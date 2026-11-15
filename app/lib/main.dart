@@ -291,7 +291,8 @@ class _HomePageState extends State<HomePage> {
     // 1단계 (초고속 즉시 반영): preload 된 가벼운 스토리·축제·E-book 허브 JSON 먼저 파싱·렌더링
     final parsedStories = <DailyStoryItem>[];
     final parsedMarkets = <TraditionalMarketInfo>[];
-    final hubJson = await fetchWebJson('data/public_travel_hub.json');
+    final cacheBust = DateTime.now().millisecondsSinceEpoch ~/ 60000;
+    final hubJson = await fetchWebJson('data/public_travel_hub.json?v=$cacheBust');
     if (hubJson != null) {
       for (final raw in (hubJson['traditional_markets'] as List? ?? const [])) {
         if (raw is Map) {
