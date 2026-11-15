@@ -337,7 +337,7 @@ class StorageImage extends StatelessWidget {
             children: [
               Icon(Icons.villa_outlined, size: errorIconSize + 8, color: const Color(0xFF6C7A89)),
               const SizedBox(height: 4),
-              const Text('합법 등록 스테이', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF5A6877))),
+              const Text('공공데이터 등록 스테이', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF5A6877))),
             ],
           ),
         ),
@@ -410,7 +410,7 @@ class _PublicStayVisualHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '${data['region_depth1'] ?? ''} ${data['region_depth2'] ?? ''} 합법 등록 숙소',
+                  '${data['region_depth1'] ?? ''} ${data['region_depth2'] ?? ''} 공공데이터 등록 숙소',
                   style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 6),

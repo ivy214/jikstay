@@ -41,8 +41,22 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
     if (widget.initialData != null) return widget.initialData;
     final demo = findDemoListing(widget.listingId);
     if (demo != null) return demo;
-    final snap = await FirebaseFirestore.instance.collection('listings').doc(widget.listingId).get();
-    return snap.data();
+    // Firestore 는 App Check 토큰(reCAPTCHA)을 기다리느라 느린 네트워크·광고 차단 환경에서 시간 초과될 수 있다.
+    // 한 번 더 시도하고, 그래도 안 되면 정적 숙소 색인의 기본 정보로라도 페이지를 보여 준다.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('listings')
+            .doc(widget.listingId)
+            .get()
+            .timeout(const Duration(seconds: 12));
+        if (snap.exists) return snap.data();
+        break; // 문서가 실제로 없으면 재시도하지 않는다
+      } catch (_) {
+        if (attempt == 0) await Future<void>.delayed(const Duration(milliseconds: 800));
+      }
+    }
+    return findStayInStaticIndex(widget.listingId);
   }
 
   void _back(BuildContext context) {

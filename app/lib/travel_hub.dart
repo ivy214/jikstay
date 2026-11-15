@@ -17,7 +17,7 @@ const List<Map<String, dynamic>> _kFallbackHalfPriceRegions = [
   {
     'region_group': '전라/충청',
     'cities': ['강진', '해남', '완도', '고흥', '영광', '영암', '장흥', '고창', '제천', '태안', '서천'],
-    'benefit_ko': '여행경비 50% 환급 (청년 일부 최대 70%) · 합법 등록 숙소 영수증 필수',
+    'benefit_ko': '여행경비 50% 환급 (청년 일부 최대 70%) · 지자체 인정 업소 영수증 필수',
     'benefit_en': '50% Stay & Dining Cashback + Digital Resident Pass partner perks',
   },
   {
@@ -54,7 +54,7 @@ const List<Map<String, dynamic>> _kFallbackBenefits = [
     'official_url': 'https://korean.visitkorea.or.kr',
     'ko': {
       'title': '2026 대한민국 반값여행 (25개 지자체 50% 환급)',
-      'desc': '여행 전 사전신청 후 합법 등록 숙소·식당 영수증을 제출하면 지출액의 50%(2인 최대 20만원)를 지역화폐로 환급받습니다. (미신고 불법숙소 영수증 제외)',
+      'desc': '여행 전 사전신청 후 지자체가 인정한 숙소·식당 영수증을 제출하면 지출액의 50%(2인 최대 20만원)를 지역화폐로 환급받습니다. (미신고 불법숙소 영수증 제외)',
     },
     'en': {
       'title': '2026 Half-Price Regional Travel & Foreigner FIT Perks',

@@ -35,6 +35,20 @@ bool hasDirectBookingUrl(Map<String, dynamic> data) {
   return !uri.host.toLowerCase().contains('map.naver.');
 }
 
+/// Firestore 를 읽지 못할 때의 대체 경로: 정적 숙소 색인(public_stays_index.json)의 기본 정보.
+/// 상세 필드(편의시설·이용규칙 등)는 없지만 이름·지역·사진·위치·외부 연결은 보여 줄 수 있다.
+Future<Map<String, dynamic>?> findStayInStaticIndex(String listingId) async {
+  final index = await fetchWebJson('data/public_stays_index.json');
+  final items = index?['items'];
+  if (items is! List) return null;
+  for (final it in items) {
+    if (it is Map && it['listing_id'] == listingId) {
+      return {...Map<String, dynamic>.from(it), 'status': 'active', '_from_static_index': true};
+    }
+  }
+  return null;
+}
+
 /// 숙소 정보 출처가 행정안전부 인허가 대조(true)인지, 한국관광공사 TourAPI 등록(false)인지.
 /// 색인 항목은 `src`, Firestore 문서는 `public_mng_no`(관광공사 출처는 'KTO-' 접두사)로 판별한다.
 bool isMoisVerified(Map<String, dynamic> data) {
