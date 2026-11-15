@@ -18,7 +18,7 @@ import 'web_utils.dart';
 typedef SpotDetailPage = SpotDetailSheet;
 
 Future<void> recordOutboundVisitClick(DiscoveryItem item, {bool offlineMode = false}) async {
-  if (offlineMode || item.category == DiscoveryCategory.ebook) return;
+  if (offlineMode || !item.hasFirestoreDoc) return;
   final colName = item.category == DiscoveryCategory.stay ? 'listings' : 'spots';
   try {
     await FirebaseFirestore.instance
@@ -161,7 +161,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
   }
 
   Future<void> _loadReviews() async {
-    if (widget.offlineMode || _current.category == DiscoveryCategory.ebook) return;
+    if (widget.offlineMode || !_current.hasFirestoreDoc) return;
     final colName = _current.category == DiscoveryCategory.stay ? 'listings' : 'spots';
     try {
       final snap = await FirebaseFirestore.instance
@@ -1315,8 +1315,8 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                     ),
                   ],
 
-                  // 12. 방문자 별점 & 한줄 후기 (E-book 제외 모든 장소 지원)
-                  if (_current.category != DiscoveryCategory.ebook) ...[
+                  // 12. 방문자 별점 & 한줄 후기 (E-book·5일장 제외 — Firestore 문서가 있는 장소만)
+                  if (_current.hasFirestoreDoc) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 22),
                       child: Divider(height: 1),

@@ -83,6 +83,7 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 | `curate_public_stays.py` | 행안부 인허가 + TourAPI + 네이버 블로그로 권역×업종별 숙소 선별 → `public_stays_index.json` (+ `--upload`) |
 | `build_travel_hub.py` | 17개 시·도 E-book·볼거리·먹거리·축제·코스 허브 생성 → `public_travel_hub.json` (+ `--upload-spots`) |
 | `weekly_hub_refresh.py` | 주간: 진행 중 축제 갱신·상세 보강 (CI 에서는 `--no-translate` 후 번역을 별도 단계로) |
+| `collect_half_price_spots.py` | 반값여행 대상 25개 시·군별 볼거리 6·먹거리 4·축제(조회순)를 시·군 코드로 추가 수집(`half_price_city` 표시, `--upload` 로 Firestore 문서 생성). 허브를 `build_travel_hub.py` 로 새로 만들면 다시 실행 |
 | `translate_hub.py` | EN/JA/ZH 증분 번역 (Gemini, 키 없으면 OpenAI) |
 | `enrich_naver_local.py` | 네이버 지역 검색으로 `naver_link`(공식 링크, OTA 제외)·`naver_category` 보강. 허브/색인을 다시 만들면 재실행(캐시로 즉시 복원) |
 | `clean_naver_reviews.py` | 장소와 무관한 네이버 방문기 제거(`is_relevant_place_snippet`), `--refetch` 로 빈 곳 재검색 |

@@ -457,6 +457,12 @@ class DiscoveryItem {
 
   double get averageRating => reviewCount > 0 ? scoreSum / reviewCount : 0.0;
 
+  /// 5일장(mkt_…)은 검색 결과용으로만 만든 항목이라 Firestore 문서가 없다 → 후기·클릭 집계 대상 아님
+  bool get isMarket => id.startsWith('mkt_');
+
+  /// Firestore spots/listings 문서가 있어 후기 작성·클릭 집계가 가능한 항목
+  bool get hasFirestoreDoc => category != DiscoveryCategory.ebook && !isMarket;
+
   String get _searchLocationPrefix => (regionLabel.isNotEmpty ? regionLabel : province).trim();
 
   /// 카카오 플레이스(카카오맵 장소 상세·방문자 별점·사진·메뉴) 검색 직결 링크

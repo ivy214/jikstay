@@ -595,7 +595,11 @@ class _HomePageState extends State<HomePage> {
     final saved = SavedPlaces.ids.value.toSet();
     final weekend = upcomingWeekend(DateTime.now());
     final relevance = <String, int>{};
-    final out = _allItems.where((it) {
+    // 5일장은 기본 피드에는 넣지 않고 검색할 때만 결과에 포함 ("강진" → 강진오일시장)
+    final pool = q.isEmpty
+        ? _allItems
+        : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
+    final out = pool.where((it) {
       if (_savedOnly && !saved.contains(it.id)) return false;
       if (_weekendOnly && !isOpenDuring(it, weekend.$1, weekend.$2)) return false;
       if (_category != DiscoveryCategory.all && it.category != _category) return false;

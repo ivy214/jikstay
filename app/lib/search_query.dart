@@ -163,3 +163,29 @@ String? dominantProvince(Iterable<DiscoveryItem> items, {int sample = 12}) {
   if (counts.isEmpty) return null;
   return counts.entries.reduce((a, b) => b.value > a.value ? b : a).key;
 }
+
+/// 5일장을 검색 결과 카드로 쓰기 위한 변환 (분류는 먹거리, 장날·특산물을 부제·이용안내로)
+DiscoveryItem marketToDiscoveryItem(TraditionalMarketInfo m) {
+  // days 는 장날 끝자리 [1, 6] → "1·6일장", [5, 0] → "5·10일장"
+  final dayText = m.days.map((d) => d == 0 ? '10' : '$d').join('·');
+  final regionLabel = '${m.province} ${m.city}'.trim();
+  return DiscoveryItem(
+    id: m.id,
+    category: DiscoveryCategory.food,
+    title: m.title,
+    province: m.province,
+    regionLabel: regionLabel,
+    address: regionLabel,
+    lat: m.lat,
+    lng: m.lng,
+    subtitle: '$dayText일장 · ${m.specialty}',
+    pullQuote: m.specialty,
+    practicalHeader: '장날 · 특산물',
+    practicalInfo: [
+      PracticalInfoRow(label: '장날', value: '$dayText일장 (날짜 끝자리가 ${m.days.join('·')}인 날)'),
+      if (m.specialty.isNotEmpty) PracticalInfoRow(label: '특산물·먹거리', value: m.specialty),
+    ],
+    mapUrl: 'https://map.naver.com/p/search/${Uri.encodeComponent('$regionLabel ${m.title}')}',
+    priorityScore: -1,
+  );
+}

@@ -146,6 +146,18 @@ void main() {
       expect(search('전북 숙소'), unorderedEquals(['nw_stay', 'jj_stay']));
       expect(parseSearchQuery('여행').isEmpty, isTrue);
       expect(dominantProvince(namwonItems.skip(1)), '전북');
+
+      // 5일장 → 검색용 카드 (먹거리 분류, 후기·클릭 집계 대상 아님)
+      final mkt = marketToDiscoveryItem(const TraditionalMarketInfo(
+          id: 'mkt_gangjin', province: '전남', city: '강진군', title: '강진오일시장', days: [4, 9], lat: 34.6, lng: 126.7, specialty: '한정식·짱뚱어'));
+      expect(mkt.category, DiscoveryCategory.food);
+      expect(mkt.subtitle, startsWith('4·9일장'));
+      expect(mkt.hasFirestoreDoc, isFalse);
+      expect(searchRelevance(mkt, parseSearchQuery('강진여행')), isNotNull);
+      expect(searchRelevance(mkt, parseSearchQuery('강진 맛집')), isNotNull);
+      expect(marketToDiscoveryItem(const TraditionalMarketInfo(
+              id: 'mkt_x', province: '경기', city: '양평군', title: '양평물맑은시장', days: [3, 8], lat: 37, lng: 127, specialty: ''))
+          .subtitle, startsWith('3·8일장'));
     });
 
     final sampleItems = <MapEntry<String, Map<String, dynamic>>>[
