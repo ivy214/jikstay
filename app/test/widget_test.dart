@@ -554,5 +554,46 @@ void main() {
 
       expect(find.textContaining('장수여행객: 관광지도 보고 방문해서 음료 혜택까지 잘 받았어요!'), findsOneWidget);
     });
+
+    testWidgets('캘린더 보기 및 네이버 지도 보기 전환 동작 검증', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomePage(
+            initialDemoMode: true,
+            seedItemsOverride: kBuiltInSeedDiscoveryItems,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 초기 화면에서는 지도가 로드되지 않음
+      expect(find.byKey(const Key('interactive_korea_map_canvas')), findsNothing);
+      expect(find.byKey(const Key('local_calendar_card')), findsNothing);
+
+      // 1. 캘린더 보기 탭 전환 → 월간 축제·5일장 달력 및 일정 브리핑 확인
+      await tester.tap(find.byKey(const Key('view_mode_calendar')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('local_calendar_card')), findsOneWidget);
+      expect(find.textContaining('무주 반딧불 & 덕유산 계절 트레킹 페스타'), findsWidgets);
+
+      // 2. 네이버 지도 보기 탭 전환 → 한국어 핀 지도 + 네이버 지도 직결 바 + 핀 상세 진입 확인
+      await tester.tap(find.byKey(const Key('view_mode_map')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('naver_map_top_bar')), findsOneWidget);
+      expect(find.byKey(const Key('open_naver_map_region_btn')), findsOneWidget);
+      expect(find.byKey(const Key('interactive_korea_map_canvas')), findsOneWidget);
+      expect(find.byKey(const Key('map_pin_naver_btn')), findsOneWidget);
+      expect(find.byKey(const Key('map_pin_detail_btn')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('map_pin_detail_btn')));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(SpotDetailSheet), findsOneWidget);
+    });
   });
 }

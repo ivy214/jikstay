@@ -144,6 +144,24 @@ String trUi(String key, AppLang lang) {
       AppLang.ja: '📖 観光地図・E-book',
       AppLang.zh: '📖 官方地圖・電子書',
     },
+    'view_story_feed': {
+      AppLang.ko: '📖 스토리·목록',
+      AppLang.en: '📖 Stories & Feed',
+      AppLang.ja: '📖 ストーリー・一覧',
+      AppLang.zh: '📖 故事・列表',
+    },
+    'view_calendar': {
+      AppLang.ko: '📅 캘린더 보기',
+      AppLang.en: '📅 Calendar View',
+      AppLang.ja: '📅 カレンダー表示',
+      AppLang.zh: '📅 行事曆檢視',
+    },
+    'view_naver_map': {
+      AppLang.ko: '🟢 네이버 지도 보기',
+      AppLang.en: '🟢 Naver Map View',
+      AppLang.ja: '🟢 NAVER地図で見る',
+      AppLang.zh: '🟢 NAVER地圖檢視',
+    },
     'featured_events_title': {
       AppLang.ko: '지금 주목할 대표 축제 · 지자체 공식 가이드북',
       AppLang.en: 'Featured Local Events & Official Tourist Maps',

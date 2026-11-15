@@ -227,7 +227,7 @@ class DailyStoryItem {
   }
 }
 
-DateTime? _parseYmd(String raw) {
+DateTime? parseYmdDate(String raw) {
   if (raw.length != 8) return null;
   final y = int.tryParse(raw.substring(0, 4));
   final m = int.tryParse(raw.substring(4, 6));
@@ -235,6 +235,8 @@ DateTime? _parseYmd(String raw) {
   if (y == null || m == null || d == null) return null;
   return DateTime(y, m, d);
 }
+
+DateTime? _parseYmd(String raw) => parseYmdDate(raw);
 
 class DiscoveryItem {
   final String id;
@@ -1349,10 +1351,13 @@ DailyStoryItem pickTodayMunicipalStory({
     if (provSpots.isNotEmpty) {
       final topSpot = provSpots.first;
       final eb = provEbooks.isNotEmpty ? provEbooks.first : null;
+      final cleanCity = topSpot.regionLabel.startsWith(selectedProvince)
+          ? topSpot.regionLabel.substring(selectedProvince.length).trim()
+          : topSpot.regionLabel;
       return DailyStoryItem(
         id: topSpot.id,
         province: selectedProvince,
-        city: topSpot.regionLabel,
+        city: cleanCity,
         seasonBadge: topSpot.category == DiscoveryCategory.event ? '🎉 지금 주목할 지역 축제 스토리' : '🏞️ 계절 테마 로컬 명소 이야기',
         sourceBook: eb != null ? eb.title : '$selectedProvince 공식 문화관광 자료',
         months: const [],
@@ -1362,17 +1367,26 @@ DailyStoryItem pickTodayMunicipalStory({
         lat: topSpot.lat,
         lng: topSpot.lng,
         phone: topSpot.phone,
-        pullQuote: topSpot.subtitle.isNotEmpty ? topSpot.subtitle : '$selectedProvince에서 만나는 특별한 계절 여행지',
+        pullQuote: topSpot.pullQuote.isNotEmpty
+            ? topSpot.pullQuote
+            : (topSpot.subtitle.isNotEmpty ? topSpot.subtitle : '$selectedProvince에서 만나는 특별한 계절 여행지'),
         paragraphs: [
-          if (topSpot.subtitle.isNotEmpty) topSpot.subtitle,
+          if (topSpot.paragraphs.isNotEmpty)
+            ...topSpot.paragraphs
+          else if (topSpot.subtitle.isNotEmpty)
+            topSpot.subtitle,
           if (eb != null) '${eb.title}(${eb.address})을 함께 열람하시면 주변 추천 산책코스와 로컬 먹거리 지도를 한눈에 확인하실 수 있습니다.',
         ],
-        images: topSpot.imageUrl.isNotEmpty ? [topSpot.imageUrl] : const [],
-        practicalHeader: '$selectedProvince 추천 방문지 · 대중교통 및 자차 길찾기 바로 연결',
-        practicalInfo: [
-          if (topSpot.address.isNotEmpty) PracticalInfoRow(label: '위치 주소', value: topSpot.address),
-          if (topSpot.phone.isNotEmpty) PracticalInfoRow(label: '문의 전화', value: topSpot.phone),
-        ],
+        images: topSpot.effectiveGallery,
+        practicalHeader: topSpot.practicalHeader.isNotEmpty
+            ? topSpot.practicalHeader
+            : '$selectedProvince 추천 방문지 · 대중교통 및 자차 길찾기 바로 연결',
+        practicalInfo: topSpot.practicalInfo.isNotEmpty
+            ? topSpot.practicalInfo
+            : [
+                if (topSpot.address.isNotEmpty) PracticalInfoRow(label: '위치 주소', value: topSpot.address),
+                if (topSpot.phone.isNotEmpty) PracticalInfoRow(label: '문의 전화', value: topSpot.phone),
+              ],
         pdfLinks: eb != null
             ? (eb.pdfLinks.isNotEmpty
                 ? eb.pdfLinks

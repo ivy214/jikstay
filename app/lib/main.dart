@@ -17,10 +17,14 @@ import 'discovery_models.dart';
 import 'firebase_options.dart';
 import 'i18n.dart';
 import 'legal.dart';
+import 'local_calendar_view.dart';
+import 'naver_map_view.dart';
 import 'spot_detail_sheet.dart';
 import 'story_detail_page.dart';
 import 'travel_hub.dart';
 import 'web_utils.dart';
+
+enum HomeViewMode { feed, calendar, map }
 
 /// reCAPTCHA Enterprise 사이트 키: flutter build web --dart-define=RECAPTCHA_SITE_KEY=...
 const kRecaptchaSiteKey = String.fromEnvironment('RECAPTCHA_SITE_KEY');
@@ -243,6 +247,7 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchCtrl = TextEditingController();
 
   DiscoveryCategory _category = DiscoveryCategory.all;
+  HomeViewMode _viewMode = HomeViewMode.feed;
   String _selectedProvince = '전체';
   String _query = '';
   bool _showBenefitsHub = false;
@@ -252,6 +257,7 @@ class _HomePageState extends State<HomePage> {
   // 첫 프레임부터 빈 스피너 없이 오늘의 로컬 스토리와 기본 큐레이션을 즉시 렌더링
   List<DiscoveryItem> _allItems = kBuiltInSeedDiscoveryItems;
   List<DailyStoryItem> _dailyStories = kFallbackDailyMunicipalStories;
+  List<TraditionalMarketInfo> _markets = kFallbackTraditional5DayMarkets;
   String? _selectedItemId;
   int _feedVisibleCount = _feedPageSize;
   bool _initialDeepLinkHandled = false;
@@ -279,8 +285,15 @@ class _HomePageState extends State<HomePage> {
 
     // 1단계 (초고속 즉시 반영): preload 된 가벼운 스토리·축제·E-book 허브 JSON 먼저 파싱·렌더링
     final parsedStories = <DailyStoryItem>[];
+    final parsedMarkets = <TraditionalMarketInfo>[];
     final hubJson = await fetchWebJson('data/public_travel_hub.json');
     if (hubJson != null) {
+      for (final raw in (hubJson['traditional_markets'] as List? ?? const [])) {
+        if (raw is Map) {
+          final mkt = parseTraditionalMarketJson(Map<String, dynamic>.from(raw));
+          if (mkt != null) parsedMarkets.add(mkt);
+        }
+      }
       for (final raw in (hubJson['daily_stories'] as List? ?? const [])) {
         if (raw is Map) {
           final st = parseDailyStoryFromJson(Map<String, dynamic>.from(raw));
@@ -332,10 +345,11 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (!mounted) return;
-    if (itemsById.isNotEmpty || parsedStories.isNotEmpty) {
+    if (itemsById.isNotEmpty || parsedStories.isNotEmpty || parsedMarkets.isNotEmpty) {
       setState(() {
         if (itemsById.isNotEmpty) _allItems = itemsById.values.toList();
         if (parsedStories.isNotEmpty) _dailyStories = parsedStories;
+        if (parsedMarkets.isNotEmpty) _markets = parsedMarkets;
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _applyInitialPortalDeepLink());
@@ -577,6 +591,48 @@ class _HomePageState extends State<HomePage> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Widget _buildViewModePill({
+    required Key key,
+    required HomeViewMode mode,
+    required String label,
+    required Color activeColor,
+  }) {
+    final sel = _viewMode == mode;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        key: key,
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          setState(() => _viewMode = mode);
+          trackPortalEvent('switch_view_mode', {
+            'mode': mode.name,
+            'province': _selectedProvince,
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          decoration: BoxDecoration(
+            color: sel ? activeColor : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: sel ? activeColor : const Color(0xFFCBD5E1),
+              width: sel ? 1.4 : 1.0,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: sel ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AppLang>(
@@ -609,6 +665,7 @@ class _HomePageState extends State<HomePage> {
                   onTap: () {
                     setState(() {
                       _showBenefitsHub = false;
+                      _viewMode = HomeViewMode.feed;
                       _category = DiscoveryCategory.all;
                       _searchCtrl.clear();
                       _query = '';
@@ -723,94 +780,157 @@ class _HomePageState extends State<HomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 단일 깔끔한 탐색 바: [📍 지역 선택 토글] + 핵심 테마 탭 (선택 피로 최소화)
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: InkWell(
-                                    key: const Key('region_picker_btn'),
-                                    borderRadius: BorderRadius.circular(18),
-                                    onTap: () => setState(() => _showProvincePicker = !_showProvincePicker),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                                      decoration: BoxDecoration(
-                                        color: _selectedProvince == '전체'
-                                            ? const Color(0xFFF1F5F9)
-                                            : const Color(0xFF0F172A),
-                                        borderRadius: BorderRadius.circular(18),
-                                        border: Border.all(
-                                          color: _selectedProvince == '전체'
-                                              ? const Color(0xFFCBD5E1)
-                                              : const Color(0xFF0F172A),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            lang == AppLang.ko
-                                                ? '📍 지역: ${trProvince(_selectedProvince, lang)}'
-                                                : '📍 ${trProvince(_selectedProvince, lang)}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w800,
+                          // 단일 깔끔한 탐색 바: [📍 지역 선택] + [카테고리 칩] + [보기 전환: 스토리 / 캘린더 / 네이버 지도]
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: InkWell(
+                                          key: const Key('region_picker_btn'),
+                                          borderRadius: BorderRadius.circular(18),
+                                          onTap: () => setState(() => _showProvincePicker = !_showProvincePicker),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                            decoration: BoxDecoration(
                                               color: _selectedProvince == '전체'
-                                                  ? const Color(0xFF0F172A)
-                                                  : Colors.white,
+                                                  ? const Color(0xFFF1F5F9)
+                                                  : const Color(0xFF0F172A),
+                                              borderRadius: BorderRadius.circular(18),
+                                              border: Border.all(
+                                                color: _selectedProvince == '전체'
+                                                    ? const Color(0xFFCBD5E1)
+                                                    : const Color(0xFF0F172A),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  lang == AppLang.ko
+                                                      ? '📍 지역: ${trProvince(_selectedProvince, lang)}'
+                                                      : '📍 ${trProvince(_selectedProvince, lang)}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: _selectedProvince == '전체'
+                                                        ? const Color(0xFF0F172A)
+                                                        : Colors.white,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 3),
+                                                Icon(
+                                                  _showProvincePicker
+                                                      ? Icons.keyboard_arrow_up_rounded
+                                                      : Icons.keyboard_arrow_down_rounded,
+                                                  size: 16,
+                                                  color: _selectedProvince == '전체'
+                                                      ? const Color(0xFF475569)
+                                                      : Colors.white,
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                          const SizedBox(width: 3),
-                                          Icon(
-                                            _showProvincePicker
-                                                ? Icons.keyboard_arrow_up_rounded
-                                                : Icons.keyboard_arrow_down_rounded,
-                                            size: 16,
-                                            color: _selectedProvince == '전체'
-                                                ? const Color(0xFF475569)
-                                                : Colors.white,
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
+                                      if (screenW < 1040) ...[
+                                        _buildViewModePill(
+                                          key: const Key('view_mode_feed'),
+                                          mode: HomeViewMode.feed,
+                                          label: trUi('view_story_feed', lang),
+                                          activeColor: const Color(0xFF0F172A),
+                                        ),
+                                        _buildViewModePill(
+                                          key: const Key('view_mode_calendar'),
+                                          mode: HomeViewMode.calendar,
+                                          label: trUi('view_calendar', lang),
+                                          activeColor: const Color(0xFF7C3AED),
+                                        ),
+                                        _buildViewModePill(
+                                          key: const Key('view_mode_map'),
+                                          mode: HomeViewMode.map,
+                                          label: trUi('view_naver_map', lang),
+                                          activeColor: const Color(0xFF03C75A),
+                                        ),
+                                        Container(
+                                          width: 1,
+                                          height: 18,
+                                          margin: const EdgeInsets.only(right: 8, left: 2),
+                                          color: const Color(0xFFE2E8F0),
+                                        ),
+                                      ],
+                                      ...DiscoveryCategory.values.map((cat) {
+                                        final sel = _category == cat;
+                                        return Padding(
+                                          padding: const EdgeInsets.only(right: 6),
+                                          child: InkWell(
+                                            key: Key('cat_chip_${cat.name}'),
+                                            borderRadius: BorderRadius.circular(18),
+                                            onTap: () => setState(() {
+                                              _category = cat;
+                                              _feedVisibleCount = _feedPageSize;
+                                              if (_viewMode == HomeViewMode.calendar &&
+                                                  cat != DiscoveryCategory.all &&
+                                                  cat != DiscoveryCategory.event) {
+                                                _viewMode = HomeViewMode.feed;
+                                              }
+                                            }),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                              decoration: BoxDecoration(
+                                                color: sel ? cat.color : const Color(0xFFF8FAFC),
+                                                borderRadius: BorderRadius.circular(18),
+                                                border: Border.all(
+                                                  color: sel ? cat.color : const Color(0xFFCBD5E1),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                trUi(cat.i18nKey, lang),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: sel ? Colors.white : const Color(0xFF334155),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                   ),
                                 ),
-                                ...DiscoveryCategory.values.map((cat) {
-                                  final sel = _category == cat;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: InkWell(
-                                      key: Key('cat_chip_${cat.name}'),
-                                      borderRadius: BorderRadius.circular(18),
-                                      onTap: () => setState(() {
-                                        _category = cat;
-                                        _feedVisibleCount = _feedPageSize;
-                                      }),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                                        decoration: BoxDecoration(
-                                          color: sel ? cat.color : const Color(0xFFF8FAFC),
-                                          borderRadius: BorderRadius.circular(18),
-                                          border: Border.all(
-                                            color: sel ? cat.color : const Color(0xFFCBD5E1),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          trUi(cat.i18nKey, lang),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                            color: sel ? Colors.white : const Color(0xFF334155),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
+                              ),
+                              if (screenW >= 1040) ...[
+                                Container(
+                                  width: 1,
+                                  height: 20,
+                                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                                  color: const Color(0xFFE2E8F0),
+                                ),
+                                _buildViewModePill(
+                                  key: const Key('view_mode_feed'),
+                                  mode: HomeViewMode.feed,
+                                  label: trUi('view_story_feed', lang),
+                                  activeColor: const Color(0xFF0F172A),
+                                ),
+                                _buildViewModePill(
+                                  key: const Key('view_mode_calendar'),
+                                  mode: HomeViewMode.calendar,
+                                  label: trUi('view_calendar', lang),
+                                  activeColor: const Color(0xFF7C3AED),
+                                ),
+                                _buildViewModePill(
+                                  key: const Key('view_mode_map'),
+                                  mode: HomeViewMode.map,
+                                  label: trUi('view_naver_map', lang),
+                                  activeColor: const Color(0xFF03C75A),
+                                ),
                               ],
-                            ),
+                            ],
                           ),
                           if (_showProvincePicker) ...[
                             const SizedBox(height: 6),
@@ -896,21 +1016,42 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ),
                         Expanded(
-                          child: _LiveLocalFeedPanel(
-                            lang: lang,
-                            selectedProvince: _selectedProvince,
-                            todayStory: todayStory,
-                            moreStories: moreStories,
-                            onOpenTodayStory: () => _openStoryDetail(todayStory),
-                            onOpenStory: _openStoryDetail,
-                            feedItems: feedItems,
-                            totalAreaCount: feedItems.length,
-                            visibleLimit: _feedVisibleCount,
-                            selectedItemId: _selectedItemId,
-                            onTapItem: _openItemSheet,
-                            onOpenEbookDirect: _openExternalUrl,
-                            onLoadMore: () => setState(() => _feedVisibleCount += _feedPageSize),
-                          ),
+                          child: switch (_viewMode) {
+                            HomeViewMode.calendar => LocalCalendarView(
+                                allItems: _allItems,
+                                markets: _markets,
+                                selectedProvince: _selectedProvince,
+                                query: _query,
+                                lang: lang,
+                                onSelectItem: _openItemSheet,
+                                onOpenExternalUrl: _openExternalUrl,
+                              ),
+                            HomeViewMode.map => NaverLocalMapView(
+                                items: feedItems,
+                                selectedProvince: _selectedProvince,
+                                selectedCategory: _category,
+                                query: _query,
+                                lang: lang,
+                                offlineMode: _offlineSeedMode || widget.initialDemoMode,
+                                onOpenDetailPage: _openItemSheet,
+                                onOpenExternalUrl: _openExternalUrl,
+                              ),
+                            HomeViewMode.feed => _LiveLocalFeedPanel(
+                                lang: lang,
+                                selectedProvince: _selectedProvince,
+                                todayStory: todayStory,
+                                moreStories: moreStories,
+                                onOpenTodayStory: () => _openStoryDetail(todayStory),
+                                onOpenStory: _openStoryDetail,
+                                feedItems: feedItems,
+                                totalAreaCount: feedItems.length,
+                                visibleLimit: _feedVisibleCount,
+                                selectedItemId: _selectedItemId,
+                                onTapItem: _openItemSheet,
+                                onOpenEbookDirect: _openExternalUrl,
+                                onLoadMore: () => setState(() => _feedVisibleCount += _feedPageSize),
+                              ),
+                          },
                         ),
                       ],
                     ),
