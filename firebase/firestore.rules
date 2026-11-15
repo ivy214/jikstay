@@ -16,6 +16,8 @@ service cloud.firestore {
       let safeRid = validRid ? rid : '_invalid_';
       let revPath = /databases/$(database)/documents/listings/$(listingId)/reviews/$(safeRid);
       return validRid
+        && request.auth != null
+        && rid == request.auth.uid
         && diff.hasOnly(['review_count', 'score_sum', 'last_review_id'])
         && diff.hasAll(['review_count', 'score_sum', 'last_review_id'])
         && !exists(revPath)
@@ -33,6 +35,8 @@ service cloud.firestore {
       let safeRid = validRid ? rid : '_invalid_';
       let revPath = /databases/$(database)/documents/spots/$(spotId)/reviews/$(safeRid);
       return validRid
+        && request.auth != null
+        && rid == request.auth.uid
         && diff.hasOnly(['review_count', 'score_sum', 'last_review_id'])
         && diff.hasAll(['review_count', 'score_sum', 'last_review_id'])
         && !exists(revPath)
@@ -78,7 +82,10 @@ service cloud.firestore {
       match /reviews/{reviewId} {
         allow read: if true;
 
-        allow create: if get(/databases/$(database)/documents/listings/$(listingId)).data.status == "active"
+        // 익명 로그인 필수 + 문서 ID = uid → 장소당 1인 1후기 (기존 후기 문서는 그대로 유지)
+        allow create: if request.auth != null
+          && reviewId == request.auth.uid
+          && get(/databases/$(database)/documents/listings/$(listingId)).data.status == "active"
           && getAfter(/databases/$(database)/documents/listings/$(listingId)).data.get('last_review_id', '') == reviewId
           && isValidReviewPayload('listing_id', listingId);
 
@@ -99,7 +106,10 @@ service cloud.firestore {
       match /reviews/{reviewId} {
         allow read: if true;
 
-        allow create: if get(/databases/$(database)/documents/spots/$(spotId)).data.status == "active"
+        // 익명 로그인 필수 + 문서 ID = uid → 장소당 1인 1후기 (기존 후기 문서는 그대로 유지)
+        allow create: if request.auth != null
+          && reviewId == request.auth.uid
+          && get(/databases/$(database)/documents/spots/$(spotId)).data.status == "active"
           && getAfter(/databases/$(database)/documents/spots/$(spotId)).data.get('last_review_id', '') == reviewId
           && isValidReviewPayload('spot_id', spotId);
 

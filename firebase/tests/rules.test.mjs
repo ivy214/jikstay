@@ -106,7 +106,20 @@ describe("Firestore 보안 규칙 (공공API 전용 + 사용자 별점·후기)"
     await assertFails(deleteDoc(activeRef));
   });
 
-  it("사용자 별점(1~5) 및 후기는 원자적 배치(WriteBatch)로만 등록되며 평점 조작·덮어쓰기·삭제를 차단", async () => {
+  // 익명 로그인 uid = 후기 문서 ID = last_review_id
+  function reviewBatch(db, col, targetId, uid, review, scoreInc) {
+    const parentRef = doc(db, `${col}/${targetId}`);
+    const b = writeBatch(db);
+    b.set(doc(db, `${col}/${targetId}/reviews/${uid}`), review);
+    b.update(parentRef, {
+      review_count: increment(1),
+      score_sum: increment(scoreInc),
+      last_review_id: uid,
+    });
+    return b.commit();
+  }
+
+  it("사용자 별점(1~5) 및 후기는 익명 로그인 + 원자적 배치로만 등록되며 1인 1후기·평점 조작·삭제를 차단", async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await setDoc(doc(db, "listings/stay_pub_001"), {
@@ -120,95 +133,60 @@ describe("Firestore 보안 규칙 (공공API 전용 + 사용자 별점·후기)"
       });
     });
 
+    const aliceDb = testEnv.authenticatedContext("uid_alice_0001").firestore();
+    const bobDb = testEnv.authenticatedContext("uid_bob_00002").firestore();
+    const malloryDb = testEnv.authenticatedContext("uid_mallory_03").firestore();
     const guestDb = testEnv.unauthenticatedContext().firestore();
-    const listingRef = doc(guestDb, "listings/stay_pub_001");
-    const revRef1 = doc(guestDb, "listings/stay_pub_001/reviews/rev_good_01");
+    const listingRef = doc(aliceDb, "listings/stay_pub_001");
+    const aliceRev = doc(aliceDb, "listings/stay_pub_001/reviews/uid_alice_0001");
 
-    // 1. 정상 별점(5점) + 후기 원자적 배치 등록 (초기 review_count/score_sum 없는 문서에서도 정상 동작)
-    const batch1 = writeBatch(guestDb);
-    batch1.set(revRef1, validReview("stay_pub_001", { score: 5 }));
-    batch1.update(listingRef, {
-      review_count: increment(1),
-      score_sum: increment(5),
-      last_review_id: "rev_good_01",
-    });
-    await assertSucceeds(batch1.commit());
+    // 1. 비로그인 사용자는 후기 작성 불가
+    await assertFails(reviewBatch(guestDb, "listings", "stay_pub_001", "rev_guest_01", validReview("stay_pub_001"), 5));
 
-    // 등록된 후기 공개 조회 확인
-    const savedRev = await getDoc(revRef1);
-    assert.equal(savedRev.data().score, 5);
-    const updatedStay = await getDoc(listingRef);
-    assert.equal(updatedStay.data().review_count, 1);
-    assert.equal(updatedStay.data().score_sum, 5);
+    // 2. 정상 등록 (초기 review_count/score_sum 없는 문서에서도 동작)
+    await assertSucceeds(reviewBatch(aliceDb, "listings", "stay_pub_001", "uid_alice_0001", validReview("stay_pub_001", { score: 5 }), 5));
+    assert.equal((await getDoc(aliceRev)).data().score, 5);
+    let stay = await getDoc(listingRef);
+    assert.equal(stay.data().review_count, 1);
+    assert.equal(stay.data().score_sum, 5);
 
-    // 2. 두 번째 후기(4점, 영문 게스트) 연속 등록 검증
-    const revRef2 = doc(guestDb, "listings/stay_pub_001/reviews/rev_good_02");
-    const batch2 = writeBatch(guestDb);
-    batch2.set(
-      revRef2,
-      validReview("stay_pub_001", {
-        nickname: "Alex",
-        score: 4,
-        comment: "Great legal stay near Aewol coast!",
-        lang: "en",
-      })
+    // 3. 다른 사용자의 두 번째 후기
+    await assertSucceeds(
+      reviewBatch(bobDb, "listings", "stay_pub_001", "uid_bob_00002",
+        validReview("stay_pub_001", { nickname: "Alex", score: 4, comment: "Great legal stay near Aewol coast!", lang: "en" }), 4)
     );
-    batch2.update(listingRef, {
-      review_count: increment(1),
-      score_sum: increment(4),
-      last_review_id: "rev_good_02",
-    });
-    await assertSucceeds(batch2.commit());
-    const stayAfter2 = await getDoc(listingRef);
-    assert.equal(stayAfter2.data().review_count, 2);
-    assert.equal(stayAfter2.data().score_sum, 9);
+    stay = await getDoc(listingRef);
+    assert.equal(stay.data().review_count, 2);
+    assert.equal(stay.data().score_sum, 9);
 
-    // 3. 실제 후기 생성 없이 평점(score_sum)만 단독 조작 시도 → 차단
+    // 4. 같은 사용자의 중복 후기 → 차단 (문서 ID가 uid로 고정되므로 재생성 불가)
+    await assertFails(reviewBatch(aliceDb, "listings", "stay_pub_001", "uid_alice_0001", validReview("stay_pub_001", { score: 1 }), 1));
+
+    // 5. 다른 사람 uid 또는 임의 ID로 문서를 만들어 1인 1후기를 우회하는 시도 → 차단
+    await assertFails(reviewBatch(malloryDb, "listings", "stay_pub_001", "uid_someone_else", validReview("stay_pub_001"), 5));
+    await assertFails(reviewBatch(malloryDb, "listings", "stay_pub_001", "rev_random_123", validReview("stay_pub_001"), 5));
+
+    // 6. 후기 없이 평점만 단독 조작 → 차단
     await assertFails(
-      updateDoc(listingRef, {
+      updateDoc(doc(malloryDb, "listings/stay_pub_001"), {
         review_count: increment(1),
         score_sum: increment(5),
-        last_review_id: "rev_good_02",
+        last_review_id: "uid_mallory_03",
       })
     );
 
-    // 4. 후기 점수는 1점인데 숙소 합산에는 5점을 더하는 불일치 조작 시도 → 차단
-    const revFake = doc(guestDb, "listings/stay_pub_001/reviews/rev_mismatch");
-    const badBatch = writeBatch(guestDb);
-    badBatch.set(revFake, validReview("stay_pub_001", { score: 1 }));
-    badBatch.update(listingRef, {
-      review_count: increment(1),
-      score_sum: increment(5),
-      last_review_id: "rev_mismatch",
-    });
-    await assertFails(badBatch.commit());
+    // 7. 후기 1점 + 합산 5점 불일치 → 차단
+    await assertFails(reviewBatch(malloryDb, "listings", "stay_pub_001", "uid_mallory_03", validReview("stay_pub_001", { score: 1 }), 5));
 
-    // 5. 범위 밖 별점(6점 / 0점) 또는 너무 짧은 후기 차단
-    const revBadScore = doc(guestDb, "listings/stay_pub_001/reviews/rev_bad_score");
-    const badScoreBatch = writeBatch(guestDb);
-    badScoreBatch.set(revBadScore, validReview("stay_pub_001", { score: 6 }));
-    badScoreBatch.update(listingRef, {
-      review_count: increment(1),
-      score_sum: increment(6),
-      last_review_id: "rev_bad_score",
-    });
-    await assertFails(badScoreBatch.commit());
+    // 8. 범위 밖 별점(6점) → 차단
+    await assertFails(reviewBatch(malloryDb, "listings", "stay_pub_001", "uid_mallory_03", validReview("stay_pub_001", { score: 6 }), 6));
 
-    // 6. 기존 후기 수정·덮어쓰기·삭제 시도 → 차단
-    await assertFails(updateDoc(revRef1, { comment: "타인 후기 변조" }));
-    await assertFails(deleteDoc(revRef1));
+    // 9. 본인 후기라도 수정·삭제 불가
+    await assertFails(updateDoc(aliceRev, { comment: "후기 변조 시도" }));
+    await assertFails(deleteDoc(aliceRev));
 
-    // 7. 중지된(suspended) 숙소에 후기 등록 시도 → 차단
-    const suspRef = doc(guestDb, "listings/stay_suspended");
-    const suspRev = doc(guestDb, "listings/stay_suspended/reviews/rev_susp_01");
-    const suspBatch = writeBatch(guestDb);
-    suspBatch.set(suspRev, validReview("stay_suspended", { score: 5 }));
-    suspBatch.update(suspRef, {
-      review_count: increment(1),
-      score_sum: increment(5),
-      last_review_id: "rev_susp_01",
-    });
-    await assertFails(suspBatch.commit());
+    // 10. 중지된(suspended) 숙소에 후기 → 차단
+    await assertFails(reviewBatch(malloryDb, "listings", "stay_suspended", "uid_mallory_03", validReview("stay_suspended"), 5));
   });
 
   it("전국 로컬 스팟(spots: 축제·볼거리·먹거리) CPC 클릭 +1 및 방문자 별점·후기 원자적 집계 허용", async () => {
@@ -227,15 +205,12 @@ describe("Firestore 보안 규칙 (공공API 전용 + 사용자 별점·후기)"
     const guestDb = testEnv.unauthenticatedContext().firestore();
     const spotRef = doc(guestDb, "spots/spot_fo_101");
 
-    // CPC 방문유도(길찾기·전화·쿠폰) 클릭 +1 허용
+    // CPC 방문유도(길찾기·전화·쿠폰) 클릭 +1 허용 (로그인 불필요)
     await assertSucceeds(updateDoc(spotRef, { outbound_clicks: increment(1) }));
     assert.equal((await getDoc(spotRef)).data().outbound_clicks, 4);
     await assertFails(updateDoc(spotRef, { outbound_clicks: increment(3) }));
 
-    // 스팟 방문자 별점(5점) + 후기 원자적 등록 허용
-    const sRevRef = doc(guestDb, "spots/spot_fo_101/reviews/srev_001");
-    const batch = writeBatch(guestDb);
-    batch.set(sRevRef, {
+    const spotReview = {
       spot_id: "spot_fo_101",
       nickname: "무진장여행러",
       score: 5,
@@ -243,13 +218,14 @@ describe("Firestore 보안 규칙 (공공API 전용 + 사용자 별점·후기)"
       visit_tag: "가족여행",
       lang: "ko",
       created_at: serverTimestamp(),
-    });
-    batch.update(spotRef, {
-      review_count: increment(1),
-      score_sum: increment(5),
-      last_review_id: "srev_001",
-    });
-    await assertSucceeds(batch.commit());
+    };
+
+    // 비로그인 → 차단, 익명 로그인 → 허용, 같은 사용자 재작성 → 차단
+    await assertFails(reviewBatch(guestDb, "spots", "spot_fo_101", "srev_guest01", spotReview, 5));
+    const visitorDb = testEnv.authenticatedContext("uid_visitor_01").firestore();
+    await assertSucceeds(reviewBatch(visitorDb, "spots", "spot_fo_101", "uid_visitor_01", spotReview, 5));
+    await assertFails(reviewBatch(visitorDb, "spots", "spot_fo_101", "uid_visitor_01", spotReview, 5));
+
     const afterSpot = await getDoc(spotRef);
     assert.equal(afterSpot.data().review_count, 1);
     assert.equal(afterSpot.data().score_sum, 5);

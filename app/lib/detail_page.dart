@@ -14,6 +14,7 @@ import 'amenities.dart';
 import 'demo_data.dart';
 import 'i18n.dart';
 import 'legal.dart';
+import 'review_auth.dart';
 import 'translation_store.dart';
 import 'web_utils.dart';
 
@@ -3177,25 +3178,26 @@ class _UserReviewsSectionState extends State<UserReviewsSection> {
     setState(() => _submitting = true);
     try {
       if (!widget.isOfflineDemo && !widget.listingId.startsWith('stay_demo_')) {
-        final db = FirebaseFirestore.instance;
-        final listingRef = db.collection('listings').doc(widget.listingId);
-        final revRef = listingRef.collection('reviews').doc();
-        final batch = db.batch();
-        batch.set(revRef, <String, dynamic>{
-          'listing_id': widget.listingId,
-          'nickname': nick,
-          'score': scoreToSave,
-          'comment': body,
-          if (tagToSave.isNotEmpty) 'visit_tag': tagToSave,
-          'lang': langCode,
-          'created_at': FieldValue.serverTimestamp(),
-        });
-        batch.update(listingRef, <String, dynamic>{
-          'review_count': FieldValue.increment(1),
-          'score_sum': FieldValue.increment(scoreToSave),
-          'last_review_id': revRef.id,
-        });
-        await batch.commit();
+        final result = await submitReviewBatch(
+          collection: 'listings',
+          targetId: widget.listingId,
+          targetIdField: 'listing_id',
+          score: scoreToSave,
+          payload: <String, dynamic>{
+            'nickname': nick,
+            'comment': body,
+            if (tagToSave.isNotEmpty) 'visit_tag': tagToSave,
+            'lang': langCode,
+          },
+        );
+        if (result == ReviewSubmitResult.alreadyReviewed) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(trUi('review_already_posted', widget.lang))),
+            );
+          }
+          return;
+        }
       }
 
       if (!mounted) return;

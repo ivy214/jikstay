@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'detail_page.dart' show ListingDetailPage, StorageImage, validateUserReviewInput;
 import 'discovery_models.dart';
 import 'i18n.dart';
+import 'review_auth.dart';
 import 'translation_store.dart';
 import 'web_utils.dart';
 
@@ -220,24 +221,25 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
         final isStay = _current.category == DiscoveryCategory.stay;
         final colName = isStay ? 'listings' : 'spots';
         final idField = isStay ? 'listing_id' : 'spot_id';
-        final docRef = FirebaseFirestore.instance.collection(colName).doc(_current.id);
-        final revRef = docRef.collection('reviews').doc();
-
-        final batch = FirebaseFirestore.instance.batch();
-        batch.set(revRef, {
-          idField: _current.id,
-          'nickname': nick,
-          'score': _selectedScore,
-          'comment': comment,
-          'lang': widget.lang.code,
-          'created_at': FieldValue.serverTimestamp(),
-        });
-        batch.update(docRef, {
-          'review_count': FieldValue.increment(1),
-          'score_sum': FieldValue.increment(_selectedScore),
-          'last_review_id': revRef.id,
-        });
-        await batch.commit();
+        final result = await submitReviewBatch(
+          collection: colName,
+          targetId: _current.id,
+          targetIdField: idField,
+          score: _selectedScore,
+          payload: {
+            'nickname': nick,
+            'comment': comment,
+            'lang': widget.lang.code,
+          },
+        );
+        if (result == ReviewSubmitResult.alreadyReviewed) {
+          if (!mounted) return;
+          setState(() => _submittingReview = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(trUi('review_already_posted', widget.lang))),
+          );
+          return;
+        }
       }
 
       if (!mounted) return;

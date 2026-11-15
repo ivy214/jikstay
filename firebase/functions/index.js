@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { onRequest } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
-const { FieldValue, getFirestore } = require("firebase-admin/firestore");
+const { FieldValue, Timestamp, getFirestore } = require("firebase-admin/firestore");
 
 initializeApp();
 
@@ -22,6 +22,35 @@ const PROVINCE_EN = {
 const SUPPORTED_LANGS = new Set(["ko", "en", "ja", "zh"]);
 const BOT_UA_RE =
   /bot|crawler|spider|slurp|yeti|daumoa|bingpreview|facebookexternalhit|kakaotalk-scrap|slackbot|discordbot|whatsapp|telegrambot|headless|curl|wget|python-requests/i;
+const CPC_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000; // 같은 방문자·숙소 재클릭은 24시간 동안 과금하지 않는다.
+const CPC_DEDUP_TTL_MS = 48 * 60 * 60 * 1000; // Firestore TTL(expire_at)로 dedup 문서를 자동 삭제한다.
+const CPC_DEFAULT_DAILY_CAP = 30; // 숙소당 하루 최대 과금 클릭 수 (cpc_daily_cap 필드로 개별 조정)
+
+/**
+ * 과금 중복 판정용 클라이언트 IP.
+ * X-Forwarded-For 의 "첫 번째" 값은 요청자가 임의로 넣을 수 있으므로 쓰지 않는다.
+ * Firebase Hosting(CDN)이 직접 설정하는 fastly-client-ip 를 우선 쓰고,
+ * 없으면 구글 프런트엔드가 마지막에 덧붙인 XFF 값(요청자가 조작할 수 없는 쪽)을 쓴다.
+ */
+function resolveClientIp(headers) {
+  const get = (name) => {
+    const v = headers ? headers[name] : undefined;
+    return Array.isArray(v) ? String(v[0] || "") : String(v || "");
+  };
+  const fastly = get("fastly-client-ip").trim();
+  if (fastly) return fastly;
+  const parts = get("x-forwarded-for")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "unknown";
+}
+
+/** KST 기준 날짜(YYYY-MM-DD) — 일일 과금 상한 집계용 */
+function kstDay(nowMs) {
+  return new Date(nowMs + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 const TEMPLATE_PATH = path.join(__dirname, "index.html");
 const CACHED_TEMPLATE = fs.existsSync(TEMPLATE_PATH) ? fs.readFileSync(TEMPLATE_PATH, "utf8") : "";
 
@@ -507,13 +536,13 @@ exports.goRedirect = onRequest({ region: "asia-northeast3" }, async (req, res) =
 
     const ua = String(req.get("user-agent") || "");
     const isBot = BOT_UA_RE.test(ua);
-    const xff = String(req.get("x-forwarded-for") || req.ip || "unknown")
-      .split(",")[0]
-      .trim();
-    const utcDay = new Date().toISOString().slice(0, 10);
+    const clientIp = resolveClientIp(req.headers);
+    const nowMs = Date.now();
+    const today = kstDay(nowMs);
+    // 날짜를 키에 넣지 않고 문서 안의 시각으로 "최근 24시간" 여부를 판정한다(UTC 자정 리셋 우회 방지).
     const dedupHash = crypto
       .createHash("sha256")
-      .update(`jikstay_cpc_v1|${targetId}|${utcDay}|${xff}|${ua.slice(0, 80)}`)
+      .update(`jikstay_cpc_v2|${targetId}|${clientIp}|${ua.slice(0, 80)}`)
       .digest("hex");
 
     let destinationUrl = fallbackNaverMapUrl(data);
@@ -536,24 +565,33 @@ exports.goRedirect = onRequest({ region: "asia-northeast3" }, async (req, res) =
 
         destinationUrl = canUseDirectUrl ? cur.direct_booking_url.trim() : fallbackNaverMapUrl(cur);
 
-        if (!dedupSnap.exists) {
-          const updates = { outbound_clicks: FieldValue.increment(1) };
-          let charged = 0;
-          if (canUseDirectUrl && !hasLegacyUnlimited && balance >= rate) {
-            const nextBal = Math.max(0, balance - rate);
-            updates.cpc_balance = nextBal;
-            updates.cpc_charged_clicks = FieldValue.increment(1);
-            updates.is_sponsored = nextBal >= rate;
-            charged = rate;
-          }
-          tx.update(ref, updates);
-          tx.set(dedupRef, {
-            listing_id: targetId,
-            day: utcDay,
-            charged_krw: charged,
-            created_at: FieldValue.serverTimestamp(),
-          });
+        const lastMs = dedupSnap.exists ? Number(dedupSnap.get("last_click_ms")) || 0 : 0;
+        const isDuplicate = lastMs > 0 && nowMs - lastMs < CPC_DEDUP_WINDOW_MS;
+        if (isDuplicate) return;
+
+        const updates = { outbound_clicks: FieldValue.increment(1) };
+        let charged = 0;
+        const dailyCap = Number(cur.cpc_daily_cap) > 0 ? Number(cur.cpc_daily_cap) : CPC_DEFAULT_DAILY_CAP;
+        const chargedToday = cur.cpc_charged_day === today ? Number(cur.cpc_charged_today) || 0 : 0;
+        const underDailyCap = chargedToday < dailyCap;
+        if (canUseDirectUrl && !hasLegacyUnlimited && balance >= rate && underDailyCap) {
+          const nextBal = Math.max(0, balance - rate);
+          updates.cpc_balance = nextBal;
+          updates.cpc_charged_clicks = FieldValue.increment(1);
+          updates.cpc_charged_day = today;
+          updates.cpc_charged_today = chargedToday + 1;
+          updates.is_sponsored = nextBal >= rate;
+          charged = rate;
         }
+        tx.update(ref, updates);
+        tx.set(dedupRef, {
+          listing_id: targetId,
+          last_click_ms: nowMs,
+          charged_krw: charged,
+          capped: canUseDirectUrl && !underDailyCap,
+          created_at: FieldValue.serverTimestamp(),
+          expire_at: Timestamp.fromMillis(nowMs + CPC_DEDUP_TTL_MS),
+        });
       });
     } else {
       const isClaimed = data.listing_tier === "claimed" || Boolean(data.application_id);
@@ -646,4 +684,6 @@ exports.buildOgHtml = buildOgHtml;
 exports.buildSpotOgHtml = buildSpotOgHtml;
 exports.buildRegionOgHtml = buildRegionOgHtml;
 exports.escapeHtml = escapeHtml;
+exports.resolveClientIp = resolveClientIp;
+exports.kstDay = kstDay;
 exports.normalizeLang = normalizeLang;

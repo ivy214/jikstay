@@ -86,3 +86,29 @@ describe("Cloud Functions 다국어 SEO 및 스키마 생성", () => {
     assert.match(regHtml, /"@type":"TouristDestination"/);
   });
 });
+
+describe("CPC 과금 중복 판정용 클라이언트 IP", () => {
+  it("Hosting CDN이 넣는 fastly-client-ip를 가장 먼저 사용", () => {
+    assert.equal(
+      fn.resolveClientIp({ "fastly-client-ip": "203.0.113.7", "x-forwarded-for": "1.1.1.1, 203.0.113.7" }),
+      "203.0.113.7"
+    );
+  });
+
+  it("요청자가 조작할 수 있는 X-Forwarded-For 첫 값은 무시하고 마지막 값을 사용", () => {
+    const a = fn.resolveClientIp({ "x-forwarded-for": "9.9.9.1, 198.51.100.20" });
+    const b = fn.resolveClientIp({ "x-forwarded-for": "9.9.9.2, 198.51.100.20" });
+    assert.equal(a, "198.51.100.20");
+    assert.equal(a, b);
+  });
+
+  it("헤더가 없으면 unknown", () => {
+    assert.equal(fn.resolveClientIp({}), "unknown");
+  });
+
+  it("일일 과금 상한은 KST 날짜 기준", () => {
+    // 2026-11-15 15:30 UTC = 2026-11-16 00:30 KST
+    assert.equal(fn.kstDay(Date.UTC(2026, 10, 15, 15, 30)), "2026-11-16");
+    assert.equal(fn.kstDay(Date.UTC(2026, 10, 15, 14, 59)), "2026-11-15");
+  });
+});

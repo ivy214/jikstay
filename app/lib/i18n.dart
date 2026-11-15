@@ -329,6 +329,12 @@ String trUi(String key, AppLang lang) {
       AppLang.ja: '評価と口コミが登録されました！',
       AppLang.zh: '感謝您！評分與評價已成功發佈。',
     },
+    'review_already_posted': {
+      AppLang.ko: '이 장소에는 이미 후기를 남기셨습니다. 장소당 1회만 작성할 수 있어요.',
+      AppLang.en: 'You have already reviewed this place. One review per place, please.',
+      AppLang.ja: 'この場所にはすでに口コミを投稿済みです。1か所につき1回のみ投稿できます。',
+      AppLang.zh: '您已評價過此地點，每個地點僅能評價一次。',
+    },
     'review_validation_err': {
       AppLang.ko: '닉네임(1~24자)과 후기 내용(4~600자)을 확인해 주세요.',
       AppLang.en: 'Please enter a nickname (1–24 chars) and review (4–600 chars).',
