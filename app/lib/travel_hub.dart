@@ -1,6 +1,6 @@
 // 한국관광공사(TourAPI KorService2) + 정부·지자체 공식 웹진 + 2026 반값여행·외국인 혜택 통합 허브 화면.
 // - 앱 번들 크기를 늘리지 않기 위해 정적 빌드된 허브 핵심 데이터(/data/hub/core.json)를 탭 진입 시 지연 로드한다.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'detail_page.dart' show StorageImage, kBrand;

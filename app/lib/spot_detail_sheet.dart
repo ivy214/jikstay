@@ -2,7 +2,7 @@
 // 가독성(본문 폭 760px, 줄간격 1.88), 핵심 탐방·메뉴 정보 박스(《장수여행》 p.9 모델),
 // 카카오 플레이스·네이버 플레이스·네이버 블로그 방문기 연동, 인라인 방문쿠폰, 주변 동선 연결을 통합한다.
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 

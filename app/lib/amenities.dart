@@ -1,5 +1,5 @@
 // 에어비앤비 벤치마킹 기반 표준 Amenity(편의시설) 분류·아이콘 매핑·빠른 필터 유틸리티.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class AmenityFilterTab {
   final String key;

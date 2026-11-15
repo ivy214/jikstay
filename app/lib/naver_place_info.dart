@@ -1,7 +1,7 @@
 // 네이버 지역 검색으로 보강한 업종 분류·공식 링크 표시 (backend/enrich_naver_local.py 가 채우는 필드)
 //   naver_category  예: "한식>감자탕", "숙박>펜션"
 //   naver_link      공식 홈페이지 / 인스타그램 / 네이버 톡톡 등 (OTA 링크는 백엔드에서 제외)
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'i18n.dart';

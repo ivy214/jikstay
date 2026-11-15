@@ -1,5 +1,5 @@
 // 주말 1박2일(한국인) & 3·5일(외국인) 여행 코스 자동 생성기 + URL 공유(딥링크) 모듈.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import 'discovery_models.dart';

@@ -1,7 +1,7 @@
 // 지자체 공식 가이드북(PDF)·문화관광 누리집 원문 기반 매거진형 스토리 상세 페이지.
 // 가독성(줄간격 1.88, 본문 폭 760px 제한), 핵심 탐방정보 박스(《장수여행》 p.9 모델),
 // 원본 PDF 직링크, 3사 대중교통 길찾기, 과하지 않은 주변 동선 추천을 하나로 통합한다.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 

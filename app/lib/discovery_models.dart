@@ -1,7 +1,7 @@
 // 전국 17개 시·도 통합 로컬 디스커버리 데이터 모델 및 반경 동선 매칭 엔진.
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'i18n.dart';
 import 'translation_store.dart';

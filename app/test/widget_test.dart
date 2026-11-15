@@ -1,5 +1,5 @@
 // Firebase 없이 검증 가능한 순수 로직 및 위젯 테스트.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jikstay/amenities.dart';
 import 'package:jikstay/demo_data.dart';

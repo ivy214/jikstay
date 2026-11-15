@@ -1,5 +1,5 @@
 // 법적 고지 및 개인정보처리방침 요약 (공공데이터 기반 숙소 정보 제공 + 방문자 별점·후기 운영 모델)
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 const kConsentVersion = '2026-11-15.3';
 

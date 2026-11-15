@@ -1,6 +1,6 @@
 // 전국 17개 시·도 지역 축제·행사 및 전통 5일장 월간 인터랙티브 캘린더 뷰.
 // 선택한 날짜의 진행·개막 축제와 전통 장날을 한눈에 보여주고, 클릭 시 팝업 없이 전체 상세 페이지 또는 네이버 지도로 연결한다.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'detail_page.dart' show StorageImage;
 import 'discovery_models.dart';

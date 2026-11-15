@@ -1,5 +1,5 @@
 // 국내 및 해외(영어·일본어·번체중국어) 게스트 타겟팅 다국어 UI & 자동 번역 직거래 문의 브릿지.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 enum AppLang {
   ko('ko', '한국어', '🇰🇷 한국어'),
