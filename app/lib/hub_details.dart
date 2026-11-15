@@ -15,10 +15,14 @@ const Map<String, String> kProvinceDetailCodes = {
 /// 첫 화면용 허브 JSON. 분할 파일이 없으면(로컬 개발 등) 원본 전체 파일로 대체한다.
 Future<Map<String, dynamic>?> fetchHubCore({String cacheBust = ''}) async {
   final q = cacheBust.isEmpty ? '' : '?v=$cacheBust';
-  final core = await fetchWebJson('data/hub/core.json$q');
-  if (core != null) return core;
-  HubDetailStore.splitAvailable = false;
-  return fetchWebJson('data/public_travel_hub.json$q');
+  var hub = await fetchWebJson('data/hub/core.json$q');
+  if (hub == null) {
+    HubDetailStore.splitAvailable = false;
+    hub = await fetchWebJson('data/public_travel_hub.json$q');
+  }
+  final updated = hub?['updated_at'];
+  if (updated is num) HubDetailStore.updatedAtMs = updated.toInt();
+  return hub;
 }
 
 class HubDetailStore {
@@ -26,6 +30,9 @@ class HubDetailStore {
 
   /// core.json 대신 원본 전체 파일을 받은 경우 상세 파일이 없으므로 조회하지 않는다.
   static bool splitAvailable = true;
+
+  /// 허브 데이터 갱신 시각(ms). 상세 화면의 '출처 · 기준일' 표기에 쓴다.
+  static int updatedAtMs = 0;
 
   static final Map<String, Map<String, dynamic>> _byCode = {};
   static final Map<String, Future<Map<String, dynamic>>> _inflight = {};

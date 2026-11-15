@@ -25,6 +25,7 @@ import 'story_detail_page.dart';
 import 'translation_store.dart';
 import 'travel_hub.dart';
 import 'trip_planner.dart';
+import 'ux_widgets.dart';
 import 'web_utils.dart';
 
 part 'home/feed_panel.dart';
@@ -263,6 +264,11 @@ class _HomePageState extends State<HomePage> {
   String _query = '';
   bool _showBenefitsHub = false;
   bool _showProvincePicker = false;
+  // 빠른 필터: 내 주변(거리순) · 이번 주말 축제 · 찜한 곳만
+  (double, double)? _userPos;
+  bool _locating = false;
+  bool _weekendOnly = false;
+  bool _savedOnly = false;
   bool _offlineSeedMode = false;
 
   // 첫 프레임부터 빈 스피너 없이 오늘의 로컬 스토리와 기본 큐레이션을 즉시 렌더링
@@ -276,6 +282,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    SavedPlaces.ids.addListener(_onSavedChanged);
     onAppLangSelected = (next) => TranslationStore.ensureLoaded(next);
     if (appLangNotifier.value != AppLang.ko) {
       TranslationStore.ensureLoaded(appLangNotifier.value);
@@ -291,6 +298,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    SavedPlaces.ids.removeListener(_onSavedChanged);
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -370,7 +378,7 @@ class _HomePageState extends State<HomePage> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _applyInitialPortalDeepLink());
 
-    // 프레임 양보 후 2단계 (백그라운드 비차단 로드): 전국 합법 안심숙소 경량 색인 병합
+    // 프레임 양보 후 2단계 (백그라운드 비차단 로드): 전국 합법 숙소 경량 색인 병합
     await Future<void>.delayed(const Duration(milliseconds: 60));
     if (!mounted) return;
 
@@ -574,9 +582,17 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _onSavedChanged() {
+    if (mounted) setState(() {});
+  }
+
   List<DiscoveryItem> _filteredItems() {
     final q = _query.trim().toLowerCase();
+    final saved = SavedPlaces.ids.value.toSet();
+    final weekend = upcomingWeekend(DateTime.now());
     final out = _allItems.where((it) {
+      if (_savedOnly && !saved.contains(it.id)) return false;
+      if (_weekendOnly && !isOpenDuring(it, weekend.$1, weekend.$2)) return false;
       if (_category != DiscoveryCategory.all && it.category != _category) return false;
       if (_selectedProvince != '전체' && it.province != _selectedProvince) return false;
       if (q.isEmpty) return true;
@@ -585,8 +601,80 @@ class _HomePageState extends State<HomePage> {
       return hay.contains(q);
     }).toList();
 
-    out.sort((a, b) => b.priorityScore.compareTo(a.priorityScore));
+    final pos = _userPos;
+    if (pos != null) {
+      // 내 주변: 거리순 (근사 좌표 숙소는 실제 위치를 몰라 뒤로)
+      double d(DiscoveryItem it) => haversineKm(pos.$1, pos.$2, it.lat, it.lng) + (it.hasApproxLocation ? 1000 : 0);
+      out.sort((a, b) => d(a).compareTo(d(b)));
+    } else {
+      out.sort((a, b) => b.priorityScore.compareTo(a.priorityScore));
+    }
     return out;
+  }
+
+  Future<void> _toggleNearMe(AppLang lang) async {
+    if (_userPos != null) {
+      setState(() => _userPos = null);
+      return;
+    }
+    setState(() => _locating = true);
+    final pos = await currentPosition();
+    if (!mounted) return;
+    setState(() {
+      _locating = false;
+      _userPos = pos;
+      _feedVisibleCount = _feedPageSize;
+    });
+    if (pos == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(pickLangText(lang,
+            ko: '위치를 확인할 수 없습니다. 브라우저의 위치 권한을 허용하거나 지역을 직접 선택해 주세요.',
+            en: 'Could not get your location. Allow location access or pick a region.',
+            ja: '現在地を取得できません。位置情報を許可するか地域を選んでください。',
+            zh: '無法取得位置，請允許定位或直接選擇地區。')),
+      ));
+    } else {
+      _selectProvince('전체');
+      trackPortalEvent('sort_near_me', const {});
+    }
+  }
+
+  Widget _quickFilterChip({
+    required Key key,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: InkWell(
+          key: key,
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+            decoration: BoxDecoration(
+              color: selected ? color : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: selected ? color : const Color(0xFFCBD5E1)),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                color: selected ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _selectProvince(String provKey) {
@@ -611,7 +699,7 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    // 2) 합법 인증 숙소 항목이면 숙소 전체 상세 페이지로 직행
+    // 2) 공공데이터 등록 숙소 항목이면 숙소 전체 상세 페이지로 직행
     if (item.category == DiscoveryCategory.stay) {
       Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ListingDetailPage(
@@ -777,6 +865,7 @@ class _HomePageState extends State<HomePage> {
                             prefixIcon: const Icon(Icons.search_rounded, size: 18),
                             suffixIcon: _query.isNotEmpty
                                 ? IconButton(
+                                    tooltip: pickLangText(lang, ko: '검색어 지우기', en: 'Clear', ja: 'クリア', zh: '清除'),
                                     padding: EdgeInsets.zero,
                                     icon: const Icon(Icons.clear_rounded, size: 16),
                                     onPressed: () => setState(() {
@@ -829,13 +918,15 @@ class _HomePageState extends State<HomePage> {
                                 ja: '📖 ローカルストーリーへ',
                                 zh: '📖 回到在地故事',
                               )
-                            : pickLangText(
-                                lang,
-                                ko: '🎁 반값여행·E-book관',
-                                en: '🎁 50% Pass & PDFs',
-                                ja: '🎁 半額支援・PDFガイド',
-                                zh: '🎁 半價補助・官方指南',
-                              ),
+                            : (screenW < 480
+                                ? pickLangText(lang, ko: '🎁 혜택', en: '🎁 Perks', ja: '🎁 特典', zh: '🎁 優惠')
+                                : pickLangText(
+                                    lang,
+                                    ko: '🎁 반값여행·E-book관',
+                                    en: '🎁 50% Pass & PDFs',
+                                    ja: '🎁 半額支援・PDFガイド',
+                                    zh: '🎁 半價補助・官方指南',
+                                  )),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -873,6 +964,39 @@ class _HomePageState extends State<HomePage> {
                                   scrollDirection: Axis.horizontal,
                                   child: Row(
                                     children: [
+                                      _quickFilterChip(
+                                        key: const Key('near_me_chip'),
+                                        label: _locating
+                                            ? pickLangText(lang, ko: '📍 위치 확인 중…', en: '📍 Locating…', ja: '📍 取得中…', zh: '📍 定位中…')
+                                            : pickLangText(lang, ko: '📍 내 주변', en: '📍 Near me', ja: '📍 現在地周辺', zh: '📍 我附近'),
+                                        selected: _userPos != null,
+                                        color: const Color(0xFF2563EB),
+                                        onTap: () => _toggleNearMe(lang),
+                                      ),
+                                      _quickFilterChip(
+                                        key: const Key('weekend_chip'),
+                                        label: pickLangText(lang, ko: '🗓 이번 주말', en: '🗓 This weekend', ja: '🗓 今週末', zh: '🗓 本週末'),
+                                        selected: _weekendOnly,
+                                        color: const Color(0xFFEA580C),
+                                        onTap: () => setState(() {
+                                          _weekendOnly = !_weekendOnly;
+                                          _feedVisibleCount = _feedPageSize;
+                                        }),
+                                      ),
+                                      _quickFilterChip(
+                                        key: const Key('saved_chip'),
+                                        label: pickLangText(lang,
+                                            ko: '❤️ 찜 ${SavedPlaces.ids.value.length}',
+                                            en: '❤️ Saved ${SavedPlaces.ids.value.length}',
+                                            ja: '❤️ 保存 ${SavedPlaces.ids.value.length}',
+                                            zh: '❤️ 收藏 ${SavedPlaces.ids.value.length}'),
+                                        selected: _savedOnly,
+                                        color: const Color(0xFFE11D48),
+                                        onTap: () => setState(() {
+                                          _savedOnly = !_savedOnly;
+                                          _feedVisibleCount = _feedPageSize;
+                                        }),
+                                      ),
                                       Padding(
                                         padding: const EdgeInsets.only(right: 8),
                                         child: InkWell(
@@ -1044,7 +1168,7 @@ class _HomePageState extends State<HomePage> {
                                         child: Text(
                                           trProvince(p.key, lang),
                                           style: TextStyle(
-                                            fontSize: 11.5,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w700,
                                             color: sel ? Colors.white : const Color(0xFF475569),
                                           ),

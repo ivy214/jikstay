@@ -2,7 +2,6 @@
 // 가독성(줄간격 1.88, 본문 폭 760px 제한), 핵심 탐방정보 박스(《장수여행》 p.9 모델),
 // 원본 PDF 직링크, 3사 대중교통 길찾기, 과하지 않은 주변 동선 추천을 하나로 통합한다.
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'detail_page.dart' show ListingDetailPage, StorageImage;
@@ -11,6 +10,7 @@ import 'hub_details.dart';
 import 'i18n.dart';
 import 'spot_detail_sheet.dart';
 import 'translation_store.dart';
+import 'ux_widgets.dart';
 import 'web_utils.dart';
 
 class StoryDetailPage extends StatefulWidget {
@@ -66,6 +66,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
 
   /// 명소·축제에서 만든 스토리는 첫 화면 데이터에 본문이 없으므로 시·도별 상세 파일로 다시 만든다.
   Future<void> _hydrateSpotStory(DailyStoryItem st) async {
+    TranslationStore.ensureDetails(appLangNotifier.value, kProvinceDetailCodes[st.province] ?? 'etc');
     DiscoveryItem? spot;
     for (final it in widget.allItems) {
       if (it.id == st.id) {
@@ -159,24 +160,10 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
   }
 
   Future<void> _copyShareLink() async {
-    final shareUrl = 'https://jikstay-lkxu1.web.app/?story=${Uri.encodeComponent(_story.id)}';
-    await Clipboard.setData(ClipboardData(text: shareUrl));
+    final shareUrl = '${currentSiteOrigin()}/?story=${Uri.encodeComponent(_story.id)}';
     trackPortalEvent('share_story_link', {'story_id': _story.id});
-    if (!mounted) return;
     final lang = appLangNotifier.value;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          pickLangText(
-            lang,
-            ko: '스토리 링크가 복사되었습니다. 가족·동행에게 바로 공유해 보세요!',
-            en: 'Story link copied to clipboard!',
-            ja: 'ストーリーのリンクをコピーしました！',
-            zh: '已複製故事連結，歡迎分享給親友！',
-          ),
-        ),
-      ),
-    );
+    await sharePlace(context, title: _story.tTitle(lang), url: shareUrl, lang: lang);
   }
 
   @override
@@ -252,6 +239,16 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
           ),
         ],
       ),
+      bottomNavigationBar: isWide
+          ? null
+          : DetailActionBar(
+              itemId: _story.id,
+              lang: lang,
+              onDirections: () => _openUrl(anchorItem.naverRouteUrl, eventTag: 'story_transit_naver'),
+              onShare: _copyShareLink,
+              phone: _story.phone,
+              onCall: () => _openUrl('tel:${_story.phone.replaceAll(' ', '')}', eventTag: 'story_call'),
+            ),
       body: SingleChildScrollView(
         controller: _scrollCtrl,
         padding: EdgeInsets.symmetric(horizontal: isWide ? 28 : 16, vertical: isWide ? 28 : 18),
@@ -369,6 +366,11 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // 3-1. 방문 결정용 핵심 정보 칩 + 출처·기준일
+                  QuickFactsChips(rows: tPracticalInfo),
+                  const SizedBox(height: 8),
+                  SourceLine(item: anchorItem, lang: lang),
                   const SizedBox(height: 20),
 
                   // 4. 핵심 설화·감성 한 줄 콜아웃 (Pull-Quote)
@@ -470,7 +472,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                                               child: Text(
                                                 '📍 $chapterCaption',
                                                 style: const TextStyle(
-                                                  fontSize: 11.5,
+                                                  fontSize: 12,
                                                   fontWeight: FontWeight.w700,
                                                   color: Colors.white,
                                                 ),
@@ -678,9 +680,9 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                     Text(
                       pickLangText(
                         lang,
-                        ko: '볼거리·먹거리·축제·합법 인증 숙소까지 연관 장소를 눌러 계속 이어서 탐색하세요.',
+                        ko: '볼거리·먹거리·축제·공공데이터 등록 숙소까지 연관 장소를 눌러 계속 이어서 탐색하세요.',
                         en: 'Tap any connected sight, eatery, festival, or licensed stay to keep exploring.',
-                        ja: '見どころ・グルメ・祭り・公認宿まで関連スポットをタップして続けて探索できます。',
+                        ja: '見どころ・グルメ・祭り・宿泊まで関連スポットをタップして続けて探索できます。',
                         zh: '點擊相連景點、美食、慶典或合法認證住宿，持續深入探索行程。',
                       ),
                       style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
@@ -717,7 +719,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                           if (bundle.stays.isNotEmpty)
                             (
                               DiscoveryCategory.stay,
-                              pickLangText(lang, ko: '🏡 안심숙소', en: '🏡 Stays', ja: '🏡 公認宿', zh: '🏡 住宿'),
+                              pickLangText(lang, ko: '🏡 숙소', en: '🏡 Stays', ja: '🏡 宿泊', zh: '🏡 住宿'),
                               bundle.stays.length,
                             ),
                         ])
@@ -816,7 +818,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                                     children: [
                                       Text(
                                         '${st.tSeasonBadge(lang)} · ${st.tRegionLabel(lang)}',
-                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
@@ -894,7 +896,7 @@ class _StoryNearbyStopTile extends StatelessWidget {
                               Text(
                                 item.categoryBadgeText(lang),
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   color: item.category.color,
                                 ),
@@ -917,7 +919,7 @@ class _StoryNearbyStopTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${item.categoryEmoji} ${item.categoryBadgeText(lang)} · ${pickLangText(lang, ko: '약 ${distKm.toStringAsFixed(1)}km', en: '${distKm.toStringAsFixed(1)}km away', ja: '約${distKm.toStringAsFixed(1)}km', zh: '約 ${distKm.toStringAsFixed(1)}km')}${item.couponTitle.isNotEmpty ? " · 🎁 ${item.tCouponTitle(lang)}" : ""}',
+                      '${item.categoryEmoji} ${item.categoryBadgeText(lang)} · ${item.distanceLabel(distKm, lang)}${item.couponTitle.isNotEmpty ? " · 🎁 ${item.tCouponTitle(lang)}" : ""}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
@@ -928,7 +930,7 @@ class _StoryNearbyStopTile extends StatelessWidget {
                         item.tSubtitle(lang),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                       ),
                     ],
                   ],

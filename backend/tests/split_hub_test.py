@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from split_hub import OVERVIEW_PREVIEW_CHARS, _default_map_url, split  # noqa: E402
+from split_hub import OVERVIEW_PREVIEW_CHARS, _default_map_url, split, split_translations  # noqa: E402
 
 long_overview = "가" * 150 + " 밤이면 야경이 아름답다."
 hub = {
@@ -58,4 +58,17 @@ assert core["daily_stories"] == hub["daily_stories"]
 # 원본은 변경하지 않음
 assert "paragraphs" in hub["spots"][0]
 print("[OK] 허브 core / 시·도별 상세 분할")
+# 번역 번들 분할: items 의 본문·탐방정보는 시·도별 상세로, 목록 필드는 core 에
+bundle = {
+    "lang": "en",
+    "stories": {"st1": {"title": "Story", "paragraphs": ["p"]}},
+    "stays": {"stay_1": {"title": "Stay"}},
+    "items": {"spot_a": {"title": "Suseong Lake", "overview": "x" * 400, "paragraphs": ["p1"], "practical_info": [{"label": "a", "value": "b"}]}},
+}
+t_core, t_det = split_translations(bundle, {"spot_a": "대구"})
+assert t_core["stories"] == bundle["stories"] and t_core["stays"] == bundle["stays"]
+assert t_core["items"]["spot_a"]["title"] == "Suseong Lake"
+assert "paragraphs" not in t_core["items"]["spot_a"] and t_core["items"]["spot_a"]["overview"].endswith("…")
+assert t_det["daegu"]["spot_a"]["paragraphs"] == ["p1"] and len(t_det["daegu"]["spot_a"]["overview"]) == 400
+print("[OK] 번역 번들 core / 시·도별 상세 분할")
 print("ALL OK")

@@ -409,6 +409,7 @@ final Map<String, Map<String, dynamic>> kDemoListingsMap = {
   },
   'stay_demo_pub_seoul': {
     'listing_id': 'stay_demo_pub_seoul',
+    'src': 'mois',
     'is_sponsored': false,
     'status': 'active',
     'title': '연남 아틀리에 하우스 (공공API 선별 예시)',
@@ -488,7 +489,7 @@ final Map<String, Map<String, dynamic>> kDemoListingsMap = {
     'i18n': {
       'en': {
         'title': 'Yeonnam Atelier House (Seoul Hongdae)',
-        'summary': '100% Gov-Licensed Foreigner City Homestay near Hongik Univ. Station & Yeontral Park.',
+        'summary': 'Licensed Foreigner City Homestay near Hongik Univ. Station & Yeontral Park.',
       },
       'ja': {
         'title': '延南アトリエハウス（ソウル弘大・延南洞）',

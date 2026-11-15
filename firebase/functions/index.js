@@ -45,7 +45,7 @@ function fallbackNaverMapUrl(listing) {
   if (typeof listing.naver_map_url === "string" && /^https?:\/\//i.test(listing.naver_map_url)) {
     return listing.naver_map_url;
   }
-  const q = [listing.region_depth1, listing.region_depth2, listing.title].filter(Boolean).join(" ").trim() || "합법숙소";
+  const q = [listing.region_depth1, listing.region_depth2, listing.title].filter(Boolean).join(" ").trim() || "숙소";
   return `https://map.naver.com/p/search/${encodeURIComponent(q)}`;
 }
 
@@ -55,40 +55,40 @@ function buildLocalizedMeta(listing, lang) {
   const points = Array.isArray(listing.summary_points) ? listing.summary_points.slice(0, 2).join(" · ") : "";
 
   if (lang === "en") {
-    const title = (i18n && i18n.title) || listing.title || "Gov-Verified Stay in Korea";
+    const title = (i18n && i18n.title) || listing.title || "Local Stay in Korea";
     return {
       htmlLang: "en",
-      titleText: `${title} | JikStay Korea (0% Booking Fee)`,
+      titleText: `${title} | JikStay Korea`,
       descText:
         (i18n && i18n.summary) ||
-        `100% Korean Government-Licensed Stay (${listing.license_type || "Verified"}) in ${region}. Zero platform commission — book direct with the host.`,
+        `Stay in ${region} listed in Korean public tourism data. See the location, official links and local reviews, then contact the property directly.`,
     };
   }
   if (lang === "ja") {
-    const title = (i18n && i18n.title) || listing.title || "韓国公認ステイ";
+    const title = (i18n && i18n.title) || listing.title || "韓国の宿泊施設";
     return {
       htmlLang: "ja",
-      titleText: `${title} | JikStay 韓国公認宿・仲介手数料0ウォン`,
+      titleText: `${title} | JikStay Korea`,
       descText:
         (i18n && i18n.summary) ||
-        `韓国自治体の営業申告確認済（${listing.license_type || "公認"}）・${region}。予約サイトの仲介手数料0ウォンでホスト直取引。`,
+        `韓国の公共観光データに登録された${region}の宿泊施設。場所・公式リンク・現地レビューを確認できます。`,
     };
   }
   if (lang === "zh") {
-    const title = (i18n && i18n.title) || listing.title || "韓國合法認證住宿";
+    const title = (i18n && i18n.title) || listing.title || "韓國住宿";
     return {
       htmlLang: "zh-Hant",
-      titleText: `${title} | JikStay 韓國合法民宿・0%手續費直訂`,
+      titleText: `${title} | JikStay 韓國`,
       descText:
         (i18n && i18n.summary) ||
-        `韓國政府營業申報核實合法住宿（${listing.license_type || "認證"}）・${region}。免平台仲介手續費，直接聯繫屋主預訂。`,
+        `登錄於韓國公共旅遊資料的${region}住宿。可查看位置、官方連結與在地評價。`,
     };
   }
 
-  const titleText = listing.title ? `${listing.title} | 직스테이` : "직스테이 - 수수료 0원 합법 숙소 직거래";
+  const titleText = listing.title ? `${listing.title} | 직스테이` : "직스테이 로컬 - 공공데이터 숙소·로컬 여행 정보";
   const descText =
-    [region, listing.license_type ? `${listing.license_type} 신고 확인` : "", points].filter(Boolean).join(" | ") ||
-    "영업신고를 확인한 합법 숙소를 중개수수료 없이 호스트와 직접 예약하세요.";
+    [region, listing.license_type || "", points].filter(Boolean).join(" | ") ||
+    "공공데이터에 등록된 숙소와 주변 볼거리·먹거리·축제를 한 번에 찾아보세요.";
   return { htmlLang: "ko", titleText, descText };
 }
 
@@ -186,18 +186,18 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko") {
   let titleText = isStory ? `${title} · ${spot.source_book || prov} | 직스테이 로컬 스토리` : `${title} (${prov}) | 직스테이 로컬`;
   let descText = spot.summary
     ? `${spot.summary} (${addr})`
-    : `${addr} · 주변 맛집·지자체 공식 관광지도 PDF·합법 안심숙소 동선 안내`;
+    : `${addr} · 주변 맛집·지자체 공식 관광지도·숙소 동선 안내`;
   if (lang === "en") {
     titleText = `${title} (${provEn}) | Jikstay Korea`;
     descText = spot.en_summary
       ? String(spot.en_summary)
-      : `${addr} — Explore official municipal PDF maps, public transit routes, nearby local food & verified stays in ${provEn}.`;
+      : `${addr} — Explore official municipal PDF maps, public transit routes, nearby local food & stays in ${provEn}.`;
   } else if (lang === "ja") {
     titleText = `${title}（${prov}）| Jikstay Korea`;
-    descText = `${addr} — 自治体公式観光地図PDF・乗換ルート・周辺グルメ・公認宿ガイド。`;
+    descText = `${addr} — 自治体公式観光地図PDF・乗換ルート・周辺グルメ・宿泊ガイド。`;
   } else if (lang === "zh") {
     titleText = `${title}（${prov}）| Jikstay 韓國`;
-    descText = `${addr} — 官方旅遊地圖PDF、大眾運輸路線、周邊在地美食與合法民宿指南。`;
+    descText = `${addr} — 官方旅遊地圖PDF、大眾運輸路線、周邊在地美食與住宿指南。`;
   }
 
   const encodedId = encodeURIComponent(spotId);
@@ -280,16 +280,16 @@ function buildPlanOgHtml(template, rawPlan, origin, rawLang = "ko") {
   const provEn = PROVINCE_EN[prov] || prov;
   const titleText =
     lang === "ko"
-      ? `${prov} ${days - 1}박${days}일 추천 여행코스 · 축제·맛집·합법숙소 | 직스테이 로컬`
+      ? `${prov} ${days - 1}박${days}일 추천 여행코스 · 축제·맛집·숙소 | 직스테이 로컬`
       : lang === "ja"
-        ? `${prov} ${days}日間おすすめ旅行プラン・公認宿 | Jikstay Korea`
+        ? `${prov} ${days}日間おすすめ旅行プラン・宿泊 | Jikstay Korea`
         : lang === "zh"
-          ? `${prov} ${days}日推薦行程・慶典美食與合法住宿 | Jikstay 韓國`
+          ? `${prov} ${days}日推薦行程・慶典美食與住宿 | Jikstay 韓國`
           : `${provEn} ${days}-Day Korea Trip Itinerary & Verified Stays | Jikstay Korea`;
   const descText =
     lang === "ko"
-      ? `${prov} 임박 축제, 로컬 맛집, 수수료 0원 합법 안심숙소를 반경 55km 동선으로 묶은 맞춤 여행코스입니다.`
-      : `Custom ${days}-day ${provEn} itinerary combining local festivals, top food spots & 0% fee verified stays.`;
+      ? `${prov} 임박 축제, 로컬 맛집, 공공데이터 등록 숙소를 반경 55km 동선으로 묶은 맞춤 여행코스입니다.`
+      : `Custom ${days}-day ${provEn} itinerary combining local festivals, top food spots & public-data stays.`;
   const canon = `${origin}/?plan=${encodeURIComponent(rawPlan)}${lang === "ko" ? "" : `&lang=${encodeURIComponent(lang)}`}`;
   const jsonLd = JSON.stringify({
     "@context": "https://schema.org",
@@ -318,17 +318,17 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko") {
   const lang = normalizeLang(rawLang);
   const htmlLang = lang === "zh" ? "zh-Hant" : lang;
   const provEn = PROVINCE_EN[province] || province;
-  let titleText = `${province} 여행 공식 관광지도 PDF·축제·로컬맛집·합법숙소 총정리 | 직스테이 로컬`;
-  let descText = `${province} 지자체 공식 가이드북(PDF/E-book), 실시간 축제·오일장, 로컬 맛집 쿠폰과 합법 인허가 안심숙소를 한눈에 확인하세요.`;
+  let titleText = `${province} 여행 공식 관광지도·축제·로컬맛집·숙소 총정리 | 직스테이 로컬`;
+  let descText = `${province} 지자체 공식 가이드북(PDF/E-book), 진행 중인 축제·오일장, 로컬 맛집 쿠폰과 공공데이터 등록 숙소를 한눈에 확인하세요.`;
   if (lang === "en") {
-    titleText = `${provEn} Official Tourist Maps PDF, Festivals, Food & Legal Stays | Jikstay Korea`;
-    descText = `Explore ${provEn}, Korea with free official municipal PDF guidebooks, public transit routes, local festivals, restaurants, and verified stays.`;
+    titleText = `${provEn} Official Tourist Maps PDF, Festivals, Food & Stays | Jikstay Korea`;
+    descText = `Explore ${provEn}, Korea with free official municipal PDF guidebooks, public transit routes, local festivals, restaurants, and stays.`;
   } else if (lang === "ja") {
-    titleText = `${province} 公式観光地図PDF・祭り・グルメ・公認宿まとめ | Jikstay Korea`;
-    descText = `${province}の自治体公式ガイドブックPDF、開催中の祭り、地元グルメ、営業申告確認済の公認宿をマップで一括検索。`;
+    titleText = `${province} 公式観光地図PDF・祭り・グルメ・宿泊まとめ | Jikstay Korea`;
+    descText = `${province}の自治体公式ガイドブックPDF、開催中の祭り、地元グルメ、宿泊施設をまとめて検索。`;
   } else if (lang === "zh") {
-    titleText = `${province} 官方旅遊地圖PDF・慶典・美食・合法民宿總整理 | Jikstay 韓國`;
-    descText = `一鍵開啟${province}地方政府官方旅遊指南PDF、大眾運輸路線、慶典活動、在地美食與合法認證住宿。`;
+    titleText = `${province} 官方旅遊地圖PDF・慶典・美食・住宿總整理 | Jikstay 韓國`;
+    descText = `一鍵開啟${province}地方政府官方旅遊指南PDF、大眾運輸路線、慶典活動、在地美食與住宿。`;
   }
 
   const encodedProv = encodeURIComponent(province);
@@ -437,14 +437,14 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   if (lang !== "ko") {
     const htmlLang = lang === "zh" ? "zh-Hant" : lang;
     const homeTitles = {
-      en: "Jikstay Korea — Verified Local Stays, 0% Fee & 17-Province Travel Guides",
-      ja: "Jikstay Korea — 韓国公認宿・仲介手数料0円・17市道公式ローカルガイド",
-      zh: "Jikstay 韓國 — 韓國合法認證住宿・0%手續費・17市道官方旅遊指南",
+      en: "Jikstay Korea — Local Stories, Stays & 17-Province Travel Guides",
+      ja: "Jikstay Korea — ローカル旅行ストーリー・宿・17市道公式ガイド",
+      zh: "Jikstay 韓國 — 在地旅遊故事・住宿・17市道官方旅遊指南",
     };
     const homeDescs = {
-      en: "Book government-verified legal stays in Korea with 0% guest platform fee. Explore festivals, local food & official municipal travel guides across 17 provinces.",
-      ja: "韓国政府・自治体の営業届出確認済み宿泊施設を仲介手数料0円で直接予約。全国17市道の祭り・グルメ・公式ガイドを一覧。",
-      zh: "免平台手續費直接預訂韓國政府核驗合法民宿與韓屋，一次瀏覽全國17市道慶典、在地美食與官方旅遊指南。",
+      en: "Find stays listed in Korean public tourism data and explore festivals, local food & official municipal travel guides across 17 provinces.",
+      ja: "韓国の公共観光データに登録された宿泊施設と、全国17市道の祭り・グルメ・公式ガイドを一覧。",
+      zh: "查看登錄於韓國公共旅遊資料的住宿，一次瀏覽全國17市道慶典、在地美食與官方旅遊指南。",
     };
     const t = escapeHtml(homeTitles[lang] || homeTitles.en);
     const d = escapeHtml(homeDescs[lang] || homeDescs.en);

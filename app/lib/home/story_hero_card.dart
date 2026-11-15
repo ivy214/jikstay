@@ -55,7 +55,7 @@ class _DailyStoryHeroCard extends StatelessWidget {
                     ),
                     child: Text(
                       lang == AppLang.ko ? '📖 $dateTag' : trUi('today_local_story', lang),
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
                     ),
                   ),
                   Container(
@@ -66,7 +66,7 @@ class _DailyStoryHeroCard extends StatelessWidget {
                     ),
                     child: Text(
                       story.tSeasonBadge(lang),
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
                     ),
                   ),
                 ],

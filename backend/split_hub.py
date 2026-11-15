@@ -3,6 +3,7 @@
 초기 로딩 경량화: public_travel_hub.json(원본, ~1.6MB)을
   - app/web/data/hub/core.json            목록·카드·지도·주변 거리 계산에 필요한 필드만 (첫 화면에서 로드)
   - app/web/data/hub/details_{code}.json  시·도별 상세 전용 필드 (상세 화면을 열 때 해당 시·도만 로드)
+  - app/web/data/i18n/{en|ja|zh}/core.json + details_{code}.json  번역 번들도 같은 방식으로 분할
 으로 나눈다.
 
 원본 파일은 그대로 두고(번역·다이제스트·보강 스크립트가 계속 원본을 읽고 씀), 이 스크립트는 빌드 직전에 실행한다.
@@ -22,6 +23,11 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parent.parent
 HUB_PATH = ROOT / "app" / "web" / "data" / "public_travel_hub.json"
 OUT_DIR = ROOT / "app" / "web" / "data" / "hub"
+I18N_SRC_DIR = ROOT / "app" / "web" / "data"
+I18N_OUT_DIR = ROOT / "app" / "web" / "data" / "i18n"
+LANGS = ("en", "ja", "zh")
+# 번역 번들에서 상세 화면에서만 쓰는 필드 (목록·카드는 title/addr/region_label/overview 미리보기/pull_quote/coupon_title 만 사용)
+I18N_DETAIL_FIELDS = ("paragraphs", "practical_info", "practical_header")
 
 # app/lib/hub_details.dart 의 kProvinceDetailCodes 와 같아야 한다.
 PROVINCE_CODES = {
@@ -82,6 +88,33 @@ def split(hub: dict[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, dict
     return core, details
 
 
+def split_translations(bundle: dict[str, Any], province_of: dict[str, str]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """번역 번들의 items 섹션을 목록용 core 와 시·도별 상세로 나눈다 (stories·markets·stays 는 core 에 그대로)."""
+    core = {k: v for k, v in bundle.items() if k != "items"}
+    core_items: dict[str, Any] = {}
+    details: dict[str, dict[str, Any]] = {}
+    for item_id, entry in (bundle.get("items") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        slim = dict(entry)
+        detail: dict[str, Any] = {}
+        for f in I18N_DETAIL_FIELDS:
+            if f in slim:
+                val = slim.pop(f)
+                if val not in (None, "", [], {}):
+                    detail[f] = val
+        overview = str(slim.get("overview") or "")
+        if len(overview) > OVERVIEW_PREVIEW_CHARS * 2:  # 외국어는 글자 수가 많아 한국어 미리보기의 2배까지
+            detail["overview"] = overview
+            slim["overview"] = overview[: OVERVIEW_PREVIEW_CHARS * 2].rstrip() + "…"
+        if detail:
+            code = PROVINCE_CODES.get(province_of.get(item_id, ""), OTHER_CODE)
+            details.setdefault(code, {})[item_id] = detail
+        core_items[item_id] = slim
+    core["items"] = core_items
+    return core, details
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     hub = json.loads(HUB_PATH.read_text(encoding="utf-8"))
@@ -92,6 +125,21 @@ def main() -> None:
         old.unlink()
     core_bytes = _dump(OUT_DIR / "core.json", core)
     detail_sizes = {code: _dump(OUT_DIR / f"details_{code}.json", d) for code, d in sorted(details.items())}
+
+    province_of = {str(it.get("id")): str(it.get("province") or "") for sec in ("spots", "festivals") for it in hub.get(sec, [])}
+    for lang in LANGS:
+        src = I18N_SRC_DIR / f"translations_{lang}.json"
+        if not src.exists():
+            continue
+        t_core, t_details = split_translations(json.loads(src.read_text(encoding="utf-8")), province_of)
+        out = I18N_OUT_DIR / lang
+        out.mkdir(parents=True, exist_ok=True)
+        for old in out.glob("details_*.json"):
+            old.unlink()
+        c = _dump(out / "core.json", t_core)
+        for code, d in t_details.items():
+            _dump(out / f"details_{code}.json", d)
+        print(f"[split-i18n] {lang}: 원본 {src.stat().st_size / 1024:.0f}KB → core {c / 1024:.0f}KB + 시·도별 상세 {len(t_details)}개")
 
     full = len(HUB_PATH.read_bytes())
     print(f"[split-hub] 원본 {full / 1024:.0f}KB → core {core_bytes / 1024:.0f}KB "

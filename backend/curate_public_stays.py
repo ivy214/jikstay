@@ -88,27 +88,27 @@ PROVINCE_I18N: dict[str, dict[str, str]] = {
 CATEGORY_I18N: dict[str, dict[str, str]] = {
     "농어촌민박업": {
         "ko_type": "감성 농어촌민박",
-        "en": "Korean Countryside Homestay (Gov-Licensed)",
-        "ja": "韓国ローカル農漁村民宿（自治体認可済）",
-        "zh": "韓國在地農漁村民宿（政府合法認證）",
+        "en": "Korean Countryside Homestay",
+        "ja": "韓国ローカル農漁村民宿",
+        "zh": "韓國在地農漁村民宿",
     },
     "일반/생활숙박업": {
-        "ko_type": "합법 숙박·레지던스",
-        "en": "Licensed Stay & Residence",
-        "ja": "公認ステイ・レジデンス（営業申告済）",
-        "zh": "合法認證住宿・公寓式酒店",
+        "ko_type": "숙박·레지던스",
+        "en": "Stay & Residence",
+        "ja": "ステイ・レジデンス",
+        "zh": "住宿・公寓式酒店",
     },
     "한옥체험업": {
         "ko_type": "전통 한옥스테이",
-        "en": "Traditional Korean Hanok Stay (Gov-Verified)",
-        "ja": "韓国伝統韓屋ステイ（自治体認証）",
-        "zh": "韓國傳統韓屋體驗住宿（政府認證）",
+        "en": "Traditional Korean Hanok Stay",
+        "ja": "韓国伝統韓屋ステイ",
+        "zh": "韓國傳統韓屋體驗住宿",
     },
     "외국인관광도시민박업": {
         "ko_type": "외국인 전용 도시민박",
-        "en": "Foreigner-Exclusive City Homestay (Gov-Licensed)",
-        "ja": "外国人専用・都市型ゲストハウス（政府公認）",
-        "zh": "外國旅客專屬都市民宿（政府合法認證）",
+        "en": "Foreigner-Exclusive City Homestay",
+        "ja": "外国人専用・都市型ゲストハウス",
+        "zh": "外國旅客專屬都市民宿",
     },
 }
 
@@ -352,11 +352,37 @@ def infer_stay_coords(doc: dict[str, Any]) -> tuple[float, float, bool]:
     return (round(base_lat + off_lat, 5), round(base_lng + off_lng, 5), True)
 
 
-def make_public_listing_id(license_type: str, mng_no: str, name: str, addr: str) -> str:
-    """재실행 시에도 동일한 문서 ID를 유지해 호스트 클레임·클릭 통계를 보존한다."""
-    seed = f"{license_type}|{mng_no.strip()}" if mng_no.strip() else f"{license_type}|{name.strip()}|{addr.strip()}"
+def make_public_listing_id(license_type: str, mng_no: str, name: str, addr: str, qualify: bool = False) -> str:
+    """재실행 시에도 동일한 문서 ID를 유지해 클릭·후기 통계를 보존한다.
+
+    한옥체험업·외국인관광도시민박업의 관리번호(MNG_NO)는 지자체별 일련번호라 전국에서 겹친다.
+    겹치는 경우(qualify=True) 주소까지 넣어 서로 다른 숙소가 같은 문서를 덮어쓰지 않게 한다.
+    """
+    if mng_no.strip():
+        seed = f"{license_type}|{mng_no.strip()}" + (f"|{addr.strip()}" if qualify else "")
+    else:
+        seed = f"{license_type}|{name.strip()}|{addr.strip()}"
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:10]
     return f"stay_pub_{digest}"
+
+
+def assign_unique_listing_ids(docs: list[dict[str, Any]]) -> int:
+    """같은 listing_id 를 받은 서로 다른 숙소에 주소 포함 ID를 다시 부여한다. 바꾼 개수를 돌려준다."""
+    counts: dict[str, int] = {}
+    for d in docs:
+        counts[d["listing_id"]] = counts.get(d["listing_id"], 0) + 1
+    changed = 0
+    for d in docs:
+        if counts[d["listing_id"]] > 1:
+            addr = str((d.get("location_info") or {}).get("display_address") or "")
+            d["listing_id"] = make_public_listing_id(
+                str(d.get("license_type") or ""), str(d.get("public_mng_no") or ""), str(d.get("title") or ""), addr, qualify=True
+            )
+            changed += 1
+    ids = [d["listing_id"] for d in docs]
+    if len(ids) != len(set(ids)):
+        raise RuntimeError("listing_id 중복이 남아 있습니다 (주소까지 같은 숙소).")
+    return changed
 
 
 def extract_public_amenities_and_specs(
@@ -929,9 +955,9 @@ def build_multilingual_meta(
     cat = CATEGORY_I18N.get(
         license_type,
         {
-            "en": "Government-Licensed Stay",
-            "ja": "政府公認宿泊施設",
-            "zh": "政府合法認證住宿",
+            "en": "Local Stay",
+            "ja": "宿泊施設",
+            "zh": "住宿",
         },
     )
     rooms = room_specs.get("bedrooms")
@@ -942,26 +968,26 @@ def build_multilingual_meta(
     return {
         "en": {
             "title": f"{name} ({prov['en']})",
-            "subtitle": f"{cat['en']}{room_en} · 0% Booking Fee Direct Stay",
+            "subtitle": f"{cat['en']}{room_en}",
             "summary": (
-                f"Verified legal stay registered with local Korean authorities in {prov['en']} ({depth2}). "
-                "Zero platform commission — connect directly with the property or view local reviews."
+                f"{cat['en']} in {prov['en']} ({depth2}) listed in Korean public tourism data. "
+                "See the location, official links and local reviews, then contact the property directly."
             ),
         },
         "ja": {
             "title": f"{name}（{prov['ja']}）",
-            "subtitle": f"{cat['ja']}{room_ja}・仲介手数料0ウォン直取引",
+            "subtitle": f"{cat['ja']}{room_ja}",
             "summary": (
-                f"韓国自治体の営業申告が確認された{prov['ja']}（{depth2}）の合法宿泊施設です。"
-                "予約サイトの仲介手数料なしで公式窓口・現地レビューをご確認いただけます。"
+                f"韓国の公共観光データに登録された{prov['ja']}（{depth2}）の{cat['ja']}です。"
+                "場所・公式リンク・現地レビューを確認し、宿へ直接お問い合わせください。"
             ),
         },
         "zh": {
             "title": f"{name}（{prov['zh']}）",
-            "subtitle": f"{cat['zh']}{room_zh}・0%平台手續費直訂",
+            "subtitle": f"{cat['zh']}{room_zh}",
             "summary": (
-                f"經韓國地方政府營業申報核實的{prov['zh']}（{depth2}）合法住宿。"
-                "免除平台高額仲介費，可直接查看在地評價並聯繫住宿方。"
+                f"登錄於韓國公共旅遊資料的{prov['zh']}（{depth2}）{cat['zh']}。"
+                "可查看位置、官方連結與在地評價，並直接聯繫住宿方。"
             ),
         },
     }
@@ -1003,8 +1029,11 @@ def build_curated_listing_doc(
     host_blog_url = str(enrichment.get("host_blog_url") or "").strip()
 
     if kto_cid:
-        verify_summary = f"한국관광공사(TourAPI) 등록 합법 '{license_type}' 숙박시설 (콘텐츠 #{kto_cid})"
-        verify_subtitle = f"한국관광공사 국문 관광정보(콘텐츠 #{kto_cid})에 등록·검증된 합법 숙소입니다."
+        verify_summary = f"한국관광공사(TourAPI) 등록 숙박시설 · 분류 '{license_type}' (콘텐츠 #{kto_cid})"
+        verify_subtitle = (
+            f"한국관광공사 국문 관광정보(콘텐츠 #{kto_cid})에 등록된 숙소입니다. "
+            "행정안전부 인허가 대조 전이므로 영업신고 여부는 숙소에 직접 확인해 주세요."
+        )
         license_badge_text = f"한국관광공사 등록 (#{kto_cid})"
     else:
         verify_summary = f"행정안전부 지방인허가 데이터 기준 '{license_type}' 영업/정상 확인 업소"
@@ -1028,7 +1057,7 @@ def build_curated_listing_doc(
     highlights = [
         {
             "icon_key": "verified",
-            "title": f"{license_type} 공공 인허가 확인",
+            "title": "한국관광공사 등록 숙소" if kto_cid else f"{license_type} 공공 인허가 확인",
             "subtitle": verify_subtitle,
         },
         {
@@ -1321,6 +1350,8 @@ def build_lightweight_index_entry(doc: dict[str, Any]) -> dict[str, Any]:
         "lng": round(lng, 5),
         "license_type": doc["license_type"],
         "curated_score": doc.get("curated_score", 0),
+        # 정보 출처: 행정안전부 인허가 대조(mois) / 한국관광공사 TourAPI 등록(kto) — 화면의 확인 문구가 달라진다
+        "src": "kto" if str(doc.get("public_mng_no") or "").startswith("KTO-") else "mois",
     }
     if doc.get("accommodation_type"):
         entry["accommodation_type"] = doc["accommodation_type"]
@@ -1446,6 +1477,10 @@ def run_curation(
                 f"정예 {len(selected)}곳 확정 (공식사진 링크 {photo_cnt}곳)"
             )
             all_curated.extend(selected)
+
+    renamed = assign_unique_listing_ids(all_curated)
+    if renamed:
+        print(f"관리번호 중복 숙소 {renamed}곳에 주소 포함 ID 부여")
 
     os.makedirs(os.path.dirname(os.path.abspath(out_json)), exist_ok=True)
     with open(out_json, "w", encoding="utf-8") as f:

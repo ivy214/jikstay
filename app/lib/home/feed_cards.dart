@@ -69,7 +69,7 @@ class _LiveFeedItemCard extends StatelessWidget {
                         ),
                         child: Text(
                           '${item.categoryEmoji} ${trProvince(item.province, lang)} · ${item.categoryBadgeText(lang)}',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: item.category.color),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: item.category.color),
                         ),
                       ),
                       if (freshBadge != null)
@@ -81,7 +81,7 @@ class _LiveFeedItemCard extends StatelessWidget {
                           ),
                           child: Text(
                             freshBadge,
-                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFFB91C1C)),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFB91C1C)),
                           ),
                         ),
                       if (item.isSponsored)
@@ -99,13 +99,13 @@ class _LiveFeedItemCard extends StatelessWidget {
                               ja: '🎁 来店特典',
                               zh: '🎁 造訪優惠',
                             ),
-                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
                           ),
                         ),
                       if (item.reviewCount > 0)
                         Text(
                           '★ ${item.averageRating.toStringAsFixed(1)} (${item.reviewCount})',
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                         ),
                     ],
                   ),
@@ -138,7 +138,7 @@ class _LiveFeedItemCard extends StatelessWidget {
                           trUi('connected_nearby_hint', lang),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF2563EB)),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF2563EB)),
                         ),
                       ),
                       if (item.category == DiscoveryCategory.ebook && item.externalUrl.isNotEmpty)
@@ -154,7 +154,7 @@ class _LiveFeedItemCard extends StatelessWidget {
                                 ja: '今すぐ開く ↗',
                                 zh: '立即開啟 ↗',
                               ),
-                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
                             ),
                           ),
                         ),
@@ -257,8 +257,8 @@ class ListingCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${data['license_type']} 영업확인',
-                      style: const TextStyle(color: Color(0xFF222222), fontSize: 11.5, fontWeight: FontWeight.w700),
+                      stayVerificationLabel(data, appLangNotifier.value, short: true),
+                      style: const TextStyle(color: Color(0xFF222222), fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                   ],
                 ),
@@ -273,7 +273,7 @@ class ListingCard extends StatelessWidget {
                   decoration: BoxDecoration(color: kBrand, borderRadius: BorderRadius.circular(20)),
                   child: Text(
                     promoTitle.isNotEmpty ? '🎁 이벤트' : '⚡ 공식 직거래',
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -284,7 +284,7 @@ class ListingCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(6)),
-                  child: const Text('외국인 전용 숙소', style: TextStyle(color: Colors.white, fontSize: 11)),
+                  child: const Text('외국인 전용 숙소', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
               ),
           ]),
@@ -310,7 +310,7 @@ class ListingCard extends StatelessWidget {
                         style: const TextStyle(color: Color(0xFF222222), fontSize: 12, fontWeight: FontWeight.w800),
                       ),
                     ] else if (specBadge.isNotEmpty)
-                      Text(specBadge, style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5)),
+                      Text(specBadge, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -334,7 +334,7 @@ class ListingCard extends StatelessWidget {
                     topAm.join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF6C757D)),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6C757D)),
                   ),
                 ],
                 const Spacer(),
@@ -352,7 +352,7 @@ class ListingCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF222222)),
                         ),
-                        const Text('중개수수료 0원', style: TextStyle(fontSize: 11, color: kBrand, fontWeight: FontWeight.w700)),
+                        const Text('중개수수료 0원', style: TextStyle(fontSize: 12, color: kBrand, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),

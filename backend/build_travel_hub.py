@@ -1061,7 +1061,8 @@ def fetch_travel_courses(limit: int = 12) -> list[dict[str, Any]]:
             "image_url": it["_img"],
             "overview": overview or "한국관광공사가 엄선한 지역 대표 테마 여행코스입니다.",
             "stops": stops,
-            "article_url": f"https://korean.visitkorea.or.kr/detail/cs_detail_cos.do?cotid={cid}" if cid else "https://korean.visitkorea.or.kr",
+            # TourAPI contentid 는 웹사이트 상세 주소(cotid)와 체계가 달라 404 → 대한민국 구석구석 검색으로 연결
+            "article_url": f"https://korean.visitkorea.or.kr/search/search_list.do?keyword={quote(it['_title'])}" if it.get("_title") else "https://korean.visitkorea.or.kr",
         })
     return courses
 

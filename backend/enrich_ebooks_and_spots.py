@@ -21,7 +21,7 @@ import re
 import sys
 import time
 from typing import Any
-from urllib.parse import quote, urljoin
+from urllib.parse import urlparse, quote, urljoin
 
 from bs4 import BeautifulSoup
 from google import genai
@@ -49,6 +49,15 @@ from curate_public_stays import (  # noqa: E402
 )
 
 ENV_PATH = ROOT / ".env"
+SOCIAL_HOSTS = ("facebook.com", "instagram.com", "twitter.com", "x.com", "youtube.com", "blog.naver.com", "pf.kakao.com")
+
+
+def is_social_link(url: str) -> bool:
+    """가이드북·PDF 링크 후보에서 제외할 SNS·블로그 주소인지."""
+    host = (urlparse(url).hostname or "").lower()
+    return any(host == h or host.endswith("." + h) for h in SOCIAL_HOSTS)
+
+
 HUB_PATH = ROOT / "app" / "web" / "data" / "public_travel_hub.json"
 MODEL_NAME = "gemini-3.5-flash-lite"
 
@@ -67,7 +76,7 @@ def load_env() -> None:
 def probe_ebook_site(ebook: dict[str, Any]) -> dict[str, Any]:
     url = str(ebook.get("url", "") or "").strip()
     prov = str(ebook.get("province", "") or "").strip()
-    found_pdfs: list[dict[str, str]] = list(ebook.get("pdf_links") or [])
+    found_pdfs: list[dict[str, str]] = [p for p in (ebook.get("pdf_links") or []) if not is_social_link(str(p.get("url", "")))]
     seen_urls = {p.get("url", "") for p in found_pdfs if isinstance(p, dict)}
     snippets: list[str] = []
     page_title = ""
@@ -90,6 +99,8 @@ def probe_ebook_site(ebook: dict[str, Any]) -> dict[str, Any]:
                     low = (href + " " + txt).lower()
                     if any(k in low for k in (".pdf", "ebook", "e-book", "다운로드", "download", "getfile", "guidebook")):
                         abs_url = urljoin(url, href)
+                        if is_social_link(abs_url):
+                            continue  # 'PDF·가이드북' 버튼이 SNS 페이지로 연결되지 않게
                         if abs_url.startswith("http") and abs_url not in seen_urls and len(found_pdfs) < 4:
                             seen_urls.add(abs_url)
                             label = txt[:48] if txt else f"{prov} 공식 가이드북/PDF"

@@ -11,6 +11,7 @@ import 'package:jikstay/main.dart';
 import 'package:jikstay/naver_place_info.dart';
 import 'package:jikstay/spot_detail_sheet.dart';
 import 'package:jikstay/translation_store.dart';
+import 'package:jikstay/ux_widgets.dart';
 import 'package:jikstay/travel_hub.dart';
 import 'package:jikstay/trip_planner.dart';
 
@@ -348,7 +349,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('행정안전부 공공데이터 영업확인 업소'), findsOneWidget);
+      expect(find.textContaining('행정안전부 인허가 데이터 영업확인'), findsWidgets);
       expect(find.textContaining('네이버 블로그 실방문 후기'), findsOneWidget);
       expect(find.text('무료 주인 등록 · 직거래 연결'), findsNothing);
 
@@ -404,7 +405,7 @@ void main() {
       expect(find.textContaining('2026 반값여행'), findsWidgets);
       expect(find.textContaining('K-공감'), findsWidgets);
 
-      final namhaeChip = find.text('남해 합법숙소');
+      final namhaeChip = find.text('남해 숙소');
       await tester.scrollUntilVisible(namhaeChip, 250, scrollable: find.byType(Scrollable).first);
       await tester.tap(namhaeChip);
       await tester.pump();
@@ -460,15 +461,21 @@ void main() {
       expect(find.text('직스테이 로컬'), findsOneWidget);
       expect(find.byKey(const Key('daily_story_banner')), findsOneWidget);
       expect(find.byKey(const Key('prov_chip_전북')), findsNothing);
-      expect(find.textContaining('실시간 로컬 피드'), findsOneWidget);
+      expect(find.textContaining('로컬 피드'), findsOneWidget);
 
       // 2. 일일 스토리 배너 클릭 → 매거진형 스토리 상세 페이지(원문 + 《장수여행》 p.9 핵심 탐방박스 + 원본 PDF + 대중교통) 확인
+      // '오늘의 스토리'는 날짜마다 바뀌므로 실행 당일 홈이 고른 스토리 기준으로 확인한다
+      final today = pickTodayMunicipalStory(stories: const [], allItems: kBuiltInSeedDiscoveryItems);
       await tester.tap(find.byKey(const Key('open_daily_story_btn')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('금강첫물, 뜬봉샘 발원지'), findsWidgets);
-      expect(find.textContaining('조선 개국조 이성계가 봉황새가'), findsWidgets);
-      expect(find.byKey(const Key('story_practical_box')), findsOneWidget);
-      expect(find.textContaining('《장수여행》 가이드북 원본 열람'), findsOneWidget);
+      expect(find.textContaining(today.title), findsWidgets);
+      if (today.paragraphs.isNotEmpty) {
+        final head = today.paragraphs.first;
+        expect(find.textContaining(head.substring(0, head.length < 12 ? head.length : 12)), findsWidgets);
+      }
+      if (today.practicalInfo.isNotEmpty) {
+        expect(find.byKey(const Key('story_practical_box')), findsOneWidget);
+      }
       expect(find.byKey(const Key('story_kakao_route_btn')), findsOneWidget);
 
       // 지도로 복귀
@@ -610,7 +617,8 @@ void main() {
         TranslationStore.clearForTest();
       });
 
-      final storyId = kFallbackDailyMunicipalStories.first.id;
+      // '오늘의 스토리'는 날짜에 따라 바뀌므로 실행 당일 홈이 고르는 스토리에 번역을 넣는다
+      final storyId = pickTodayMunicipalStory(stories: const [], allItems: kBuiltInSeedDiscoveryItems).id;
       final firstFeedId = kBuiltInSeedDiscoveryItems.first.id;
       TranslationStore.seedForTest(AppLang.en, {
         'stories': {
@@ -734,6 +742,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // 빠른 필터 칩이 앞에 생겨 가로 스크롤 줄 뒤쪽으로 밀려났으므로 보이게 스크롤한 뒤 누른다
+      await tester.ensureVisible(find.byKey(const Key('trip_planner_btn')).first);
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('trip_planner_btn')).first);
       await tester.pumpAndSettle();
       expect(find.textContaining('주말 1박2일'), findsWidgets);
@@ -821,5 +832,97 @@ void main() {
       expect(bookingCtaLabel('https://map.naver.com/p/search/abc', data: {'direct_booking_url': 'https://map.naver.com/p/search/abc'}),
           '네이버 지도·예약처 보기');
     });
+  });
+
+  group('정보 정확성 · 사용자 편의 UI', () {
+    test('숙소 확인 문구는 출처별로 다르게 (관광공사 출처를 인허가 확인으로 과장하지 않음)', () {
+      expect(stayVerificationLabel({'src': 'mois', 'license_type': '농어촌민박업'}, AppLang.ko), '행정안전부 인허가 데이터 영업확인');
+      expect(stayVerificationLabel({'src': 'kto', 'license_type': '농어촌민박업'}, AppLang.ko), '한국관광공사 관광정보 등록 숙소');
+      expect(stayVerificationLabel({'public_mng_no': 'KTO-2556500'}, AppLang.ko, short: true), '관광공사 등록');
+      expect(stayVerificationLabel({'public_mng_no': 'M-1', 'license_type': '한옥체험업'}, AppLang.ko, short: true), '한옥체험업 영업확인');
+    });
+
+    test('이번 주말 계산과 기간 겹침', () {
+      final (sat, sun) = upcomingWeekend(DateTime(2026, 11, 18)); // 수요일
+      expect(sat, DateTime(2026, 11, 21));
+      expect(sun, DateTime(2026, 11, 22));
+      expect(upcomingWeekend(DateTime(2026, 11, 22)).$1, DateTime(2026, 11, 21)); // 일요일이면 그 주말
+      final fest = parseSpotJson({'id': 'f1', 'title': '축제', 'province': '서울', 'lat': 37.5, 'lng': 127.0,
+          'start_date': '20261120', 'end_date': '20261121'}, fallbackCategory: DiscoveryCategory.event)!;
+      expect(isOpenDuring(fest, sat, sun), isTrue);
+      final past = parseSpotJson({'id': 'f2', 'title': '지난 축제', 'province': '서울', 'lat': 37.5, 'lng': 127.0,
+          'start_date': '20261101', 'end_date': '20261110'}, fallbackCategory: DiscoveryCategory.event)!;
+      expect(isOpenDuring(past, sat, sun), isFalse);
+    });
+
+    test('근사 좌표 항목은 거리 숫자 대신 시·군 단위로 표기', () {
+      final exact = parseSpotJson({'id': 'a', 'title': 'A', 'province': '서울', 'lat': 37.5, 'lng': 127.0},
+          fallbackCategory: DiscoveryCategory.attraction)!;
+      final approx = parseSpotJson({'id': 'b', 'title': 'B', 'province': '서울', 'lat': 37.5, 'lng': 127.0, 'approx_coord': true},
+          fallbackCategory: DiscoveryCategory.attraction)!;
+      expect(exact.distanceLabel(2.345, AppLang.ko), '약 2.3km');
+      expect(exact.distanceLabel(0.42, AppLang.ko), '약 420m');
+      expect(approx.distanceLabel(2.345, AppLang.ko), '시·군 단위 위치');
+    });
+
+    test('찜 추가·해제', () {
+      SavedPlaces.resetForTest();
+      expect(SavedPlaces.toggle('spot_x'), isTrue);
+      expect(SavedPlaces.contains('spot_x'), isTrue);
+      expect(SavedPlaces.toggle('spot_x'), isFalse);
+      expect(SavedPlaces.contains('spot_x'), isFalse);
+    });
+
+    test('핵심 정보 칩은 운영시간·휴무·주차 등만 골라 최대 4개', () {
+      final rows = [
+        const PracticalInfoRow(label: '문의 안내', value: '031-000-0000'),
+        const PracticalInfoRow(label: '이용 시간', value: '상시 개방'),
+        const PracticalInfoRow(label: '쉬는 날', value: '연중무휴'),
+        const PracticalInfoRow(label: '주차 안내', value: '가능'),
+      ];
+      final picked = pickQuickFacts(rows).map((e) => e.$2.label).toList();
+      expect(picked, ['이용 시간', '쉬는 날', '주차 안내']);
+    });
+
+    testWidgets('상세 하단 행동 바: 길찾기·찜·공유와 (있을 때만) 전화·공식 링크', (tester) async {
+      SavedPlaces.resetForTest();
+      var directions = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: DetailActionBar(
+            itemId: 'spot_y',
+            lang: AppLang.ko,
+            onDirections: () => directions++,
+            onShare: () {},
+          ),
+        ),
+      ));
+      expect(find.byKey(const Key('action_directions_btn')), findsOneWidget);
+      expect(find.byKey(const Key('action_call_btn')), findsNothing);
+      expect(find.byKey(const Key('action_official_btn')), findsNothing);
+      await tester.tap(find.byKey(const Key('action_directions_btn')));
+      expect(directions, 1);
+      await tester.tap(find.byKey(const Key('action_save_btn')));
+      await tester.pump();
+      expect(SavedPlaces.contains('spot_y'), isTrue);
+      expect(find.text('찜함'), findsOneWidget);
+    });
+  });
+
+  test('번역 상세(본문)는 시·도 파일을 합친 뒤에만 보인다', () {
+    TranslationStore.clearForTest();
+    TranslationStore.seedForTest(AppLang.en, {
+      'items': {
+        'spot_a': {'title': 'Suseong Lake', 'overview': 'Short…'},
+      },
+    });
+    expect(TranslationStore.stringList(AppLang.en, 'items', 'spot_a', 'paragraphs', const ['ko']), ['ko']);
+    TranslationStore.mergeDetailsForTest(AppLang.en, {
+      'spot_a': {'overview': 'Full overview', 'paragraphs': ['First', 'Second']},
+    });
+    expect(TranslationStore.field(AppLang.en, 'items', 'spot_a', 'title', ''), 'Suseong Lake');
+    expect(TranslationStore.field(AppLang.en, 'items', 'spot_a', 'overview', ''), 'Full overview');
+    expect(TranslationStore.stringList(AppLang.en, 'items', 'spot_a', 'paragraphs', const []), ['First', 'Second']);
+    TranslationStore.clearForTest();
   });
 }

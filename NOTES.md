@@ -28,6 +28,8 @@ app/                    Flutter Web (Dart 3.14 / Flutter 3.50)
   lib/i18n.dart · translation_store.dart  KO/EN/JA/ZH(번체) UI·데이터 번역
   web/data/               정적 데이터(원본) — public_travel_hub.json, public_stays_index.json, translations_*.json
   web/data/hub/           (생성물, git 제외) split_hub.py 가 빌드 직전에 만든 core.json + details_{시도}.json
+  web/data/i18n/{lang}/   (생성물, git 제외) 번역 번들도 같은 방식으로 core.json + details_{시도}.json
+  lib/ux_widgets.dart     찜(기기 저장)·공유(기기 공유 시트)·상세 하단 행동 바·핵심 정보 칩·출처/기준일 표기
 backend/                Python 3.12 데이터 파이프라인·로컬 관리자 (Admin SDK, 로컬 PC 또는 GitHub Actions)
 firebase/               보안 규칙 · 인덱스 · Cloud Functions(Node 22) · 규칙/함수 테스트
 deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 → (선택) 배포
@@ -49,6 +51,7 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
   `details_{seoul|busan|…}.json`(평균 65KB)에 있고, 상세 화면을 열 때 해당 시·도 파일만 1회 받는다.
   core 가 없으면(로컬 개발) 앱이 원본 `public_travel_hub.json` 으로 대체한다.
 - **번역**: `translate_hub.py` 가 원문 해시 캐시(`backend/translation_cache.json`, git 커밋)로 변경분만 Gemini 번역.
+  앱은 외국어 전환 시 `i18n/{lang}/core.json`(목록용)만 받고, 상세를 열면 그 시·도의 본문 번역을 추가로 받는다.
 
 ## 4. Firestore · Storage
 
@@ -124,8 +127,22 @@ backend\.venv\Scripts\python backend\tests\<name>.py   # smoke / admin / curate 
 ## 8. 남은 일 · 알려진 한계
 
 - [ ] `app/lib/legal.dart` 사업자 정보·개인정보 보호책임자 자리표시자 교체 + 법률 검토 (문구 바꾸면 `kConsentVersion` 올리기)
-- [ ] reCAPTCHA Enterprise 키 발급 → App Check 시행 (익명 로그인만으로는 대량 후기 스팸을 못 막음)
+- [ ] reCAPTCHA Enterprise 키 발급 → `RECAPTCHA_SITE_KEY` 로 빌드·배포한 **뒤에** App Check 다시 시행.
+  2026-11-14~16 사이 키 없이 Firestore·Storage 가 ENFORCED 로 켜져 사이트의 모든 Firestore 요청(숙소 상세·후기·클릭)이 거부됐었다.
+  11-16 UNENFORCED 로 되돌림. 순서를 바꾸면 같은 장애가 재발한다.
 - [ ] `license_check.recheck`: TourAPI 출처 숙소는 관리번호가 `KTO-…`(관광공사 ID)라 상호 LIKE 검색에 의존 → 등록 상호가 다르면 `not_found` 로 `needs_review` 가 많이 생길 수 있음
-- [ ] 번역 번들(언어당 1.2~1.5MB)은 아직 분할하지 않음 — 외국어 전환 시 한 번에 받음
+- [ ] 숙소 348곳은 아직 근사 좌표(`approx_coord`) — 화면은 거리 대신 '시·군 단위 위치'로 표시, '내 주변' 정렬에서는 뒤로
+- [ ] 이름·지역이 같은 숙소 13쌍, 대표사진을 공유하는 숙소 34곳 — 중복 등록 또는 사진 오매칭 여부 수동 확인 필요
 - [ ] 네이버 검색 API 결과 저장·표시 조건(이용약관) 확인. 현재 링크·업종만 저장하고 "정보 출처: 네이버" 표기
 - [ ] 주간 갱신의 네이버 지역 축제는 검색 결과 HTML 을 직접 파싱(API 아님) — 약관·구조 변경 위험
+
+## 9. 데이터 정확성 규칙 (2026-11-16 정리)
+
+- **숙소 ID**: 한옥체험업·외국인관광도시민박업 관리번호는 지자체별 일련번호라 전국에서 겹친다. 겹치면 `assign_unique_listing_ids` 가
+  주소를 넣어 ID를 분리한다 (이전에 171곳이 80개 ID를 공유해 다른 숙소 상세가 열렸음).
+- **출처 표기**: 숙소 색인의 `src` = `mois`(행정안전부 인허가 대조) / `kto`(한국관광공사 TourAPI 등록, 1,171곳).
+  관광공사 출처를 "인허가 영업확인"으로 표시하지 않는다 (`stayVerificationLabel`). 다국어 요약·SEO 문구도 "정부 인증·합법"을 쓰지 않는다.
+- **링크**: 코스는 TourAPI ID가 웹사이트 주소와 달라 구석구석 검색으로 연결. 가이드북·PDF 후보에서 SNS 주소 제외(`is_social_link`).
+  접속 점검에서 죽은 네이버 공식 링크는 `backend/naver_dead_links.json` 에 남겨 재보강 때 다시 붙지 않게 한다.
+- **좌표**: 근사 좌표 숙소는 네이버 지역 검색에서 이름 완전 일치 + 도로명 일치일 때만 실제 좌표로 교체(176곳).
+- **문구**: "실시간"(데이터는 주 1회 갱신), 근거 없는 "수수료 절감액" 배지는 쓰지 않는다. 반값여행 등 정책 정보에는 기준 연도와 확인 안내를 단다.

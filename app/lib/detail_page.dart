@@ -17,6 +17,7 @@ import 'legal.dart';
 import 'naver_place_info.dart';
 import 'review_auth.dart';
 import 'translation_store.dart';
+import 'ux_widgets.dart';
 import 'web_utils.dart';
 
 part 'detail/listing_detail_page.dart';
@@ -32,6 +33,36 @@ bool hasDirectBookingUrl(Map<String, dynamic> data) {
   final uri = Uri.tryParse((data['direct_booking_url'] ?? '').toString().trim());
   if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) return false;
   return !uri.host.toLowerCase().contains('map.naver.');
+}
+
+/// 숙소 정보 출처가 행정안전부 인허가 대조(true)인지, 한국관광공사 TourAPI 등록(false)인지.
+/// 색인 항목은 `src`, Firestore 문서는 `public_mng_no`(관광공사 출처는 'KTO-' 접두사)로 판별한다.
+bool isMoisVerified(Map<String, dynamic> data) {
+  final src = (data['src'] ?? '').toString();
+  if (src.isNotEmpty) return src == 'mois';
+  final mng = (data['public_mng_no'] ?? '').toString();
+  return mng.isNotEmpty && !mng.startsWith('KTO-');
+}
+
+/// 출처에 맞는 확인 문구. 관광공사 출처를 '인허가 영업확인'으로 과장하지 않는다.
+String stayVerificationLabel(Map<String, dynamic> data, AppLang lang, {bool short = false}) {
+  final license = (data['license_type'] ?? '').toString();
+  if (isMoisVerified(data)) {
+    return short
+        ? pickLangText(lang, ko: '$license 영업확인', en: 'Licensed (MOIS)', ja: '営業許可確認', zh: '已核驗營業許可')
+        : pickLangText(lang,
+            ko: '행정안전부 인허가 데이터 영업확인',
+            en: 'Business license verified (MOIS public data)',
+            ja: '行政安全部 許認可データで営業確認',
+            zh: '已以行政安全部許可資料核驗營業');
+  }
+  return short
+      ? pickLangText(lang, ko: '관광공사 등록', en: 'KTO listed', ja: '観光公社 登録', zh: '觀光公社登錄')
+      : pickLangText(lang,
+          ko: '한국관광공사 관광정보 등록 숙소',
+          en: 'Listed by Korea Tourism Organization',
+          ja: '韓国観光公社 観光情報に登録',
+          zh: '韓國觀光公社旅遊資訊登錄住宿');
 }
 
 /// 숙소 문서에서 누적 평점(평균 별점 · 후기 수)을 안전하게 추출한다.
@@ -241,7 +272,10 @@ String _tAccommodationType(String raw, AppLang lang) {
   if (lang == AppLang.ko) return (title: rawTitle, subtitle: rawSub);
 
   String title = rawTitle;
-  if (rawTitle.contains('공공 인허가 확인')) {
+  if (rawTitle.contains('한국관광공사 등록')) {
+    title = pickLangText(lang,
+        ko: rawTitle, en: 'Listed by Korea Tourism Organization', ja: '韓国観光公社に登録', zh: '韓國觀光公社登錄');
+  } else if (rawTitle.contains('공공 인허가 확인')) {
     title = pickLangText(
       lang,
       ko: rawTitle,
@@ -273,7 +307,7 @@ String _tAccommodationType(String raw, AppLang lang) {
       ko: rawSub,
       en: 'Verified legal stay registered with Korea Tourism Organization (Content #$cid).',
       ja: '韓国観光公社（コンテンツ #$cid）に登録・検証された合法宿泊施設です。',
-      zh: '已在韩国观光公社（内容编号 #$cid）备案认证的合法住宿。',
+      zh: '已在韩国观光公社（内容编号 #$cid）备案认证的住宿。',
     );
   } else if (rawSub.contains('실제 여행객 후기 및 안내글')) {
     final cntMatch = RegExp(r'(\d+)건').firstMatch(rawSub);
@@ -337,7 +371,7 @@ String buildBookingInquiryTemplate(
   if (lang == AppLang.en) {
     lines.add("(Hello! I found your government-verified stay '$title' on JikStay and would like to inquire about availability & direct booking. Thank you!)");
   } else if (lang == AppLang.ja) {
-    lines.add("(こんにちは！韓国公認宿検索『JikStay』で「$title」を拝見し、空室状況と予約方法をお伺いしたくご連絡いたしました。)");
+    lines.add("(こんにちは！韓国宿泊検索『JikStay』で「$title」を拝見し、空室状況と予約方法をお伺いしたくご連絡いたしました。)");
   } else if (lang == AppLang.zh) {
     lines.add("(您好！我們在韓國合法民宿平台 JikStay 看到「$title」，想詢問空房與直接預訂方式，謝謝您！)");
   }

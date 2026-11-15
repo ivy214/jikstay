@@ -21,6 +21,7 @@ __pycache__/
 app/build/
 # backend/split_hub.py 가 빌드 직전에 생성 (원본: app/web/data/public_travel_hub.json)
 app/web/data/hub/
+app/web/data/i18n/
 app/.dart_tool/
 app/ephemeral/
 firebase/public/

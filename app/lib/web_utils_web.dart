@@ -45,3 +45,53 @@ Future<Map<String, dynamic>?> fetchWebJson(String relativeUrl) async {
     return null;
   }
 }
+
+@JS('jikstayStoreGet')
+external JSString? _jikstayStoreGet(JSString key);
+
+@JS('jikstayStoreSet')
+external void _jikstayStoreSet(JSString key, JSString value);
+
+@JS('jikstayShare')
+external JSPromise<JSBoolean> _jikstayShare(JSString title, JSString url);
+
+/// 브라우저 저장소(localStorage). 사생활 보호 모드 등으로 막혀 있으면 null.
+String? storeGet(String key) {
+  try {
+    return _jikstayStoreGet(key.toJS)?.toDart;
+  } catch (_) {
+    return null;
+  }
+}
+
+void storeSet(String key, String value) {
+  try {
+    _jikstayStoreSet(key.toJS, value.toJS);
+  } catch (_) {}
+}
+
+/// 기기의 공유 시트(Web Share API). 지원하지 않거나 취소되면 false.
+Future<bool> nativeShare(String title, String url) async {
+  try {
+    return (await _jikstayShare(title.toJS, url.toJS).toDart).toDart;
+  } catch (_) {
+    return false;
+  }
+}
+
+@JS('jikstayGeo')
+external JSPromise<JSString> _jikstayGeo();
+
+/// 현재 위치(위도, 경도). 권한 거부·미지원·시간 초과면 null.
+Future<(double, double)?> currentPosition() async {
+  try {
+    final raw = (await _jikstayGeo().toDart).toDart;
+    final parts = raw.split(',');
+    if (parts.length != 2) return null;
+    final lat = double.tryParse(parts[0]);
+    final lng = double.tryParse(parts[1]);
+    return (lat == null || lng == null) ? null : (lat, lng);
+  } catch (_) {
+    return null;
+  }
+}

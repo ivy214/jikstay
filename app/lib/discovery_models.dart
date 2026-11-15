@@ -368,6 +368,23 @@ DateTime? parseYmdDate(String raw) {
 
 DateTime? _parseYmd(String raw) => parseYmdDate(raw);
 
+/// 이번 주말(토, 일). 오늘이 토·일이면 오늘이 속한 주말을 돌려준다.
+(DateTime, DateTime) upcomingWeekend(DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  final sat = today.weekday == DateTime.sunday
+      ? today.subtract(const Duration(days: 1))
+      : today.add(Duration(days: DateTime.saturday - today.weekday));
+  return (sat, sat.add(const Duration(days: 1)));
+}
+
+/// 기간이 있는 항목(축제·행사)이 [from]~[to] 사이에 하루라도 열리는지. 기간 정보가 없으면 false.
+bool isOpenDuring(DiscoveryItem it, DateTime from, DateTime to) {
+  final start = parseYmdDate(it.startDate);
+  if (start == null) return false;
+  final end = parseYmdDate(it.endDate) ?? start;
+  return !start.isAfter(to) && !end.isBefore(from);
+}
+
 class DiscoveryItem {
   final String id;
   final DiscoveryCategory category;
@@ -606,13 +623,25 @@ class DiscoveryItem {
     if (outboundClicks >= 5 || reviewCount >= 2) {
       return pickLangText(
         lang,
-        ko: '🔥 실시간 인기',
+        ko: '🔥 인기',
         en: '🔥 Trending',
         ja: '🔥 人気上昇中',
-        zh: '🔥 即時熱門',
+        zh: '🔥 熱門',
       );
     }
     return null;
+  }
+
+  /// 실제 좌표가 없어 시·군 중심 근처 근사값을 쓰는 항목 (backend: approx_coord)
+  bool get hasApproxLocation => raw['approx_coord'] == true;
+
+  /// 기준점으로부터의 거리 표시. 근사 좌표 항목은 거리 숫자 대신 '시·군 단위 위치'로 정직하게 표기한다.
+  String distanceLabel(double km, AppLang lang) {
+    if (hasApproxLocation) {
+      return pickLangText(lang, ko: '시·군 단위 위치', en: 'Approx. area', ja: '市郡単位の位置', zh: '大致區域');
+    }
+    final v = km < 1.0 ? '${(km * 1000).round()}m' : '${km.toStringAsFixed(1)}km';
+    return pickLangText(lang, ko: '약 $v', en: '$v away', ja: '約$v', zh: '約 $v');
   }
 
   String get categoryEmoji => switch (category) {
@@ -628,7 +657,7 @@ class DiscoveryItem {
     DiscoveryCategory.event => pickLangText(lang, ko: '축제·행사', en: 'Event', ja: '祭り・イベント', zh: '慶典活動'),
     DiscoveryCategory.attraction => pickLangText(lang, ko: '볼거리', en: 'Sight', ja: '観光名所', zh: '必訪景點'),
     DiscoveryCategory.food => pickLangText(lang, ko: '먹거리', en: 'Food', ja: 'グルメ', zh: '在地美食'),
-    DiscoveryCategory.stay => pickLangText(lang, ko: '안심숙소', en: 'Stay', ja: '公認宿', zh: '合法住宿'),
+    DiscoveryCategory.stay => pickLangText(lang, ko: '숙소', en: 'Stay', ja: '宿泊', zh: '住宿'),
     DiscoveryCategory.ebook => pickLangText(lang, ko: '공식 관광지도', en: 'Guide PDF', ja: '公式ガイド', zh: '官方指南'),
     DiscoveryCategory.all => pickLangText(lang, ko: '전체', en: 'All', ja: 'すべて', zh: '全部'),
   };

@@ -196,7 +196,7 @@ List<PortalBannerSlide> buildDailyPortalSlides({
         ? '대한민국 반값여행(25개 시·군 50% 환급) & 디지털 관광주민증'
         : '2026 Korea 50% Cashback Towns & K-Tourism Digital Resident Pass',
     subtitle: lang == AppLang.ko
-        ? '사전신청 가이드 확인 후 영수증 정산이 가능한 합법 인증 숙소·식당을 찾으세요'
+        ? '사전신청 가이드 확인 후 영수증 정산이 가능한 공공데이터 등록 숙소·식당을 찾으세요'
         : 'Check eligible subsidy towns, free official magazines, and licensed stays',
     ctaLabel: lang == AppLang.ko ? '혜택관 열기' : 'Benefits Hub',
     accentColor: const Color(0xFF059669),

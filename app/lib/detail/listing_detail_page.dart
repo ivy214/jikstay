@@ -54,24 +54,11 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
     }
   }
 
-  Future<void> _copyShareLink(BuildContext context) async {
+  Future<void> _copyShareLink(BuildContext context, String title) async {
     final shareUrl = '${currentSiteOrigin()}/?id=${Uri.encodeComponent(widget.listingId)}';
-    await Clipboard.setData(ClipboardData(text: shareUrl));
-    if (context.mounted) {
-      final lang = appLangNotifier.value;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(pickLangText(
-            lang,
-            ko: '숙소 링크가 복사되었습니다. 카카오톡 등에 붙여넣어 공유하세요!',
-            en: 'Stay link copied to clipboard.',
-            ja: '宿泊施設のリンクをコピーしました。',
-            zh: '已复制住宿链接。',
-          )),
-        ),
-      );
-    }
+    await sharePlace(context, title: title, url: shareUrl, lang: appLangNotifier.value);
   }
+
 
   Future<void> _pickDates(BuildContext context) async {
     final now = DateTime.now();
@@ -119,7 +106,7 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                   surfaceTintColor: Colors.white,
                   elevation: 0,
                   shape: const Border(bottom: BorderSide(color: Color(0xFFEBEBEB))),
-                  leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => _back(context)),
+                  leading: IconButton(tooltip: trUi('back_btn', lang), icon: const Icon(Icons.arrow_back_rounded), onPressed: () => _back(context)),
                   title: Text(
                     hasData
                         ? _tStayTitle(widget.listingId, data, lang)
@@ -131,8 +118,23 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                   actions: [
                     const LangSelectorButton(),
                     const SizedBox(width: 6),
+                    ValueListenableBuilder<List<String>>(
+                      valueListenable: SavedPlaces.ids,
+                      builder: (context, saved, _) {
+                        final on = saved.contains(widget.listingId);
+                        return IconButton(
+                          key: const Key('stay_save_btn'),
+                          tooltip: on
+                              ? pickLangText(lang, ko: '찜 해제', en: 'Unsave', ja: '保存解除', zh: '取消收藏')
+                              : pickLangText(lang, ko: '찜하기', en: 'Save', ja: '保存', zh: '收藏'),
+                          icon: Icon(on ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                              color: on ? const Color(0xFFE11D48) : const Color(0xFF334155)),
+                          onPressed: () => SavedPlaces.toggle(widget.listingId),
+                        );
+                      },
+                    ),
                     TextButton.icon(
-                      onPressed: () => _copyShareLink(context),
+                      onPressed: () => _copyShareLink(context, (data?['title'] ?? '').toString()),
                       icon: const Icon(Icons.ios_share_rounded, size: 18),
                       label: Text(pickLangText(lang, ko: '공유하기', en: 'Share', ja: '共有', zh: '分享')),
                     ),

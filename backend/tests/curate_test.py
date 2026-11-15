@@ -98,4 +98,25 @@ with tempfile.TemporaryDirectory() as tmpdir:
 assert len(picked) == 3
 assert all(d["title"] != "폐업민박" for d in picked)
 print("[OK] 버킷 상위 N개 선별 및 폐업 자동 제외")
+
+
+# 5. 관리번호가 전국에서 겹치는 업종(한옥체험업 등): 서로 다른 숙소가 같은 ID를 받지 않아야 한다
+from curate_public_stays import assign_unique_listing_ids, make_public_listing_id  # noqa: E402
+
+base = make_public_listing_id("한옥체험업", "CDFI2262222026000001", "해곁", "제주 구좌읍 한동로6길 139")
+docs = [
+    {"listing_id": base, "license_type": "한옥체험업", "public_mng_no": "CDFI2262222026000001", "title": "해곁",
+     "location_info": {"display_address": "제주 구좌읍 한동로6길 139"}},
+    {"listing_id": base, "license_type": "한옥체험업", "public_mng_no": "CDFI2262222026000001", "title": "상상한옥",
+     "location_info": {"display_address": "서울 중구 중림로9길 15"}},
+    {"listing_id": "stay_pub_unique0001", "license_type": "농어촌민박업", "public_mng_no": "M-1", "title": "단독",
+     "location_info": {"display_address": "강원 어딘가"}},
+]
+assert assign_unique_listing_ids(docs) == 2
+assert len({d["listing_id"] for d in docs}) == 3
+assert docs[2]["listing_id"] == "stay_pub_unique0001"  # 겹치지 않는 숙소는 ID 유지
+again = [dict(d, listing_id=base) for d in docs[:2]]
+assign_unique_listing_ids(again)
+assert [d["listing_id"] for d in again] == [d["listing_id"] for d in docs[:2]]  # 재실행해도 같은 ID
+print("[OK] 관리번호 중복 숙소 ID 분리 (재실행 시 동일)")
 print("ALL OK")

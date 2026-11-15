@@ -120,10 +120,10 @@ String trUi(String key, AppLang lang) {
       AppLang.zh: 'Jikstay 韓國',
     },
     'zero_fee_badge': {
-      AppLang.ko: '전국 17개 시도 공식 가이드 · 볼거리 · 먹거리 · 안심숙소',
+      AppLang.ko: '전국 17개 시도 공식 가이드 · 볼거리 · 먹거리 · 숙소',
       AppLang.en: 'Verified Legal Stays · 0% Fee · 17-Province Guides',
-      AppLang.ja: '韓国公認宿・仲介手数料0円・17市道公式ガイド',
-      AppLang.zh: '韓國合法住宿・0%手續費・17市道官方指南',
+      AppLang.ja: '韓国宿泊・仲介手数料0円・17市道公式ガイド',
+      AppLang.zh: '韓國住宿・0%手續費・17市道官方指南',
     },
     'search_hint': {
       AppLang.ko: '지역·축제·볼거리·맛집·숙소 검색 (예: 무주, 강릉, 한우, 한옥)',
@@ -156,10 +156,10 @@ String trUi(String key, AppLang lang) {
       AppLang.zh: '🍲 在地美食',
     },
     'cat_stay': {
-      AppLang.ko: '🏡 안심숙소',
+      AppLang.ko: '🏡 숙소',
       AppLang.en: '🏡 Legal Stays',
-      AppLang.ja: '🏡 公認宿',
-      AppLang.zh: '🏡 合法住宿',
+      AppLang.ja: '🏡 宿泊',
+      AppLang.zh: '🏡 住宿',
     },
     'cat_ebook': {
       AppLang.ko: '📖 관광지도·E-book',
@@ -192,10 +192,10 @@ String trUi(String key, AppLang lang) {
       AppLang.zh: '精選地方慶典＆政府官方旅遊地圖',
     },
     'live_feed_title': {
-      AppLang.ko: '실시간 로컬 피드',
-      AppLang.en: 'Live Local Feed',
-      AppLang.ja: 'リアルタイム・ローカルフィード',
-      AppLang.zh: '即時在地動態',
+      AppLang.ko: '로컬 피드',
+      AppLang.en: 'Local Feed',
+      AppLang.ja: 'ローカルフィード',
+      AppLang.zh: '在地動態',
     },
     'connected_course_title': {
       AppLang.ko: '함께 방문하기 좋은 주변 연결 코스',
@@ -220,12 +220,6 @@ String trUi(String key, AppLang lang) {
       AppLang.en: '🗺️ Map & Directions',
       AppLang.ja: '🗺️ 地図・ルート案内',
       AppLang.zh: '🗺️ 地圖與導航',
-    },
-    'public_verified_badge': {
-      AppLang.ko: '공공데이터 영업확인',
-      AppLang.en: 'Gov-Registry Active',
-      AppLang.ja: '公的データ営業確認',
-      AppLang.zh: '政府資料營業中',
     },
     'naver_reviews_title': {
       AppLang.ko: '네이버 블로그 실방문 후기 · 소개 링크',
@@ -252,9 +246,9 @@ String trUi(String key, AppLang lang) {
       AppLang.zh: '0%手續費直接預訂諮詢',
     },
     'nav_stays': {
-      AppLang.ko: '🏡 전국 합법숙소 탐색',
+      AppLang.ko: '🏡 전국 숙소 탐색',
       AppLang.en: '🏡 Verified Stays',
-      AppLang.ja: '🏡 公認宿を探す',
+      AppLang.ja: '🏡 宿泊を探す',
       AppLang.zh: '🏡 合法民宿搜尋',
     },
     'nav_travel_hub': {

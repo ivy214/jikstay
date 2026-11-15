@@ -3,6 +3,7 @@
 네이버 지역 검색(Naver API Hub `search/v1/local`)으로 숙소·볼거리·먹거리 상세 정보를 보강한다.
 
 채우는 필드 (비어 있을 때만, 원본 데이터는 덮어쓰지 않음)
+  - lat/lng         근사 좌표(approx_coord) 숙소만: 이름 완전 일치 + 도로명 일치 결과의 좌표로 교체
   - naver_link      공식 홈페이지 / 인스타그램 / 네이버 톡톡 등 (OTA·단축 링크 제외)
   - naver_category  네이버 업종 분류 (예: "한식>감자탕", "숙박>펜션")
 
@@ -54,6 +55,9 @@ HUB_PATH = ROOT / "app" / "web" / "data" / "public_travel_hub.json"
 STAYS_PATH = ROOT / "app" / "web" / "data" / "public_stays_index.json"
 CACHE_PATH = ROOT / "output" / "curated_stays_cache" / "naver_local_cache.json"
 REPORT_PATH = ROOT / "output" / "naver_local_matches.csv"
+# 접속 점검에서 404·도메인 없음으로 확인된 링크 (재실행 시 다시 붙지 않게)
+DEAD_LINKS_PATH = ROOT / "backend" / "naver_dead_links.json"
+DEAD_LINKS: set[str] = set(json.loads(DEAD_LINKS_PATH.read_text(encoding="utf-8"))) if DEAD_LINKS_PATH.exists() else set()
 
 API_URL = "https://naverapihub.apigw.ntruss.com/search/v1/local"
 
@@ -115,7 +119,7 @@ def _road_token(addr: str) -> str:
 
 def clean_link(url: str) -> str:
     url = (url or "").strip()
-    if not re.match(r"^https?://", url, re.I):
+    if not re.match(r"^https?://", url, re.I) or url in DEAD_LINKS:
         return ""
     host = (urlparse(url).hostname or "").lower()
     if not host or any(b in host for b in BLOCKED_LINK_HOSTS):
@@ -339,6 +343,14 @@ def main() -> None:
                 st["category"] += 1
                 if not args.dry_run:
                     rec["naver_category"] = category
+            # 근사 좌표(시·군 중심 + 무작위 오프셋) 숙소는 이름 완전 일치 + 도로명 일치로 찾은 네이버 좌표로 교체
+            if kind == "stay" and rec.get("approx_coord"):
+                applied.append("coord")
+                st["coord"] = st.get("coord", 0) + 1
+                if not args.dry_run:
+                    rec["lat"] = round(int(it["mapy"]) / 1e7, 5)
+                    rec["lng"] = round(int(it["mapx"]) / 1e7, 5)
+                    rec.pop("approx_coord", None)
             w.writerow([
                 kind, rec.get("id") or rec.get("listing_id"), rec.get("title"), _strip_tags(it.get("title", "")),
                 category, f"{dist:.2f}", link, "+".join(applied),
@@ -349,6 +361,7 @@ def main() -> None:
         print(
             f"[{labels.get(kind, kind)}] 매칭 {st['matched']}/{st['total']} "
             f"· 링크 추가 {st['link']} · 업종 추가 {st['category']}"
+            + (f" · 좌표 보정 {st['coord']}" if st.get("coord") else "")
         )
     print(f"API 호출 {searcher.api_calls}회 · 오류 {searcher.errors}회 · 검토용 CSV: {REPORT_PATH}")
 

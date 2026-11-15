@@ -45,7 +45,7 @@ class _BentoGalleryState extends State<_BentoGallery> {
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     child: Row(
                       children: [
-                        IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
+                        IconButton(tooltip: '닫기', onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -154,7 +154,7 @@ class _BentoGalleryState extends State<_BentoGallery> {
                 decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
                 child: Text(
                   im['space_tag'].toString(),
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -337,7 +337,7 @@ class StorageImage extends StatelessWidget {
             children: [
               Icon(Icons.villa_outlined, size: errorIconSize + 8, color: const Color(0xFF6C7A89)),
               const SizedBox(height: 4),
-              const Text('합법 등록 스테이', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF5A6877))),
+              const Text('합법 등록 스테이', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF5A6877))),
             ],
           ),
         ),
@@ -404,7 +404,7 @@ class _PublicStayVisualHero extends StatelessWidget {
                     border: Border.all(color: const Color(0xFF34D399)),
                   ),
                   child: Text(
-                    '✓ 행정안전부 인허가 영업확인 · ${data['license_type'] ?? '합법 숙소'}',
+                    '✓ ${stayVerificationLabel(data, appLangNotifier.value)} · ${data['license_type'] ?? ''}',
                     style: const TextStyle(color: Color(0xFFA7F3D0), fontSize: 12, fontWeight: FontWeight.w700),
                   ),
                 ),

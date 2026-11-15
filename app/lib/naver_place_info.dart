@@ -115,7 +115,7 @@ class NaverPlaceInfo extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        Text(source, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+        Text(source, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
       ],
     );
   }

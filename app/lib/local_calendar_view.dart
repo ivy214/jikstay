@@ -227,7 +227,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
                     child: Text(
                       lang == AppLang.ko ? '${qm.month}월' : '${qm.year}.${qm.month}',
                       style: TextStyle(
-                        fontSize: 11.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w800,
                         color: active ? Colors.white : const Color(0xFF475569),
                       ),
@@ -238,7 +238,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
               const SizedBox(width: 6),
               const Text(
                 '🎉 축제·행사  🎊 당일개막  🧺 5일장',
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
               ),
             ],
           ),
@@ -357,7 +357,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
                             startsToday ? '🎊${activeEvs.length}' : '🎉${activeEvs.length}',
                             maxLines: 1,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: startsToday ? Colors.white : const Color(0xFF6D28D9),
                             ),
@@ -369,7 +369,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
                           '🧺${provMarkets.length}',
                           maxLines: 1,
                           style: const TextStyle(
-                            fontSize: 9.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFFB45309),
                           ),
@@ -539,7 +539,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
                             onPressed: () => widget.onOpenExternalUrl(mktNaverUrl),
                             child: Text(
                               lang == AppLang.ko ? '🟢 네이버지도 ↗' : '🟢 Map ↗',
-                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                             ),
                           ),
                         ],
@@ -718,7 +718,7 @@ class _CalendarEventTile extends StatelessWidget {
                           child: Text(
                             '${it.province} · $statusLabel',
                             style: const TextStyle(
-                              fontSize: 10.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF6D28D9),
                             ),
@@ -726,7 +726,7 @@ class _CalendarEventTile extends StatelessWidget {
                         ),
                         Text(
                           '${_fmt(entry.start)} ~ ${_fmt(entry.end)}',
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF475569)),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF475569)),
                         ),
                       ],
                     ),
@@ -744,7 +744,7 @@ class _CalendarEventTile extends StatelessWidget {
                           child: Text(
                             lang == AppLang.ko ? '매거진 상세 보기 →' : 'Read Details →',
                             style: const TextStyle(
-                              fontSize: 11.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF059669),
                             ),
@@ -758,7 +758,7 @@ class _CalendarEventTile extends StatelessWidget {
                             child: Text(
                               lang == AppLang.ko ? '🟢 네이버지도 ↗' : '🟢 Naver Map ↗',
                               style: const TextStyle(
-                                fontSize: 11.5,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: Color(0xFF15803D),
                               ),

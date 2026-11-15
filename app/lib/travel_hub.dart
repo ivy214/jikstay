@@ -62,7 +62,7 @@ const List<Map<String, dynamic>> _kFallbackBenefits = [
     },
     'ja': {
       'title': '2026 半額旅行支援＆外国人FIT自治体ステイ特典',
-      'desc': '25自治体で事前申請による旅費50%還元を実施。外国人個人旅行客向けにも自治体宿泊クーポン等を提供（※公認宿の領収書必須）。',
+      'desc': '25自治体で事前申請による旅費50%還元を実施。外国人個人旅行客向けにも自治体宿泊クーポン等を提供（※宿泊の領収書必須）。',
     },
     'zh': {
       'title': '2026 韓國半價旅遊補助＆外國自由行地方住宿優惠',
@@ -204,7 +204,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                       ),
                       child: Text(
                         lang == AppLang.ko
-                            ? '한국관광공사 TourAPI · 문체부 · 지자체 공공데이터 실시간 연동'
+                            ? '한국관광공사 TourAPI · 문체부 · 지자체 공공데이터 (주 1회 갱신)'
                             : 'Official Korea Tourism (KTO) · Gov Subsidies · Local Webzines',
                         style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 12, fontWeight: FontWeight.w700),
                       ),
@@ -223,7 +223,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                     const SizedBox(height: 6),
                     Text(
                       lang == AppLang.ko
-                          ? '원하는 혜택 지역이나 축제 도시를 누르면 영수증 정산이 가능한 해당 지역의 100% 합법 인허가 숙소로 바로 연결됩니다.'
+                          ? '원하는 혜택 지역이나 축제 도시를 누르면 영수증 정산이 가능한 해당 지역의 공공데이터 등록 숙소로 바로 연결됩니다.'
                           : 'Tap any subsidy town or festival below to filter verified legal stays eligible for official receipts & tourist discounts.',
                       style: const TextStyle(color: Color(0xFFDBEAFE), fontSize: 13.5, height: 1.5),
                     ),
@@ -285,7 +285,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                             ),
                             child: Text(
                               (b['badge'] ?? '').toString(),
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: kBrand),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: kBrand),
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -329,16 +329,25 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                   children: [
                     Text(
                       lang == AppLang.ko
-                          ? '🗺️ 2026 반값여행(50% 환급) 25개 대상 지역 — 클릭 시 영수증 인정 합법숙소 바로 검색'
-                          : '🗺️ 25 Half-Price / Digital-Pass Towns — Tap a Town to Find Licensed Stays',
+                          ? '🗺️ 2026 반값여행(50% 환급) 25개 대상 지역 — 클릭 시 해당 지역 숙소 바로 검색'
+                          : '🗺️ 25 Half-Price / Digital-Pass Towns — Tap a Town to Find Stays',
                       style: const TextStyle(fontSize: 17.5, fontWeight: FontWeight.w900, color: Color(0xFF92400E)),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       lang == AppLang.ko
-                          ? '절차: ① 여행 전 대한민국 구석구석·지자체 누리집 사전신청 → ② 승인 후 여행 → ③ 합법 숙소·식당 영수증 제출 → ④ 50%(최대 20만원) 모바일 지역화폐 환급'
-                          : 'How it works: Pre-register online (or activate K-Tourism Digital Resident Card for instant foreigner discounts) → Stay at a licensed property → Claim up to 50% perks!',
+                          ? '절차: ① 여행 전 대한민국 구석구석·지자체 누리집 사전신청 → ② 승인 후 여행 → ③ 인정 숙소·식당 영수증 제출 → ④ 50%(최대 20만원) 모바일 지역화폐 환급'
+                          : 'How it works: Pre-register online (or activate K-Tourism Digital Resident Card for instant foreigner discounts) → Stay at a qualifying property → Claim up to 50% perks!',
                       style: const TextStyle(fontSize: 13, color: Color(0xFF78350F), height: 1.45),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      pickLangText(lang,
+                          ko: '※ 2026년 공고 기준 요약입니다. 대상 지역·환급률·한도·인정 업소는 지자체마다 다르고 바뀔 수 있으니 신청 전 공식 누리집에서 꼭 확인하세요.',
+                          en: '* Summary of 2026 notices. Eligible towns, rates, caps and qualifying businesses vary by city and may change — check the official site before applying.',
+                          ja: '※2026年の公告に基づく要約です。対象地域・還付率・上限は自治体ごとに異なり変更される場合があります。申請前に公式サイトで必ずご確認ください。',
+                          zh: '※ 依2026年公告整理。適用地區、退還比例與上限各地不同且可能變動，申請前請至官方網站確認。'),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.45),
                     ),
                     const SizedBox(height: 14),
                     ...halfRegions.map((grp) {
@@ -363,7 +372,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                                         side: const BorderSide(color: Color(0xFFF59E0B)),
                                         avatar: const Icon(Icons.home_work_outlined, size: 15, color: Color(0xFFD97706)),
                                         label: Text(
-                                          lang == AppLang.ko ? '$city 합법숙소' : '$city Stays',
+                                          lang == AppLang.ko ? '$city 숙소' : '$city Stays',
                                           style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                                         ),
                                         onPressed: () => widget.onSelectCityForStays(rg, city),
@@ -395,7 +404,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                                     ),
                                     child: Text(
                                       (g['tag'] ?? '가이드').toString(),
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -476,7 +485,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                                         '${f['region_label']} · ${_fmtYmd((f['start_date'] ?? '').toString())}~${_fmtYmd((f['end_date'] ?? '').toString())}',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
@@ -566,7 +575,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                                     ),
                                     child: Text(
                                       (c['region_label'] ?? c['region_group'] ?? '').toString(),
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1D4ED8)),
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1D4ED8)),
                                     ),
                                   ),
                                   const Spacer(),
@@ -648,7 +657,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                             children: [
                               Text(
                                 '${eb['province'] ?? ''} · ${eb['city'] ?? ''}',
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -677,7 +686,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                                       side: const BorderSide(color: Color(0xFF93C5FD)),
                                       label: Text(
                                         lbl,
-                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
                                       ),
                                       onPressed: () => _openUrl((pl['url'] ?? '').toString()),
                                     );
@@ -733,7 +742,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                                     (m['publisher'] ?? '').toString(),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF0F766E)),
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F766E)),
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -745,7 +754,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                                   ),
                                   child: Text(
                                     (m['lang_badge'] ?? 'KO').toString(),
-                                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF374151)),
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF374151)),
                                   ),
                                 ),
                               ],

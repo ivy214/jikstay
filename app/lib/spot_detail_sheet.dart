@@ -3,7 +3,6 @@
 // 카카오 플레이스·네이버 플레이스·네이버 블로그 방문기 연동, 인라인 방문쿠폰, 주변 동선 연결을 통합한다.
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'detail_page.dart' show ListingDetailPage, StorageImage, validateUserReviewInput;
@@ -13,6 +12,7 @@ import 'i18n.dart';
 import 'naver_place_info.dart';
 import 'review_auth.dart';
 import 'translation_store.dart';
+import 'ux_widgets.dart';
 import 'web_utils.dart';
 
 typedef SpotDetailPage = SpotDetailSheet;
@@ -61,6 +61,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
   late DiscoveryItem _current;
   int _heroIndex = 0;
   bool _couponExpanded = false;
+  bool _bodyExpanded = false;
   int _selectedScore = 5;
   final ScrollController _scrollCtrl = ScrollController();
   final TextEditingController _nickCtrl = TextEditingController();
@@ -108,6 +109,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
 
   /// 첫 화면에서 빠진 상세 필드(본문·방문기·탐방정보·갤러리)를 시·도별 상세 파일에서 채운다.
   Future<void> _hydrateDetails(DiscoveryItem sp) async {
+    TranslationStore.ensureDetails(appLangNotifier.value, kProvinceDetailCodes[sp.province] ?? 'etc');
     final full = await hydrateDiscoveryItem(sp);
     if (!mounted || identical(full, sp) || _current.id != sp.id) return;
     setState(() {
@@ -144,6 +146,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
       _current = next;
       _heroIndex = 0;
       _couponExpanded = false;
+      _bodyExpanded = false;
       _reviews = const [];
     });
     widget.onSelectConnectedItem(next);
@@ -190,19 +193,14 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
   }
 
   Future<void> _copyShareLink() async {
-    final shareUrl = 'https://jikstay-lkxu1.web.app/?spot=${Uri.encodeComponent(_current.id)}';
-    await Clipboard.setData(ClipboardData(text: shareUrl));
+    final shareUrl = '${currentSiteOrigin()}/?spot=${Uri.encodeComponent(_current.id)}';
     trackPortalEvent('share_spot_link', {'item_id': _current.id});
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          widget.lang == AppLang.ko
-              ? '상세 페이지 링크가 복사되었습니다. 동행에게 바로 공유해 보세요!'
-              : 'Page link copied to clipboard!',
-        ),
-      ),
-    );
+    await sharePlace(context, title: _current.tTitle(appLangNotifier.value), url: shareUrl, lang: appLangNotifier.value);
+  }
+
+  String get _officialUrl {
+    final link = (_current.raw['naver_link'] ?? '').toString();
+    return link.isNotEmpty ? link : _current.externalUrl;
   }
 
   void _revealInlineCoupon() {
@@ -375,7 +373,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
         out.add(
           pickLangText(
             lang,
-            ko: '$reg 일대 여행객과 현지인이 즐겨 찾는 로컬 식도락 장소입니다. 계절이나 재료 소진 상황에 따라 운영시간·세부 메뉴 가격이 달라질 수 있으므로, 방문 전 아래 카카오 플레이스 또는 네이버 플레이스 바로가기를 통해 최신 메뉴판과 실시간 영업 여부를 함께 확인하시면 더욱 편리합니다.',
+            ko: '$reg 일대 여행객과 현지인이 즐겨 찾는 로컬 식도락 장소입니다. 계절이나 재료 소진 상황에 따라 운영시간·세부 메뉴 가격이 달라질 수 있으므로, 방문 전 아래 카카오 플레이스 또는 네이버 플레이스 바로가기를 통해 최신 메뉴판과 영업 여부를 함께 확인하시면 더욱 편리합니다.',
             en: 'A popular local eatery in $reg loved by travelers and residents alike. Hours and menu prices may vary by season—check Kakao Place or Naver Place below for the latest menu and live opening status.',
             ja: '$reg エリアで旅行者と地元民に親しまれているローカルグルメスポットです。季節や仕入れ状況により営業時間やメニューが異なる場合がありますので、下記のKakao・NAVERプレイスから最新情報をご確認ください。',
             zh: '$reg 一帶深受旅客與在地人喜愛的美食名店。營業時間與餐點價格可能依季節調整，建議出發前透過下方 Kakao Place 或 NAVER Place 確認最新菜單與營業狀態。',
@@ -408,9 +406,9 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
         out.add(
           pickLangText(
             lang,
-            ko: '$reg을 대표하는 탐방 명소로, 주변 로컬 식당·계절 축제·합법 인증 숙소와 함께 엮어 여유로운 여행 코스를 구성하기 좋습니다.',
+            ko: '$reg을 대표하는 탐방 명소로, 주변 로컬 식당·계절 축제·공공데이터 등록 숙소와 함께 엮어 여유로운 여행 코스를 구성하기 좋습니다.',
             en: 'A signature attraction in $reg—pair it with nearby local restaurants, seasonal events, and government-licensed stays for a relaxed itinerary.',
-            ja: '$reg を代表する見どころスポットです。周辺のローカル食堂や季節の祭り、公認宿泊施設と合わせてゆったり巡るのがおすすめです。',
+            ja: '$reg を代表する見どころスポットです。周辺のローカル食堂や季節の祭り、宿泊泊施設と合わせてゆったり巡るのがおすすめです。',
             zh: '$reg 的代表性觀光景點，非常適合搭配周邊在地美食、季節慶典與合法認證住宿，規劃悠閒的一日行程。',
           ),
         );
@@ -553,6 +551,20 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
           ),
         ],
       ),
+      // 모바일: 길찾기·전화·공식링크·찜·공유를 화면 하단에 고정 (12개 섹션을 다 내리지 않아도 되게)
+      bottomNavigationBar: isWide
+          ? null
+          : DetailActionBar(
+              itemId: _current.id,
+              lang: lang,
+              savable: _current.category != DiscoveryCategory.ebook,
+              onDirections: () => _openExternal(_current.naverRouteUrl, eventTag: 'click_transit_naver'),
+              onShare: _copyShareLink,
+              phone: _current.phone,
+              onCall: () => _openExternal('tel:${_current.phone.replaceAll(' ', '')}', eventTag: 'click_phone'),
+              officialUrl: _officialUrl,
+              onOfficial: () => _openExternal(_officialUrl, eventTag: 'open_official_site'),
+            ),
       body: SingleChildScrollView(
         controller: _scrollCtrl,
         padding: EdgeInsets.symmetric(horizontal: isWide ? 28 : 16, vertical: isWide ? 28 : 18),
@@ -599,7 +611,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                           ),
                           child: Text(
                             freshBadge,
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFB91C1C)),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFB91C1C)),
                           ),
                         ),
                       if (_current.isSponsored)
@@ -617,7 +629,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                               ja: '🎁 地域パートナー・来店特典',
                               zh: '🎁 在地合作推薦・造訪優惠',
                             ),
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
                           ),
                         ),
                       if (_current.reviewCount > 0)
@@ -716,6 +728,11 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // 3-1. 방문 결정에 필요한 핵심 정보(운영시간·휴무·주차·요금)를 본문보다 먼저
+                  QuickFactsChips(rows: practicalRows),
+                  const SizedBox(height: 8),
+                  SourceLine(item: _current, lang: lang),
                   const SizedBox(height: 20),
 
                   // 4. 핵심 한 줄 콜아웃 (Pull-Quote — 대표 메뉴 / 축제 테마 / 명소 한 줄 요약)
@@ -741,7 +758,8 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                   ],
 
                   // 5. 매거진 스토리 본문 (가독성 최우선: 16.5px · 줄간격 1.88)
-                  ...paragraphs.map(
+                  // 긴 본문은 앞 2문단만 보여 주고 '더 읽기'로 펼친다 (모바일 스크롤 부담 완화)
+                  ...(_bodyExpanded ? paragraphs : paragraphs.take(2)).map(
                     (p) => Padding(
                       padding: const EdgeInsets.only(bottom: 18),
                       child: Text(
@@ -755,6 +773,17 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                       ),
                     ),
                   ),
+                  if (!_bodyExpanded && paragraphs.length > 2)
+                    TextButton.icon(
+                      key: const Key('spot_read_more_btn'),
+                      onPressed: () => setState(() => _bodyExpanded = true),
+                      icon: const Icon(Icons.expand_more_rounded),
+                      label: Text(pickLangText(lang,
+                          ko: '더 읽기 (${paragraphs.length - 2}문단)',
+                          en: 'Read more',
+                          ja: '続きを読む',
+                          zh: '閱讀更多')),
+                    ),
                   const SizedBox(height: 6),
 
                   // 6. 방문 전 꼭 필요한 '핵심 탐방·메뉴·편의 정보 박스' (《장수여행》 p.9 초록 박스 모델)
@@ -841,7 +870,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                               Expanded(
                                 child: Text(
                                   lang == AppLang.ko
-                                      ? '카카오 플레이스 & 네이버 방문기 · 실시간 상세정보'
+                                      ? '카카오 플레이스 & 네이버 방문기 · 상세정보'
                                       : 'Kakao Place & Naver Live Reviews · Menus & Hours',
                                   style: const TextStyle(
                                     fontSize: 15,
@@ -856,7 +885,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                           Text(
                             lang == AppLang.ko
                                 ? '메뉴 가격표, 브레이크타임, 실제 방문객 사진·블로그 후기가 더 필요하시면 아래에서 바로 확인하세요.'
-                                : 'Check real-time menus, opening hours, and visitor photo reviews directly.',
+                                : 'Check the latest menus, opening hours, and visitor photo reviews directly.',
                             style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.45),
                           ),
                           if (_current.naverReviews.isNotEmpty) ...[
@@ -889,7 +918,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                                               child: const Text(
                                                 'N 블로그 방문기',
                                                 style: TextStyle(
-                                                  fontSize: 10.5,
+                                                  fontSize: 12,
                                                   fontWeight: FontWeight.w900,
                                                   color: Color(0xFF15803D),
                                                 ),
@@ -904,7 +933,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                                                 ].join(' · '),
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                                               ),
                                             ),
                                             const Icon(Icons.open_in_new_rounded, size: 14, color: Color(0xFF64748B)),
@@ -1191,7 +1220,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                                           eb.address,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF3B82F6)),
+                                          style: const TextStyle(fontSize: 12, color: Color(0xFF3B82F6)),
                                         ),
                                     ],
                                   ),
@@ -1255,7 +1284,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                     const SizedBox(height: 4),
                     Text(
                       lang == AppLang.ko
-                          ? '선택한 장소와 가까운 로컬 식당, 계절 축제, 볼거리, 합법 인증 안심숙소 상세 페이지로 바로 이어집니다.'
+                          ? '선택한 장소와 가까운 로컬 식당, 계절 축제, 볼거리, 공공데이터 등록 숙소 상세 페이지로 바로 이어집니다.'
                           : 'Seamlessly explore nearby local restaurants, festivals, sights, and licensed stays.',
                       style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                     ),
@@ -1279,7 +1308,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                       onTap: _switchSpot,
                     ),
                     _ConnectedHorizontalRow(
-                      title: lang == AppLang.ko ? '🏡 근처 합법 인증 안심숙소' : '🏡 Nearby Gov-Verified Stays',
+                      title: lang == AppLang.ko ? '🏡 근처 공공데이터 등록 숙소' : '🏡 Nearby Public-Data Stays',
                       items: bundle.stays,
                       anchor: _current,
                       onTap: _switchSpot,
@@ -1312,6 +1341,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                               for (int s = 1; s <= 5; s++)
                                 IconButton(
                                   key: Key('spot_star_$s'),
+                                  tooltip: pickLangText(lang, ko: '별점 $s점', en: '$s stars', ja: '星$s', zh: '$s 星'),
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -1481,7 +1511,7 @@ class _ConnectedHorizontalRow extends StatelessWidget {
                               if (it.isSponsored)
                                 const Text(
                                   '🎁 방문혜택',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
                                 ),
                               Text(
                                 it.tTitle(lang),
@@ -1491,10 +1521,10 @@ class _ConnectedHorizontalRow extends StatelessWidget {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '${dist < 1.0 ? "${(dist * 1000).round()}m" : "${dist.toStringAsFixed(1)}km"} · ${it.tRegionLabel(lang)}',
+                                '${it.distanceLabel(dist, lang)} · ${it.tRegionLabel(lang)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                               ),
                             ],
                           ),

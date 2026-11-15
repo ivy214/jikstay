@@ -250,7 +250,7 @@ DiscoveryItem? parseStayToDiscoveryItem(String docId, Map<String, dynamic> d) {
     lat: useLat,
     lng: useLng,
     imageUrl: firstImg,
-    subtitle: points.isNotEmpty ? points.first : (d['accommodation_type'] ?? '공공 인허가 확인 안심숙소').toString(),
+    subtitle: points.isNotEmpty ? points.first : (d['accommodation_type'] ?? '공공데이터 등록 숙소').toString(),
     externalUrl: rawDirectUrl.isNotEmpty ? rawDirectUrl : defaultNaverSearch,
     mapUrl: rawMapUrl.isNotEmpty ? rawMapUrl : defaultNaverSearch,
     phone: (loc['public_phone'] ?? '').toString(),

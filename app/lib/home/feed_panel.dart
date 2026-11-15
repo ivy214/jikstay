@@ -105,7 +105,7 @@ class _LiveLocalFeedPanel extends StatelessWidget {
                                       '${st.tRegionLabel(lang)} · ${st.tSeasonBadge(lang)}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
@@ -119,7 +119,7 @@ class _LiveLocalFeedPanel extends StatelessWidget {
                                       st.tSourceBook(lang),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                                     ),
                                   ],
                                 ),

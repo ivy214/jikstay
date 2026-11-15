@@ -43,13 +43,7 @@ class _VerifiedTrustBar extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        pickLangText(
-                          lang,
-                          ko: '행정안전부 공공데이터 영업확인 업소',
-                          en: 'Verified Public Lodging Data (MOIS)',
-                          ja: '韓国行政安全部 公共データ営業確認済み',
-                          zh: '韩国行政安全部公共数据营业核验住宿',
-                        ),
+                        stayVerificationLabel(data, lang),
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                       ),
                       Text(
@@ -249,35 +243,7 @@ class _DirectBookingConversionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 수수료 절감 배지 (Airbnb '60일 평균보다 낮음' 전환 배지 벤치마킹)
-          if (est.estimatedFeeSaved != null)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF0F3),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.local_offer_rounded, size: 16, color: kBrand),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      pickLangText(
-                        lang,
-                        ko: '일반 숙박앱 대비 수수료 약 ${formatWon(est.estimatedFeeSaved!)} 절약',
-                        en: 'Save approx. ${formatWon(est.estimatedFeeSaved!)} in OTA fees',
-                        ja: '一般予約サイト比で手数料 約${formatWon(est.estimatedFeeSaved!)}お得',
-                        zh: '相比常规平台可省约 ${formatWon(est.estimatedFeeSaved!)} 服务费',
-                      ),
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kBrand),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          // (수수료 절감액 배지는 실제 직거래 가격을 알 수 없어 표시하지 않는다)
 
           // 대표 예상 요금
           Row(
@@ -320,7 +286,7 @@ class _DirectBookingConversionCard extends StatelessWidget {
                             children: [
                               Text(
                                 pickLangText(lang, ko: '체크인', en: 'CHECK-IN', ja: 'チェックイン', zh: '入住'),
-                                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: 2),
                               Text(
@@ -340,7 +306,7 @@ class _DirectBookingConversionCard extends StatelessWidget {
                             children: [
                               Text(
                                 pickLangText(lang, ko: '체크아웃', en: 'CHECK-OUT', ja: 'チェックアウト', zh: '退房'),
-                                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: 2),
                               Text(
@@ -368,7 +334,7 @@ class _DirectBookingConversionCard extends StatelessWidget {
                           children: [
                             Text(
                               pickLangText(lang, ko: '인원', en: 'GUESTS', ja: '人数', zh: '人数'),
-                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 2),
                             Text(guestSummary, style: const TextStyle(fontSize: 13.5)),
@@ -477,7 +443,7 @@ class _DirectBookingConversionCard extends StatelessWidget {
                 zh: '所选日期与人数将自动复制并跳转至$channel。',
               ),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
           ),
           const Divider(height: 24),
@@ -619,7 +585,7 @@ class _MobileStickyBookingBar extends StatelessWidget {
                               ja: '仲介手数料0ウォン · $channel',
                               zh: '0平台费 · $channel',
                             ),
-                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700, decoration: TextDecoration.underline),
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700, decoration: TextDecoration.underline),
                     ),
                   ],
                 ),

@@ -390,7 +390,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800,
                                       color: _selectedPinItem!.category.color,
                                     ),
@@ -464,7 +464,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                   ),
                   child: const Text(
                     '배경지도: 국토교통부 VWorld · OpenStreetMap | 길찾기·상세연동: NAVER 지도',
-                    style: TextStyle(fontSize: 9.5, color: Color(0xFF475569)),
+                    style: TextStyle(fontSize: 12, color: Color(0xFF475569)),
                   ),
                 ),
               ),
@@ -558,7 +558,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                     Text(
                                       '${it.categoryEmoji} ${trProvince(it.province, lang)} · ${it.categoryBadgeText(lang)}',
                                       style: TextStyle(
-                                        fontSize: 10.5,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w800,
                                         color: it.category.color,
                                       ),
@@ -582,7 +582,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                           child: Text(
                                             lang == AppLang.ko ? '상세 보기 →' : 'Details →',
                                             style: const TextStyle(
-                                              fontSize: 11.5,
+                                              fontSize: 12,
                                               fontWeight: FontWeight.w800,
                                               color: Color(0xFF2563EB),
                                             ),
@@ -594,7 +594,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                           child: Text(
                                             lang == AppLang.ko ? '🟢 네이버지도 ↗' : '🟢 Naver Map ↗',
                                             style: const TextStyle(
-                                              fontSize: 11.5,
+                                              fontSize: 12,
                                               fontWeight: FontWeight.w800,
                                               color: Color(0xFF15803D),
                                             ),
@@ -647,7 +647,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                   const SizedBox(width: 6),
                   Text(
                     lang == AppLang.ko
-                        ? '${widget.selectedProvince == '전체' ? '전국' : widget.selectedProvince} 로컬 핀 지도 · 네이버 지도 실시간 연동'
+                        ? '${widget.selectedProvince == '전체' ? '전국' : widget.selectedProvince} 로컬 핀 지도 · 네이버 지도 연결'
                         : '${trProvince(widget.selectedProvince, lang)} Local Map · Synced with NAVER Map',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF14532D)),
                   ),
@@ -681,7 +681,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                     onPressed: () => widget.onOpenExternalUrl(_buildNaverRegionSearchUrl(customSuffix: '로컬 맛집')),
                     child: Text(
                       lang == AppLang.ko ? '🍲 네이버지도 맛집 ↗' : '🍲 NAVER Food ↗',
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF166534)),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF166534)),
                     ),
                   ),
                   OutlinedButton(
@@ -694,7 +694,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                     onPressed: () => widget.onOpenExternalUrl(_buildNaverRegionSearchUrl(customSuffix: '가볼만한곳 축제')),
                     child: Text(
                       lang == AppLang.ko ? '🏞️ 네이버지도 명소 ↗' : '🏞️ NAVER Sights ↗',
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF166534)),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF166534)),
                     ),
                   ),
                 ],

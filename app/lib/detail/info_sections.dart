@@ -289,7 +289,7 @@ void _showAllAmenitiesDialog(
                 children: [
                   Text('숙소 편의시설 ($totalCount개)',
                       style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
+                  IconButton(tooltip: '닫기', onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
                 ],
               ),
             ),

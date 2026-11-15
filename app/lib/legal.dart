@@ -1,7 +1,7 @@
 // 법적 고지 및 개인정보처리방침 요약 (공공데이터 기반 숙소 정보 제공 + 방문자 별점·후기 운영 모델)
 import 'package:material_ui/material_ui.dart';
 
-const kConsentVersion = '2026-11-15.3';
+const kConsentVersion = '2026-11-15.4';
 
 // 전자상거래법상 사업자 정보 표시 (사이트 하단)
 const kBizName = '[상호]';
@@ -13,7 +13,7 @@ const kBizEmail = '[문의·삭제요청 이메일]';
 
 const kPrivacyPolicy = '''개인정보처리방침 (요약, 버전 $kConsentVersion)
 
-1. 처리 목적: 행정안전부·한국관광공사 공공데이터 기반 합법 숙소 정보 제공, 방문자 별점·후기 게시, 직거래 연결 통계 집계 및 문의 응대
+1. 처리 목적: 행정안전부·한국관광공사 공공데이터 기반 숙소 정보 제공, 방문자 별점·후기 게시, 직거래 연결 통계 집계 및 문의 응대
 2. 처리 항목:
    - 숙소 탐색·직거래 이동 시: 개인정보를 수집하지 않으며 숙소별 외부 연결 클릭 횟수만 집계합니다.
    - 별점·후기 작성 시: 작성자가 직접 입력한 닉네임(실명 불요), 별점(1~5점), 방문 유형, 후기 본문, 작성 일시, 그리고 "장소당 1회 작성" 확인을 위해 브라우저에 발급되는 무작위 익명 식별자(Firebase 익명 인증 ID)
@@ -51,7 +51,7 @@ class LegalFooter extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 1120),
           child: Column(children: [
             const Text(
-              '본 서비스는 행정안전부·한국관광공사 공공데이터로 확인된 합법 숙소 정보제공 채널이며 통신판매의 당사자가 아닙니다. '
+              '본 서비스는 행정안전부·한국관광공사 공공데이터에 등록된 숙소 정보제공 채널이며 통신판매의 당사자가 아닙니다. '
               '예약·결제·환불의 의무와 책임은 각 숙소 운영자에게 있습니다.',
               style: style,
               textAlign: TextAlign.center,
