@@ -46,15 +46,28 @@ jobs:
             git push
           fi
 
-      - name: Set up Flutter (only when Firebase secret is configured)
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY != '' }}
+      - name: Check Firebase deploy secret
+        id: fb
+        env:
+          FB_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY }}
+        run: |
+          if [ -n "$FB_SA" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Flutter
+        if: steps.fb.outputs.enabled == 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.29.0"
           channel: "stable"
 
       - name: Build & deploy to Firebase Hosting
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY != '' }}
+        if: steps.fb.outputs.enabled == 'true'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY }}
         run: |
           pushd app
           flutter pub get
@@ -63,5 +76,3 @@ jobs:
           mkdir -p firebase/public
           cp -r app/build/web/* firebase/public/
           npx --yes firebase-tools deploy --only hosting --project jikstay-lkxu1
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY }}
