@@ -376,69 +376,9 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                     const SizedBox(height: 22),
                   ],
 
-                  // 5. 지자체 공식 원문 스토리 본문 (챕터별 대표 이미지 + 웹 매거진 카드)
+                  // 5. 지자체 공식 원문 스토리 본문 (챕터별 TourAPI 정합 대표 이미지 + 웹 매거진 카드)
                   ...(() {
-                    final usedUrls = <String>{if (activeHero.isNotEmpty) activeHero};
-                    final allPool = <DiscoveryItem>[
-                      ...bundle.attractions,
-                      ...bundle.foods,
-                      ...bundle.events,
-                      ...bundle.stays,
-                    ];
-
-                    (String, DiscoveryItem?) pickChapterMedia(String heading, String body) {
-                      final text = '$heading $body'.toLowerCase();
-                      final isFood = text.contains('미식') ||
-                          text.contains('맛집') ||
-                          text.contains('시장') ||
-                          text.contains('푸드') ||
-                          text.contains('골목') ||
-                          text.contains('food') ||
-                          text.contains('gourmet');
-                      final isEvent = text.contains('축제') ||
-                          text.contains('야경') ||
-                          text.contains('한강') ||
-                          text.contains('페스티벌') ||
-                          text.contains('festival');
-                      final isStay = text.contains('숙소') ||
-                          text.contains('체류') ||
-                          text.contains('한옥') ||
-                          text.contains('stay');
-
-                      final prioritized = <DiscoveryItem>[
-                        if (isFood) ...bundle.foods,
-                        if (isEvent) ...bundle.events,
-                        if (isStay) ...bundle.stays,
-                        ...bundle.attractions,
-                        ...allPool,
-                      ];
-
-                      // 1순위: 본문 텍스트에 실제 장소명이 언급되고 사진이 있는 항목
-                      for (final it in prioritized) {
-                        if (it.imageUrl.isEmpty || usedUrls.contains(it.imageUrl)) continue;
-                        final keyWord = it.title.split(' ').first.trim();
-                        if (keyWord.length >= 2 && text.contains(keyWord.toLowerCase())) {
-                          usedUrls.add(it.imageUrl);
-                          return (it.imageUrl, it);
-                        }
-                      }
-                      // 2순위: 챕터 성격에 맞는 미사용 대표 사진
-                      for (final it in prioritized) {
-                        if (it.imageUrl.isNotEmpty && !usedUrls.contains(it.imageUrl)) {
-                          usedUrls.add(it.imageUrl);
-                          return (it.imageUrl, it);
-                        }
-                      }
-                      // 3순위: 스토리 갤러리 내 미사용 사진
-                      for (final img in images) {
-                        if (img.isNotEmpty && !usedUrls.contains(img)) {
-                          usedUrls.add(img);
-                          return (img, null);
-                        }
-                      }
-                      return ('', null);
-                    }
-
+                    var chapterCounter = 0;
                     return tParagraphs.map((p) {
                       final trimmed = p.trim();
                       final nlIdx = trimmed.indexOf('\n');
@@ -453,7 +393,12 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                             .replaceFirst(RegExp(r'^##\s*'), '')
                             .trim();
                         final body = trimmed.substring(nlIdx + 1).trim();
-                        final (chapterImg, linkedSpot) = pickChapterMedia(heading, body);
+                        final media = chapterCounter < _story.chapterMedia.length
+                            ? _story.chapterMedia[chapterCounter]
+                            : null;
+                        chapterCounter += 1;
+                        final chapterImg = media?.imageUrl ?? '';
+                        final chapterCaption = media?.label ?? '';
 
                         return Container(
                           width: double.infinity,
@@ -486,42 +431,36 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                               ),
                               if (chapterImg.isNotEmpty) ...[
                                 const SizedBox(height: 12),
-                                InkWell(
+                                ClipRRect(
                                   borderRadius: BorderRadius.circular(11),
-                                  onTap: linkedSpot == null
-                                      ? null
-                                      : () => _openConnectedSpot(context, lang, linkedSpot),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(11),
-                                    child: SizedBox(
-                                      width: double.infinity,
-                                      height: isWide ? 220 : 170,
-                                      child: Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          StorageImage(url: chapterImg, cacheWidth: 880),
-                                          if (linkedSpot != null)
-                                            Positioned(
-                                              left: 10,
-                                              bottom: 10,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black.withValues(alpha: 0.66),
-                                                  borderRadius: BorderRadius.circular(20),
-                                                ),
-                                                child: Text(
-                                                  '📍 ${linkedSpot.tTitle(lang)} →',
-                                                  style: const TextStyle(
-                                                    fontSize: 11.5,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: Colors.white,
-                                                  ),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    height: isWide ? 230 : 175,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        StorageImage(url: chapterImg, cacheWidth: 880),
+                                        if (chapterCaption.isNotEmpty)
+                                          Positioned(
+                                            left: 10,
+                                            bottom: 10,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withValues(alpha: 0.65),
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Text(
+                                                '📍 $chapterCaption',
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.white,
                                                 ),
                                               ),
                                             ),
-                                        ],
-                                      ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ),

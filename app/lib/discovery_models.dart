@@ -162,6 +162,13 @@ class NaverPlaceReviewSnippet {
   });
 }
 
+class ChapterMediaItem {
+  final String imageUrl;
+  final String label;
+
+  const ChapterMediaItem({required this.imageUrl, this.label = ''});
+}
+
 /// 지자체 발행 PDF 가이드북·문화관광 페이지 원문 기반 '하루 한 편 로컬 스토리' 모델
 class DailyStoryItem {
   final String id;
@@ -182,6 +189,7 @@ class DailyStoryItem {
   final String practicalHeader;
   final List<PracticalInfoRow> practicalInfo;
   final List<MunicipalPdfLink> pdfLinks;
+  final List<ChapterMediaItem> chapterMedia;
   final String enSummary;
 
   const DailyStoryItem({
@@ -203,6 +211,7 @@ class DailyStoryItem {
     this.practicalHeader = '',
     this.practicalInfo = const [],
     this.pdfLinks = const [],
+    this.chapterMedia = const [],
     this.enSummary = '',
   });
 
@@ -1447,6 +1456,18 @@ DailyStoryItem? parseDailyStoryFromJson(Map<String, dynamic> m) {
     }
   }
 
+  final chapterMedia = <ChapterMediaItem>[];
+  if (m['chapter_media'] is List) {
+    for (final raw in m['chapter_media'] as List) {
+      if (raw is Map) {
+        chapterMedia.add(ChapterMediaItem(
+          imageUrl: (raw['image_url'] ?? '').toString().trim(),
+          label: (raw['label'] ?? '').toString().trim(),
+        ));
+      }
+    }
+  }
+
   return DailyStoryItem(
     id: id,
     province: (m['province'] ?? '전북').toString(),
@@ -1466,6 +1487,7 @@ DailyStoryItem? parseDailyStoryFromJson(Map<String, dynamic> m) {
     practicalHeader: (m['practical_header'] ?? '').toString(),
     practicalInfo: pInfo,
     pdfLinks: pdfs,
+    chapterMedia: chapterMedia,
     enSummary: (m['en_summary'] ?? '').toString(),
   );
 }
