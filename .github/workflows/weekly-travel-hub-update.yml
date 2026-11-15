@@ -17,8 +17,8 @@ jobs:
   refresh-hub:
     runs-on: ubuntu-latest
     env:
-      # 코드는 DATA_GO_KR_SERVICE_KEY / TOUR_API_KEY 를 읽는다 (시크릿 이름은 기존 그대로 사용).
-      DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+      # 시크릿 이름은 로컬 .env 변수 이름과 같게 맞춘다.
+      DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
       TOUR_API_KEY: ${{ secrets.TOUR_API_KEY }}
       NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
       NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
