@@ -1,5 +1,5 @@
-// 직스테이 로컬 (하루 한 편 지자체 가이드북 스토리 + 인터랙티브 로컬 지도 · 동선 연결 플랫폼)
-// - 첫 화면: 선택 과부하를 없앤 단일 테마 바 + '오늘의 계절·테마 로컬 스토리' 히어로 배너 + 연동 로컬 피드
+// 직스테이 로컬 (하루 한 편 지자체 가이드북 스토리 + 로컬 동선 연결 매거진 플랫폼)
+// - 첫 화면: 지도 없이 가볍고 몰입감 있는 '오늘의 계절·테마 로컬 스토리' 히어로 + 계절 스토리 모음 + 연동 로컬 피드
 // - 배너 클릭 시: 지자체 공식 책자(PDF) 원문·사진·필수 탐방정보 박스를 담은 매거진형 스토리 상세 페이지 이동
 // - ?id=stay_xxx / ?story=spot_story_xxx / ?spot=... / ?region=... 딥링크 호환
 import 'dart:math' as math;
@@ -21,7 +21,6 @@ import 'spot_detail_sheet.dart';
 import 'story_detail_page.dart';
 import 'travel_hub.dart';
 import 'web_utils.dart';
-import 'zillow_map_view.dart';
 
 /// reCAPTCHA Enterprise 사이트 키: flutter build web --dart-define=RECAPTCHA_SITE_KEY=...
 const kRecaptchaSiteKey = String.fromEnvironment('RECAPTCHA_SITE_KEY');
@@ -241,7 +240,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const int _feedPageSize = 18;
 
-  final ZillowMapController _mapCtrl = ZillowMapController();
   final TextEditingController _searchCtrl = TextEditingController();
 
   DiscoveryCategory _category = DiscoveryCategory.all;
@@ -249,15 +247,12 @@ class _HomePageState extends State<HomePage> {
   String _query = '';
   bool _showBenefitsHub = false;
   bool _showProvincePicker = false;
-  bool _mobileFullMap = false;
   bool _loading = true;
   bool _offlineSeedMode = false;
 
   List<DiscoveryItem> _allItems = const [];
   List<DailyStoryItem> _dailyStories = kFallbackDailyMunicipalStories;
-  MapViewportBounds? _viewport;
   String? _selectedItemId;
-  String? _hoveredItemId;
   int _feedVisibleCount = _feedPageSize;
   bool _initialDeepLinkHandled = false;
 
@@ -276,7 +271,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _mapCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -477,14 +471,11 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  List<DiscoveryItem> _filteredItems({bool applyViewport = false}) {
+  List<DiscoveryItem> _filteredItems() {
     final q = _query.trim().toLowerCase();
     final out = _allItems.where((it) {
       if (_category != DiscoveryCategory.all && it.category != _category) return false;
       if (_selectedProvince != '전체' && it.province != _selectedProvince) return false;
-      if (applyViewport && _viewport != null && !_viewport!.contains(it.lat, it.lng)) {
-        return false;
-      }
       if (q.isEmpty) return true;
       final hay = '${it.title} ${it.province} ${it.regionLabel} ${it.address} ${it.subtitle} ${it.couponTitle}'
           .toLowerCase();
@@ -496,24 +487,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _selectProvince(String provKey) {
-    final meta = kProvinceJumpList.firstWhere(
-      (p) => p.key == provKey,
-      orElse: () => kProvinceJumpList.first,
-    );
     setState(() {
       _selectedProvince = provKey;
       _showProvincePicker = false;
       _selectedItemId = null;
       _feedVisibleCount = _feedPageSize;
     });
-    _mapCtrl.moveTo(meta.lat, meta.lng, zoom: meta.zoom);
     syncPortalParams(region: provKey, spotId: null);
     trackPortalEvent('select_province', {'province': provKey});
   }
 
   void _openItemSheet(DiscoveryItem item) {
     setState(() => _selectedItemId = item.id);
-    _mapCtrl.moveTo(item.lat, item.lng, zoom: math.max(_mapCtrl.zoom, 10.6));
     syncPortalParams(
       region: _selectedProvince,
       spotId: item.category == DiscoveryCategory.stay ? null : item.id,
@@ -530,7 +515,6 @@ class _HomePageState extends State<HomePage> {
         offlineMode: _offlineSeedMode || widget.initialDemoMode,
         onSelectConnectedItem: (next) {
           setState(() => _selectedItemId = next.id);
-          _mapCtrl.moveTo(next.lat, next.lng, zoom: math.max(_mapCtrl.zoom, 11.0));
         },
         onOpenFullStayPage: (stayId) {
           Navigator.of(context).push(MaterialPageRoute(
@@ -564,22 +548,19 @@ class _HomePageState extends State<HomePage> {
       valueListenable: appLangNotifier,
       builder: (context, lang, _) {
         final screenW = MediaQuery.sizeOf(context).width;
-        final isDesktop = screenW >= 920;
-
-        final mapCandidates = _filteredItems(applyViewport: false);
-        var feedItems = _filteredItems(applyViewport: true);
-        if (feedItems.isEmpty && mapCandidates.isNotEmpty) {
-          feedItems = mapCandidates;
-        }
+        final feedItems = _filteredItems();
 
         final todayStory = pickTodayMunicipalStory(
           stories: _dailyStories,
           allItems: _allItems,
           selectedProvince: _selectedProvince,
         );
+        final moreStories = (_query.trim().isEmpty && _category == DiscoveryCategory.all)
+            ? _dailyStories.where((s) => s.id != todayStory.id).take(4).toList()
+            : const <DailyStoryItem>[];
 
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: const Color(0xFFF8FAF9),
           appBar: AppBar(
             backgroundColor: Colors.white,
             surfaceTintColor: Colors.white,
@@ -676,8 +657,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                       child: Text(
                         lang == AppLang.ko
-                            ? (_showBenefitsHub ? '🗺️ 스토리·지도로' : '🎁 반값여행·E-book관')
-                            : (_showBenefitsHub ? '🗺️ Story & Map' : '🎁 50% Pass & PDFs'),
+                            ? (_showBenefitsHub ? '📖 로컬 스토리로' : '🎁 반값여행·E-book관')
+                            : (_showBenefitsHub ? '📖 Local Stories' : '🎁 50% Pass & PDFs'),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -852,117 +833,54 @@ class _HomePageState extends State<HomePage> {
                 )
               : _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : isDesktop
-                      ? Row(
-                          children: [
-                            // 좌측 56%: 로컬 동선 지도
-                            Expanded(
-                              flex: 56,
-                              child: ZillowMapView(
-                                controller: _mapCtrl,
-                                items: mapCandidates,
-                                selectedItemId: _selectedItemId,
-                                hoveredItemId: _hoveredItemId,
-                                lang: lang,
-                                onViewportChanged: (b) => setState(() => _viewport = b),
-                                onPinTapped: (it) => setState(() => _selectedItemId = it.id),
-                                onOpenDetailSheet: _openItemSheet,
-                              ),
-                            ),
-                            Container(width: 1, color: const Color(0xFFE2E8F0)),
-                            // 우측 44%: 하루 한 편 '오늘의 로컬 스토리' 히어로 배너 + 연동 피드
-                            Expanded(
-                              flex: 44,
-                              child: _LiveLocalFeedPanel(
-                                lang: lang,
-                                selectedProvince: _selectedProvince,
-                                todayStory: todayStory,
-                                onOpenTodayStory: () => _openStoryDetail(todayStory),
-                                feedItems: feedItems,
-                                totalAreaCount: feedItems.length,
-                                visibleLimit: _feedVisibleCount,
-                                selectedItemId: _selectedItemId,
-                                onHoverItem: (id) => setState(() => _hoveredItemId = id),
-                                onTapItem: _openItemSheet,
-                                onOpenEbookDirect: _openExternalUrl,
-                                onLoadMore: () => setState(() => _feedVisibleCount += _feedPageSize),
-                              ),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            if (screenW < 560)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-                                child: SizedBox(
-                                  height: 36,
-                                  child: TextField(
-                                    controller: _searchCtrl,
-                                    onChanged: (v) => setState(() => _query = v),
-                                    decoration: InputDecoration(
-                                      hintText: trUi('search_hint', lang),
-                                      hintStyle: const TextStyle(fontSize: 12),
-                                      prefixIcon: const Icon(Icons.search_rounded, size: 17),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                                      filled: true,
-                                      fillColor: const Color(0xFFF8FAFC),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(18),
-                                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                      ),
-                                    ),
+                  : Column(
+                      children: [
+                        if (screenW < 560)
+                          Container(
+                            color: Colors.white,
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                            child: SizedBox(
+                              height: 36,
+                              child: TextField(
+                                controller: _searchCtrl,
+                                onChanged: (v) => setState(() {
+                                  _query = v;
+                                  _feedVisibleCount = _feedPageSize;
+                                }),
+                                decoration: InputDecoration(
+                                  hintText: trUi('search_hint', lang),
+                                  hintStyle: const TextStyle(fontSize: 12),
+                                  prefixIcon: const Icon(Icons.search_rounded, size: 17),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFC),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                                   ),
                                 ),
                               ),
-                            Expanded(
-                              flex: _mobileFullMap ? 85 : 42,
-                              child: Stack(
-                                children: [
-                                  ZillowMapView(
-                                    controller: _mapCtrl,
-                                    items: mapCandidates,
-                                    selectedItemId: _selectedItemId,
-                                    hoveredItemId: _hoveredItemId,
-                                    lang: lang,
-                                    onViewportChanged: (b) => setState(() => _viewport = b),
-                                    onPinTapped: (it) => setState(() => _selectedItemId = it.id),
-                                    onOpenDetailSheet: _openItemSheet,
-                                  ),
-                                  Positioned(
-                                    bottom: 10,
-                                    right: 12,
-                                    child: FilledButton.tonalIcon(
-                                      onPressed: () => setState(() => _mobileFullMap = !_mobileFullMap),
-                                      icon: Icon(_mobileFullMap ? Icons.view_list_rounded : Icons.map_rounded, size: 16),
-                                      label: Text(_mobileFullMap ? '스토리·피드 보기' : '지도 크게'),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ),
-                            if (!_mobileFullMap) ...[
-                              Container(height: 1, color: const Color(0xFFE2E8F0)),
-                              Expanded(
-                                flex: 58,
-                                child: _LiveLocalFeedPanel(
-                                  lang: lang,
-                                  selectedProvince: _selectedProvince,
-                                  todayStory: todayStory,
-                                  onOpenTodayStory: () => _openStoryDetail(todayStory),
-                                  feedItems: feedItems,
-                                  totalAreaCount: feedItems.length,
-                                  visibleLimit: _feedVisibleCount,
-                                  selectedItemId: _selectedItemId,
-                                  onHoverItem: (id) => setState(() => _hoveredItemId = id),
-                                  onTapItem: _openItemSheet,
-                                  onOpenEbookDirect: _openExternalUrl,
-                                  onLoadMore: () => setState(() => _feedVisibleCount += _feedPageSize),
-                                ),
-                              ),
-                            ],
-                          ],
+                          ),
+                        Expanded(
+                          child: _LiveLocalFeedPanel(
+                            lang: lang,
+                            selectedProvince: _selectedProvince,
+                            todayStory: todayStory,
+                            moreStories: moreStories,
+                            onOpenTodayStory: () => _openStoryDetail(todayStory),
+                            onOpenStory: _openStoryDetail,
+                            feedItems: feedItems,
+                            totalAreaCount: feedItems.length,
+                            visibleLimit: _feedVisibleCount,
+                            selectedItemId: _selectedItemId,
+                            onTapItem: _openItemSheet,
+                            onOpenEbookDirect: _openExternalUrl,
+                            onLoadMore: () => setState(() => _feedVisibleCount += _feedPageSize),
+                          ),
                         ),
+                      ],
+                    ),
         );
       },
     );
@@ -973,12 +891,13 @@ class _LiveLocalFeedPanel extends StatelessWidget {
   final AppLang lang;
   final String selectedProvince;
   final DailyStoryItem todayStory;
+  final List<DailyStoryItem> moreStories;
   final VoidCallback onOpenTodayStory;
+  final ValueChanged<DailyStoryItem> onOpenStory;
   final List<DiscoveryItem> feedItems;
   final int totalAreaCount;
   final int visibleLimit;
   final String? selectedItemId;
-  final ValueChanged<String?> onHoverItem;
   final ValueChanged<DiscoveryItem> onTapItem;
   final ValueChanged<String> onOpenEbookDirect;
   final VoidCallback onLoadMore;
@@ -987,118 +906,244 @@ class _LiveLocalFeedPanel extends StatelessWidget {
     required this.lang,
     required this.selectedProvince,
     required this.todayStory,
+    required this.moreStories,
     required this.onOpenTodayStory,
+    required this.onOpenStory,
     required this.feedItems,
     required this.totalAreaCount,
     required this.visibleLimit,
     required this.selectedItemId,
-    required this.onHoverItem,
     required this.onTapItem,
     required this.onOpenEbookDirect,
     required this.onLoadMore,
   });
 
+  Widget _centered(Widget child) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1040),
+        child: SizedBox(width: double.infinity, child: child),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final screenW = MediaQuery.sizeOf(context).width;
+    final twoCol = screenW >= 840;
     final shownCount = math.min(feedItems.length, visibleLimit);
     final hasMore = feedItems.length > shownCount;
+    final rowCount = twoCol ? ((shownCount + 1) ~/ 2) : shownCount;
 
     return CustomScrollView(
       key: const Key('live_feed_scroll'),
       slivers: [
-        // 1. 하루 단 한 편 — 지자체 공식 가이드북·행사 기반 '오늘의 로컬 스토리' 히어로 카드
+        // 1. 하루 단 한 편 — 지자체 공식 가이드북·행사 기반 '오늘의 로컬 스토리' 히어로 배너
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-            child: _DailyStoryHeroCard(
-              story: todayStory,
-              lang: lang,
-              onTap: onOpenTodayStory,
+          child: _centered(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+              child: _DailyStoryHeroCard(
+                story: todayStory,
+                lang: lang,
+                onTap: onOpenTodayStory,
+              ),
             ),
           ),
         ),
 
-        // 2. 실시간 피드 헤더 카운트
+        // 2. 계절·테마별 지자체 공식 가이드북 스토리 셀프 (선택 과부하 없이 이야기로 탐색)
+        if (moreStories.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _centered(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      lang == AppLang.ko ? '📚 함께 읽어볼 지자체 가이드북 스토리' : '📚 More Municipal Guidebook Stories',
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: Color(0xFF334155)),
+                    ),
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: moreStories.map((st) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () => onOpenStory(st),
+                              child: Container(
+                                width: 236,
+                                padding: const EdgeInsets.all(11),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${st.province} ${st.city} · ${st.seasonBadge}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      st.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      st.sourceBook,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+        // 3. 실시간 피드 헤더 카운트
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${trUi('live_feed_title', lang)} (${selectedProvince == '전체' ? (lang == AppLang.ko ? '현재 지도 영역' : 'Map Area') : trProvince(selectedProvince, lang)})',
-                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
-                ),
-                Text(
-                  lang == AppLang.ko ? '$totalAreaCount곳 연결됨' : '$totalAreaCount places',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
-                ),
-              ],
+          child: _centered(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${trUi('live_feed_title', lang)} (${selectedProvince == '전체' ? (lang == AppLang.ko ? '전국 큐레이션' : 'All Korea') : trProvince(selectedProvince, lang)})',
+                    style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                  ),
+                  Text(
+                    lang == AppLang.ko ? '$totalAreaCount곳 연결됨' : '$totalAreaCount places',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
 
-        // 3. 실시간 로컬 피드 카드 스트림
+        // 4. 실시간 로컬 피드 카드 스트림 (데스크톱 2열 매거진 그리드 / 모바일 1열)
         if (feedItems.isEmpty)
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(36),
-              child: Center(
-                child: Text(
-                  lang == AppLang.ko
-                      ? '현재 지도 영역에 일치하는 장소가 없습니다.\n지도를 축소하거나 다른 지역을 선택해 보세요.'
-                      : 'No matching places in this map view. Zoom out or pick another province.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13.5, color: Color(0xFF64748B), height: 1.5),
+            child: _centered(
+              Padding(
+                padding: const EdgeInsets.all(40),
+                child: Center(
+                  child: Text(
+                    lang == AppLang.ko
+                        ? '선택한 조건에 일치하는 장소가 없습니다.\n검색어를 지우거나 다른 지역·테마를 선택해 보세요.'
+                        : 'No matching places found. Clear your search or try another province.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13.5, color: Color(0xFF64748B), height: 1.5),
+                  ),
                 ),
               ),
             ),
           )
         else
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            sliver: SliverList.separated(
-              itemCount: shownCount,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, idx) {
-                final it = feedItems[idx];
-                final isSelected = it.id == selectedItemId;
-                return MouseRegion(
-                  onEnter: (_) => onHoverItem(it.id),
-                  onExit: (_) => onHoverItem(null),
-                  child: _LiveFeedItemCard(
-                    key: ValueKey('feed_card_${it.id}'),
-                    item: it,
-                    lang: lang,
-                    isSelected: isSelected,
-                    onTap: () => onTapItem(it),
-                    onOpenEbookDirect: onOpenEbookDirect,
+          SliverList.separated(
+            itemCount: rowCount,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (_, rowIdx) {
+              if (!twoCol) {
+                final it = feedItems[rowIdx];
+                return _centered(
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _LiveFeedItemCard(
+                      key: ValueKey('feed_card_${it.id}'),
+                      item: it,
+                      lang: lang,
+                      isSelected: it.id == selectedItemId,
+                      onTap: () => onTapItem(it),
+                      onOpenEbookDirect: onOpenEbookDirect,
+                    ),
                   ),
                 );
-              },
-            ),
+              }
+              final leftIdx = rowIdx * 2;
+              final rightIdx = leftIdx + 1;
+              final leftItem = feedItems[leftIdx];
+              final rightItem = rightIdx < shownCount ? feedItems[rightIdx] : null;
+              return _centered(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _LiveFeedItemCard(
+                          key: ValueKey('feed_card_${leftItem.id}'),
+                          item: leftItem,
+                          lang: lang,
+                          isSelected: leftItem.id == selectedItemId,
+                          onTap: () => onTapItem(leftItem),
+                          onOpenEbookDirect: onOpenEbookDirect,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: rightItem != null
+                            ? _LiveFeedItemCard(
+                                key: ValueKey('feed_card_${rightItem.id}'),
+                                item: rightItem,
+                                lang: lang,
+                                isSelected: rightItem.id == selectedItemId,
+                                onTap: () => onTapItem(rightItem),
+                                onOpenEbookDirect: onOpenEbookDirect,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
 
         if (hasMore)
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Center(
-                child: OutlinedButton.icon(
-                  onPressed: onLoadMore,
-                  icon: const Icon(Icons.expand_more_rounded, size: 18),
-                  label: Text(
-                    lang == AppLang.ko
-                        ? '더 보기 ($shownCount / ${feedItems.length})'
-                        : 'Load More ($shownCount / ${feedItems.length})',
+            child: _centered(
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: OutlinedButton.icon(
+                    onPressed: onLoadMore,
+                    icon: const Icon(Icons.expand_more_rounded, size: 18),
+                    label: Text(
+                      lang == AppLang.ko
+                          ? '더 보기 ($shownCount / ${feedItems.length})'
+                          : 'Load More ($shownCount / ${feedItems.length})',
+                    ),
                   ),
                 ),
               ),
             ),
           ),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 16)),
-        const SliverToBoxAdapter(child: LegalFooter()),
+        const SliverToBoxAdapter(child: SizedBox(height: 18)),
+        SliverToBoxAdapter(child: _centered(const LegalFooter())),
       ],
     );
   }
@@ -1115,183 +1160,214 @@ class _DailyStoryHeroCard extends StatelessWidget {
     required this.onTap,
   });
 
+  Widget _buildImagePanel({required double height, required BorderRadius borderRadius, required String dateTag}) {
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: SizedBox(
+        height: height,
+        width: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            StorageImage(url: story.heroImage, cacheWidth: 960),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.26),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.55),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 14,
+              left: 14,
+              right: 14,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF065F46).withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      lang == AppLang.ko ? '📖 $dateTag' : '📖 Today’s Local Story',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      story.seasonBadge,
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              bottom: 12,
+              left: 16,
+              right: 16,
+              child: Text(
+                '${story.province} ${story.city} · ${story.sourceBook}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFE2E8F0),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextPanel({required bool isWide, required String dateTag}) {
+    final summaryText = lang != AppLang.ko && story.enSummary.isNotEmpty
+        ? story.enSummary
+        : (story.pullQuote.isNotEmpty
+            ? story.pullQuote
+            : (story.paragraphs.isNotEmpty ? story.paragraphs.first : story.subtitle));
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(isWide ? 24 : 16, isWide ? 22 : 14, isWide ? 24 : 16, isWide ? 22 : 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (story.heroImage.isEmpty || isWide) ...[
+            Text(
+              isWide ? '${story.province} ${story.city} · ${story.sourceBook}' : '📖 $dateTag · ${story.seasonBadge}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Text(
+            story.title,
+            style: TextStyle(
+              fontSize: isWide ? 23 : 19,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+              height: 1.3,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            summaryText,
+            maxLines: isWide ? 4 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: isWide ? 14.5 : 13.5,
+              color: const Color(0xFF334155),
+              height: 1.62,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  lang == AppLang.ko ? '📍 ${story.subtitle}' : '📍 ${story.address}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF065F46),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      lang == AppLang.ko ? '스토리 상세 보기' : 'Read Story',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_rounded, size: 15, color: Colors.white),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final dateTag = '${now.month}월 ${now.day}일 오늘의 로컬 스토리';
+    final isWide = MediaQuery.sizeOf(context).width >= 760 && story.heroImage.isNotEmpty;
 
     return Container(
       key: const Key('daily_story_banner'),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFBBF7D0), width: 1.4),
         boxShadow: const [
-          BoxShadow(color: Color(0x0D0F172A), blurRadius: 16, offset: Offset(0, 6)),
+          BoxShadow(color: Color(0x0D0F172A), blurRadius: 18, offset: Offset(0, 6)),
         ],
       ),
       child: InkWell(
         key: const Key('open_daily_story_btn'),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 상단 풍경 사진 + 오늘의 스토리 태그 오버레이
-            if (story.heroImage.isNotEmpty)
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16.5)),
-                child: SizedBox(
-                  height: 175,
-                  width: double.infinity,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      StorageImage(url: story.heroImage, cacheWidth: 720),
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.28),
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.58),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 12,
-                        left: 12,
-                        right: 12,
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF065F46).withValues(alpha: 0.92),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                lang == AppLang.ko ? '📖 $dateTag' : '📖 Today’s Local Story',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.9),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                story.seasonBadge,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 10,
-                        left: 14,
-                        right: 14,
-                        child: Text(
-                          '${story.province} ${story.city} · ${story.sourceBook}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFFE2E8F0),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            // 하단 스토리 헤드라인 & 설화 발췌문 & 상세 안내 버튼
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: isWide
+            ? Row(
                 children: [
-                  if (story.heroImage.isEmpty) ...[
-                    Text(
-                      '📖 $dateTag · ${story.seasonBadge}',
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                  Text(
-                    story.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
-                      height: 1.3,
+                  Expanded(
+                    flex: 53,
+                    child: _buildImagePanel(
+                      height: 270,
+                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(18.5)),
+                      dateTag: dateTag,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    lang != AppLang.ko && story.enSummary.isNotEmpty
-                        ? story.enSummary
-                        : (story.pullQuote.isNotEmpty
-                            ? story.pullQuote
-                            : (story.paragraphs.isNotEmpty ? story.paragraphs.first : story.subtitle)),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      color: Color(0xFF334155),
-                      height: 1.55,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          lang == AppLang.ko ? '📍 ${story.subtitle}' : '📍 ${story.address}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              lang == AppLang.ko ? '스토리 상세 보기' : 'Read Story',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF065F46),
-                              ),
-                            ),
-                            const SizedBox(width: 3),
-                            const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF065F46)),
-                          ],
-                        ),
-                      ),
-                    ],
+                  Expanded(
+                    flex: 47,
+                    child: _buildTextPanel(isWide: true, dateTag: dateTag),
                   ),
                 ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (story.heroImage.isNotEmpty)
+                    _buildImagePanel(
+                      height: 190,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18.5)),
+                      dateTag: dateTag,
+                    ),
+                  _buildTextPanel(isWide: false, dateTag: dateTag),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
