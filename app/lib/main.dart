@@ -247,10 +247,10 @@ class _HomePageState extends State<HomePage> {
   String _query = '';
   bool _showBenefitsHub = false;
   bool _showProvincePicker = false;
-  bool _loading = true;
   bool _offlineSeedMode = false;
 
-  List<DiscoveryItem> _allItems = const [];
+  // 첫 프레임부터 빈 스피너 없이 오늘의 로컬 스토리와 기본 큐레이션을 즉시 렌더링
+  List<DiscoveryItem> _allItems = kBuiltInSeedDiscoveryItems;
   List<DailyStoryItem> _dailyStories = kFallbackDailyMunicipalStories;
   String? _selectedItemId;
   int _feedVisibleCount = _feedPageSize;
@@ -262,7 +262,6 @@ class _HomePageState extends State<HomePage> {
     if (widget.seedItemsOverride != null) {
       _allItems = widget.seedItemsOverride!;
       _offlineSeedMode = true;
-      _loading = false;
       WidgetsBinding.instance.addPostFrameCallback((_) => _applyInitialPortalDeepLink());
     } else {
       _loadUnifiedDiscovery();
@@ -278,7 +277,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadUnifiedDiscovery() async {
     final itemsById = <String, DiscoveryItem>{};
 
-    // 1) 일일 지자체 스토리 + 전국 17개 시·도 E-book + 축제 + 볼거리 + 먹거리 로드
+    // 1단계 (초고속 즉시 반영): preload 된 가벼운 스토리·축제·E-book 허브 JSON 먼저 파싱·렌더링
     final parsedStories = <DailyStoryItem>[];
     final hubJson = await fetchWebJson('data/public_travel_hub.json');
     if (hubJson != null) {
@@ -327,7 +326,19 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    // 2) 전국 17개 시·도 합법 안심숙소 색인 로드
+    if (!mounted) return;
+    if (itemsById.isNotEmpty || parsedStories.isNotEmpty) {
+      setState(() {
+        if (itemsById.isNotEmpty) _allItems = itemsById.values.toList();
+        if (parsedStories.isNotEmpty) _dailyStories = parsedStories;
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _applyInitialPortalDeepLink());
+
+    // 프레임 양보 후 2단계 (백그라운드 비차단 로드): 전국 합법 안심숙소 경량 색인 병합
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+
     final staysJson = await fetchWebJson('data/public_stays_index.json');
     if (staysJson != null && staysJson['items'] is List) {
       for (final raw in (staysJson['items'] as List)) {
@@ -340,7 +351,7 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    // 오프라인/로컬 테스트 폴백
+    // 오프라인/데모 폴백
     if (itemsById.isEmpty || widget.initialDemoMode) {
       _offlineSeedMode = itemsById.isEmpty;
       for (final seed in kBuiltInSeedDiscoveryItems) {
@@ -352,16 +363,31 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    // 3) Firestore 실시간 별점·클릭 오버레이 (가볍게 평점 보유 항목만 조회)
+    if (!mounted) return;
+    setState(() {
+      _allItems = itemsById.values.toList();
+    });
+
+    // 3단계 (백그라운드 병렬 오버레이): 평점 보유 항목만 비차단 병렬 조회
     if (!widget.initialDemoMode && !_offlineSeedMode) {
       try {
-        final staySnap = await FirebaseFirestore.instance
-            .collection('listings')
-            .where('status', isEqualTo: 'active')
-            .where('review_count', isGreaterThan: 0)
-            .limit(150)
-            .get();
-        for (final doc in staySnap.docs) {
+        final results = await Future.wait([
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('status', isEqualTo: 'active')
+              .where('review_count', isGreaterThan: 0)
+              .limit(120)
+              .get(),
+          FirebaseFirestore.instance
+              .collection('spots')
+              .where('status', isEqualTo: 'active')
+              .where('review_count', isGreaterThan: 0)
+              .limit(120)
+              .get(),
+        ]).timeout(const Duration(seconds: 3));
+
+        bool updated = false;
+        for (final doc in results[0].docs) {
           final prev = itemsById[doc.id];
           if (prev != null) {
             final d = doc.data();
@@ -370,18 +396,10 @@ class _HomePageState extends State<HomePage> {
               scoreSum: (d['score_sum'] as num?)?.toInt(),
               outboundClicks: (d['outbound_clicks'] as num?)?.toInt(),
             );
+            updated = true;
           }
         }
-      } catch (_) {}
-
-      try {
-        final spotSnap = await FirebaseFirestore.instance
-            .collection('spots')
-            .where('status', isEqualTo: 'active')
-            .where('review_count', isGreaterThan: 0)
-            .limit(150)
-            .get();
-        for (final doc in spotSnap.docs) {
+        for (final doc in results[1].docs) {
           final prev = itemsById[doc.id];
           if (prev != null) {
             final d = doc.data();
@@ -392,20 +410,14 @@ class _HomePageState extends State<HomePage> {
               isSponsored: d['is_sponsored'] as bool?,
               couponTitle: (d['coupon_title'] ?? '').toString(),
             );
+            updated = true;
           }
+        }
+        if (updated && mounted) {
+          setState(() => _allItems = itemsById.values.toList());
         }
       } catch (_) {}
     }
-
-    if (!mounted) return;
-    setState(() {
-      _allItems = itemsById.values.toList();
-      if (parsedStories.isNotEmpty) {
-        _dailyStories = parsedStories;
-      }
-      _loading = false;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _applyInitialPortalDeepLink());
   }
 
   void _openStoryDetail(DailyStoryItem story) {
@@ -831,9 +843,7 @@ class _HomePageState extends State<HomePage> {
                     });
                   },
                 )
-              : _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Column(
+              : Column(
                       children: [
                         if (screenW < 560)
                           Container(

@@ -1,106 +1,190 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="전국 17개 시·도 지자체 공식 관광지도 PDF, 실시간 축제·오일장, 로컬 맛집 방문쿠폰과 합법 안심숙소를 연결하는 직스테이 로컬 포털">
+  <meta name="description" content="전국 17개 시·도 지자체 공식 관광지도 PDF, 계절별 로컬 스토리, 축제·맛집과 합법 안심숙소를 연결하는 직스테이 로컬 매거진">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="직스테이 로컬 - 지자체 관광지도 PDF · 축제 · 맛집 · 안심숙소 포털">
-  <meta property="og:description" content="전국 17개 시·도 공식 가이드북 PDF, 대중교통 길찾기, 주변 맛집 쿠폰과 합법 숙소를 한눈에 확인하세요.">
-
-  <!--
-    Uncomment the tag below to lay the app out underneath the parts of the
-    screen that the device obstructs, such as a display cutout, the rounded
-    corners of the screen, or a home indicator.
-
-    Without it, the browser keeps the app clear of them, and `SafeArea` and
-    `MediaQuery.paddingOf` report no padding. With it, the app covers the whole
-    screen, and it is up to the app to keep its own content out of the way,
-    which is what `SafeArea` is for.
-  -->
+  <meta property="og:title" content="직스테이 로컬 - 오늘 떠나고 싶은 한국의 로컬 스토리 & 공식 가이드북">
+  <meta property="og:description" content="하루 한 편 지자체 공식 가이드북 스토리, 대중교통 길찾기, 주변 맛집 쿠폰과 합법 숙소를 한눈에 확인하세요.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="직스테이">
+  <meta name="apple-mobile-web-app-title" content="직스테이 로컬">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>직스테이 로컬 - 지자체 관광지도 PDF · 축제 · 맛집 · 안심숙소 포털</title>
+  <title>직스테이 로컬 - 오늘 떠나고 싶은 한국의 로컬 스토리 & 공식 가이드북</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- 핵심 리소스 병렬 선발주 (초기 체감 로딩 단축) -->
+  <link rel="preconnect" href="https://tong.visitkorea.or.kr" crossorigin>
+  <link rel="preload" href="main.dart.js" as="script">
+  <link rel="preload" href="data/public_travel_hub.json" as="fetch" crossorigin>
+
   <style>
-    html, body { margin: 0; padding: 0; background: #f8f9fa; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    html, body {
+      margin: 0; padding: 0; background: #f8faf9;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: #0f172a;
+    }
     #jikstay-splash {
-      position: fixed; inset: 0; z-index: 9999; background: #f8f9fa;
-      display: flex; flex-direction: column; align-items: center;
-      transition: opacity 0.25s ease-out;
+      position: fixed; inset: 0; z-index: 9999; background: #f8faf9;
+      display: flex; flex-direction: column; align-items: center; overflow-y: auto;
+      transition: opacity 0.22s ease-out;
     }
     #jikstay-splash.fade-out { opacity: 0; pointer-events: none; }
-    .js-splash-bar {
-      width: 100%; height: 56px; background: #ffffff; border-bottom: 1px solid #e9ecef;
-      display: flex; align-items: center; padding: 0 20px; box-sizing: border-box;
-      font-weight: 700; font-size: 18px; color: #212529; gap: 8px;
+    .js-topbar {
+      width: 100%; background: #ffffff; border-bottom: 1px solid #e2e8f0;
+      position: sticky; top: 0; z-index: 2;
     }
-    .js-splash-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff5a36; display: inline-block; }
-    .js-splash-hero {
-      width: 100%; max-width: 960px; padding: 28px 16px 12px; box-sizing: border-box; text-align: center;
+    .js-topbar-inner {
+      max-width: 1040px; margin: 0 auto; height: 56px; padding: 0 16px;
+      display: flex; align-items: center; justify-content: space-between; box-sizing: border-box;
     }
-    .js-splash-badge {
-      display: inline-block; background: #fff0ec; color: #ff5a36; font-size: 12px; font-weight: 700;
-      padding: 5px 12px; border-radius: 20px; margin-bottom: 10px;
+    .js-brand { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 18px; color: #0f172a; }
+    .js-brand-dot {
+      width: 24px; height: 24px; border-radius: 50%; background: #0f172a; color: #ffffff;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
     }
-    .js-splash-title { font-size: 20px; font-weight: 800; color: #212529; margin: 0 0 6px; }
-    .js-splash-sub { font-size: 13px; color: #6c757d; margin: 0 0 20px; }
-    .js-splash-grid {
-      width: 100%; max-width: 960px; padding: 0 16px; box-sizing: border-box;
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;
+    .js-status-pill {
+      background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;
+      font-size: 12px; font-weight: 800; padding: 5px 11px; border-radius: 20px;
     }
-    .js-skel {
-      height: 280px; border-radius: 12px; background: linear-gradient(90deg, #eceef1 25%, #f5f6f8 50%, #eceef1 75%);
+    .js-progress-track { width: 100%; height: 3px; background: #e2e8f0; overflow: hidden; }
+    .js-progress-bar {
+      width: 42%; height: 100%; background: #059669; border-radius: 3px;
+      animation: js-slide 1.1s ease-in-out infinite;
+    }
+    @keyframes js-slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(260%); }
+    }
+    .js-main {
+      width: 100%; max-width: 1040px; padding: 20px 16px 32px; box-sizing: border-box;
+    }
+    .js-story-card {
+      background: #ffffff; border-radius: 20px; border: 1.4px solid #bbf7d0;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05); overflow: hidden;
+      display: flex; flex-direction: row;
+    }
+    .js-story-img-wrap {
+      flex: 0 0 52%; min-height: 256px; position: relative; background: #d1fae5; overflow: hidden;
+    }
+    .js-story-img-wrap img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .js-story-badges {
+      position: absolute; top: 14px; left: 14px; display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .js-badge-dark {
+      background: rgba(6, 95, 70, 0.94); color: #ffffff; font-size: 11.5px; font-weight: 800;
+      padding: 5px 10px; border-radius: 20px;
+    }
+    .js-badge-light {
+      background: rgba(255, 255, 255, 0.92); color: #065f46; font-size: 11.5px; font-weight: 800;
+      padding: 5px 10px; border-radius: 20px;
+    }
+    .js-story-body {
+      flex: 1; padding: 22px 24px; display: flex; flex-direction: column; justify-content: center;
+    }
+    .js-story-src { font-size: 12px; font-weight: 800; color: #059669; margin: 0 0 8px; }
+    .js-story-title { font-size: 22px; font-weight: 900; color: #0f172a; margin: 0 0 10px; line-height: 1.3; }
+    .js-story-desc { font-size: 14px; color: #334155; line-height: 1.62; margin: 0 0 16px; }
+    .js-story-foot {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 12.5px; color: #64748b;
+    }
+    .js-story-cta {
+      background: #065f46; color: #ffffff; font-size: 12px; font-weight: 800;
+      padding: 7px 13px; border-radius: 20px; white-space: nowrap;
+    }
+    .js-sub-grid {
+      margin-top: 18px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+    }
+    .js-sub-skel {
+      height: 102px; border-radius: 14px; border: 1px solid #e2e8f0;
+      background: linear-gradient(90deg, #ffffff 25%, #f1f5f9 50%, #ffffff 75%);
       background-size: 200% 100%; animation: js-shimmer 1.3s infinite;
     }
     @keyframes js-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @media (max-width: 760px) {
+      .js-story-card { flex-direction: column; }
+      .js-story-img-wrap { min-height: 185px; flex: none; height: 185px; }
+      .js-story-body { padding: 16px; }
+      .js-story-title { font-size: 19px; }
+      .js-sub-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
+  <!-- 0.05초 만에 실제 오늘의 로컬 스토리를 먼저 보여주는 즉시 프리뷰 스플래시 -->
   <div id="jikstay-splash" aria-hidden="true">
-    <div class="js-splash-bar"><span class="js-splash-dot"></span>직스테이 로컬</div>
-    <div class="js-splash-hero">
-      <div class="js-splash-badge">하루 한 편 · 지자체 공식 가이드북 스토리</div>
-      <p class="js-splash-title">오늘, 떠나고 싶어지는 한국의 숨은 로컬 이야기</p>
-      <p class="js-splash-sub">계절·테마별 지역 스토리와 주변 동선을 불러오는 중입니다...</p>
+    <div class="js-topbar">
+      <div class="js-topbar-inner">
+        <div class="js-brand"><span class="js-brand-dot">✦</span>직스테이 로컬</div>
+        <div class="js-status-pill">로컬 스토리 불러오는 중...</div>
+      </div>
+      <div class="js-progress-track"><div class="js-progress-bar"></div></div>
     </div>
-    <div class="js-splash-grid">
-      <div class="js-skel"></div>
-      <div class="js-skel"></div>
-      <div class="js-skel"></div>
+    <div class="js-main">
+      <div class="js-story-card">
+        <div class="js-story-img-wrap">
+          <img src="https://tong.visitkorea.or.kr/cms/resource/69/4098569_image2_1.jpg" alt="금강첫물, 뜬봉샘 발원지" fetchpriority="high">
+          <div class="js-story-badges">
+            <span class="js-badge-dark">📖 오늘의 로컬 스토리</span>
+            <span class="js-badge-light">🍂 가을·초겨울 생태숲길 테마</span>
+          </div>
+        </div>
+        <div class="js-story-body">
+          <p class="js-story-src">전북 장수군 · 장수군청 공식 가이드북 《장수여행》 p.9 수록</p>
+          <p class="js-story-title">금강첫물, 뜬봉샘 발원지</p>
+          <p class="js-story-desc">조선 개국조 이성계가 봉황새가 오색 무지개를 타고 하늘로 뜬 것을 보고 개국의 계시를 받은 곳 — 서해바다까지 397.25km를 흐르는 금강의 첫물과 생태숲길</p>
+          <div class="js-story-foot">
+            <span>📍 장수군 물뿌랭이길 10-18 (금강사랑물체험관)</span>
+            <span class="js-story-cta">스토리 상세 준비중 →</span>
+          </div>
+        </div>
+      </div>
+      <div class="js-sub-grid">
+        <div class="js-sub-skel"></div>
+        <div class="js-sub-skel"></div>
+      </div>
     </div>
   </div>
   <script>
-    window.addEventListener("flutter-first-frame", function () {
+    // 구버전 Flutter Service Worker가 남아 4초간 부트스트랩을 지연시키는 현상을 즉시 제거
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        for (var i = 0; i < regs.length; i++) { regs[i].unregister(); }
+      }).catch(function () {});
+    }
+
+    // 앱 엔진 다운로드와 동시에 공공 여행 허브 JSON을 미리 메모리에 적재
+    var __jikstayPrefetch = {};
+    function __prefetchUrl(url) {
+      if (!__jikstayPrefetch[url]) {
+        __jikstayPrefetch[url] = fetch(url, { cache: "default" })
+          .then(function (r) { return r.ok ? r.text() : ""; })
+          .catch(function () { return ""; });
+      }
+      return __jikstayPrefetch[url];
+    }
+    __prefetchUrl("data/public_travel_hub.json");
+    setTimeout(function () { __prefetchUrl("data/public_stays_index.json"); }, 120);
+
+    function __hideSplash() {
       var el = document.getElementById("jikstay-splash");
-      if (!el) return;
+      if (!el || el.classList.contains("fade-out")) return;
       el.classList.add("fade-out");
-      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 280);
-    });
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 240);
+    }
+    window.addEventListener("flutter-first-frame", __hideSplash);
+
     window.jikstaySyncUrl = function (listingId) {
       try {
         var url = new URL(window.location.href);
@@ -138,9 +222,7 @@
       return window.location.origin || "";
     };
     window.jikstayFetchText = function (url) {
-      return fetch(url, { cache: "default" })
-        .then(function (r) { return r.ok ? r.text() : ""; })
-        .catch(function () { return ""; });
+      return __prefetchUrl(url);
     };
   </script>
   <script src="flutter_bootstrap.js" async></script>

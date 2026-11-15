@@ -35,10 +35,10 @@ Write-Host "[1/4] Flutter Web 빌드 시작..." -ForegroundColor Cyan
 Push-Location $AppDir
 try {
   if ($RecaptchaKey) {
-    & $FlutterBin build web --no-wasm-dry-run --dart-define="RECAPTCHA_SITE_KEY=$RecaptchaKey"
+    & $FlutterBin build web --no-wasm-dry-run --pwa-strategy=none --dart-define="RECAPTCHA_SITE_KEY=$RecaptchaKey"
   } else {
     Write-Warning "RECAPTCHA_SITE_KEY가 비어 있습니다. App Check 없이 빌드합니다."
-    & $FlutterBin build web --no-wasm-dry-run
+    & $FlutterBin build web --no-wasm-dry-run --pwa-strategy=none
   }
   if ($LASTEXITCODE -ne 0) {
     throw "flutter build web 실패 (종료 코드: $LASTEXITCODE)"

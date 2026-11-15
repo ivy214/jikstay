@@ -575,6 +575,11 @@ DiscoveryItem? parseStayToDiscoveryItem(String docId, Map<String, dynamic> d) {
   if (firstImg.isNotEmpty) prio += 12.0;
   if (rCount > 0) prio += (sSum / rCount) * 8.0;
 
+  final defaultNaverSearch =
+      'https://map.naver.com/p/search/${Uri.encodeComponent('${d['region_depth2'] ?? prov} $title'.trim())}';
+  final rawDirectUrl = (d['direct_booking_url'] ?? '').toString().trim();
+  final rawMapUrl = (d['naver_map_url'] ?? '').toString().trim();
+
   return DiscoveryItem(
     id: docId,
     category: DiscoveryCategory.stay,
@@ -586,8 +591,8 @@ DiscoveryItem? parseStayToDiscoveryItem(String docId, Map<String, dynamic> d) {
     lng: useLng,
     imageUrl: firstImg,
     subtitle: points.isNotEmpty ? points.first : (d['accommodation_type'] ?? '공공 인허가 확인 안심숙소').toString(),
-    externalUrl: (d['direct_booking_url'] ?? '').toString(),
-    mapUrl: (d['naver_map_url'] ?? 'https://map.naver.com/p/search/${Uri.encodeComponent('$prov $title')}').toString(),
+    externalUrl: rawDirectUrl.isNotEmpty ? rawDirectUrl : defaultNaverSearch,
+    mapUrl: rawMapUrl.isNotEmpty ? rawMapUrl : defaultNaverSearch,
     phone: (loc['public_phone'] ?? '').toString(),
     isSponsored: isSponsored,
     couponTitle: promo.isNotEmpty

@@ -1318,23 +1318,23 @@ def build_lightweight_index_entry(doc: dict[str, Any]) -> dict[str, Any]:
 
     entry: dict[str, Any] = {
         "listing_id": doc["listing_id"],
-        "listing_tier": doc.get("listing_tier", "public"),
         "title": doc["title"],
         "province": prov,
-        "region_group": doc.get("region_group", ""),
         "region_depth1": doc["region_depth1"],
         "region_depth2": doc["region_depth2"],
-        "lat": lat,
-        "lng": lng,
-        "accommodation_type": doc.get("accommodation_type", ""),
+        "lat": round(lat, 5),
+        "lng": round(lng, 5),
         "license_type": doc["license_type"],
-        "summary_points": short_point,
-        "options": (doc.get("options") or [])[:4],
-        "images": first_img,
-        "naver_blog_total": doc.get("naver_blog_total", 0),
         "curated_score": doc.get("curated_score", 0),
-        "created_at": doc.get("created_at", 0),
     }
+    if doc.get("listing_tier") and doc.get("listing_tier") != "public":
+        entry["listing_tier"] = doc["listing_tier"]
+    if doc.get("accommodation_type"):
+        entry["accommodation_type"] = doc["accommodation_type"]
+    if short_point:
+        entry["summary_points"] = short_point
+    if first_img:
+        entry["images"] = first_img
     if approx:
         entry["approx_coord"] = True
     if compact_specs:
@@ -1345,10 +1345,12 @@ def build_lightweight_index_entry(doc: dict[str, Any]) -> dict[str, Any]:
         entry["is_sponsored"] = True
     if doc.get("promo_title"):
         entry["promo_title"] = doc["promo_title"]
-    if doc.get("direct_booking_url"):
-        entry["direct_booking_url"] = doc["direct_booking_url"]
-    if doc.get("naver_map_url"):
-        entry["naver_map_url"] = doc["naver_map_url"]
+    direct_url = str(doc.get("direct_booking_url") or "")
+    if direct_url and not direct_url.startswith("https://map.naver.com/p/search/"):
+        entry["direct_booking_url"] = direct_url
+    naver_url = str(doc.get("naver_map_url") or "")
+    if naver_url and not naver_url.startswith("https://map.naver.com/p/search/"):
+        entry["naver_map_url"] = naver_url
     if doc.get("outbound_clicks"):
         entry["outbound_clicks"] = doc["outbound_clicks"]
     if doc.get("review_count"):

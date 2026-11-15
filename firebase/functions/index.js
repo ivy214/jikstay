@@ -23,6 +23,7 @@ const SUPPORTED_LANGS = new Set(["ko", "en", "ja", "zh"]);
 const BOT_UA_RE =
   /bot|crawler|spider|slurp|yeti|daumoa|bingpreview|facebookexternalhit|kakaotalk-scrap|slackbot|discordbot|whatsapp|telegrambot|headless|curl|wget|python-requests/i;
 const TEMPLATE_PATH = path.join(__dirname, "index.html");
+const CACHED_TEMPLATE = fs.existsSync(TEMPLATE_PATH) ? fs.readFileSync(TEMPLATE_PATH, "utf8") : "";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -324,7 +325,7 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko") {
 }
 
 exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => {
-  const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
+  const template = CACHED_TEMPLATE || fs.readFileSync(TEMPLATE_PATH, "utf8");
   const rawId = typeof req.query.id === "string" ? req.query.id.trim() : "";
   const rawStory = typeof req.query.story === "string" ? req.query.story.trim() : "";
   const rawSpot = rawStory || (typeof req.query.spot === "string" ? req.query.spot.trim() : "");
@@ -384,7 +385,8 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
     return;
   }
 
-  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  // 기본 홈(/)은 브라우저 재검증(max-age=0) + 글로벌 CDN 엣지 캐시(s-maxage=300)로 콜드스타트 없이 즉시 응답
+  res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=3600");
   res.status(200).send(template);
 });
 
