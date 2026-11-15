@@ -811,8 +811,35 @@ class _StoryNearbyStopTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Text(item.categoryEmoji, style: const TextStyle(fontSize: 20)),
-              const SizedBox(width: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  width: 84,
+                  height: 64,
+                  child: item.imageUrl.isNotEmpty
+                      ? StorageImage(url: item.imageUrl, cacheWidth: 240)
+                      : Container(
+                          color: item.category.color.withValues(alpha: 0.1),
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(item.category.icon, color: item.category.color, size: 22),
+                              const SizedBox(height: 2),
+                              Text(
+                                item.categoryBadgeText(lang),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: item.category.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -823,16 +850,26 @@ class _StoryNearbyStopTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
-                      '${item.categoryBadgeText(lang)} · ${pickLangText(lang, ko: '약 ${distKm.toStringAsFixed(1)}km', en: '${distKm.toStringAsFixed(1)}km away', ja: '約${distKm.toStringAsFixed(1)}km', zh: '約 ${distKm.toStringAsFixed(1)}km')}${item.couponTitle.isNotEmpty ? " · 🎁 ${item.tCouponTitle(lang)}" : ""}',
+                      '${item.categoryEmoji} ${item.categoryBadgeText(lang)} · ${pickLangText(lang, ko: '약 ${distKm.toStringAsFixed(1)}km', en: '${distKm.toStringAsFixed(1)}km away', ja: '約${distKm.toStringAsFixed(1)}km', zh: '約 ${distKm.toStringAsFixed(1)}km')}${item.couponTitle.isNotEmpty ? " · 🎁 ${item.tCouponTitle(lang)}" : ""}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                     ),
+                    if (item.tSubtitle(lang).isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        item.tSubtitle(lang),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                      ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(width: 6),
               const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFF94A3B8)),
             ],
           ),
