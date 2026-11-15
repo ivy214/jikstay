@@ -1622,6 +1622,90 @@ const List<DailyStoryItem> kFallbackDailyMunicipalStories = [
 ];
 
 /// 계절(월)·선택 지역·오늘 날짜에 맞춰 '하루 단 한 편' 주인공 로컬 스토리를 선정한다.
+DailyStoryItem _storyFromSpot(
+  DiscoveryItem topSpot,
+  String province,
+  List<DiscoveryItem> allItems, {
+  String? badgeOverride,
+}) {
+  final provEbooks = allItems
+      .where((e) => e.category == DiscoveryCategory.ebook && e.province == province)
+      .toList();
+  final eb = provEbooks.isNotEmpty ? provEbooks.first : null;
+  final cleanCity = topSpot.regionLabel.startsWith(province)
+      ? topSpot.regionLabel.substring(province.length).trim()
+      : topSpot.regionLabel;
+  return DailyStoryItem(
+    id: topSpot.id,
+    province: province,
+    city: cleanCity,
+    seasonBadge: badgeOverride ??
+        (topSpot.category == DiscoveryCategory.event
+            ? '🎉 지금 주목할 지역 축제 스토리'
+            : '🏞️ 계절 테마 로컬 명소 이야기'),
+    sourceBook: eb != null ? eb.title : '$province 공식 문화관광 자료',
+    months: const [],
+    title: topSpot.title,
+    subtitle: topSpot.address,
+    address: topSpot.address,
+    lat: topSpot.lat,
+    lng: topSpot.lng,
+    phone: topSpot.phone,
+    pullQuote: topSpot.pullQuote.isNotEmpty
+        ? topSpot.pullQuote
+        : (topSpot.subtitle.isNotEmpty ? topSpot.subtitle : '$province에서 만나는 특별한 계절 여행지'),
+    paragraphs: [
+      if (topSpot.paragraphs.isNotEmpty)
+        ...topSpot.paragraphs
+      else if (topSpot.subtitle.isNotEmpty)
+        topSpot.subtitle,
+      if (eb != null)
+        '${eb.title}(${eb.address})을 함께 열람하시면 주변 추천 산책코스와 로컬 먹거리 지도를 한눈에 확인하실 수 있습니다.',
+    ],
+    images: topSpot.effectiveGallery,
+    practicalHeader: topSpot.practicalHeader.isNotEmpty
+        ? topSpot.practicalHeader
+        : '$province 추천 방문지 · 대중교통 및 자차 길찾기 바로 연결',
+    practicalInfo: topSpot.practicalInfo.isNotEmpty
+        ? topSpot.practicalInfo
+        : [
+            if (topSpot.address.isNotEmpty) PracticalInfoRow(label: '위치 주소', value: topSpot.address),
+            if (topSpot.phone.isNotEmpty) PracticalInfoRow(label: '문의 전화', value: topSpot.phone),
+          ],
+    pdfLinks: eb != null
+        ? (eb.pdfLinks.isNotEmpty
+            ? eb.pdfLinks
+            : [MunicipalPdfLink(label: '📖 ${eb.province} 공식 관광지도 열람', url: eb.externalUrl)])
+        : const [],
+  );
+}
+
+List<DailyStoryItem> _pickImminentEventStories(
+  List<DiscoveryItem> allItems,
+  DateTime todayDay, {
+  String province = '전체',
+  int maxCount = 4,
+}) {
+  final scored = <(int, DiscoveryItem)>[];
+  for (final ev in allItems) {
+    if (ev.category != DiscoveryCategory.event || ev.imageUrl.isEmpty) continue;
+    if (province != '전체' && ev.province != province) continue;
+    final start = parseYmdDate(ev.startDate);
+    if (start == null) continue;
+    final daysToStart = start.difference(todayDay).inDays;
+    if (daysToStart >= 0 && daysToStart <= 7) {
+      scored.add((daysToStart, ev));
+    }
+  }
+  scored.sort((a, b) => a.$1.compareTo(b.$1));
+  return scored.take(maxCount).map((pair) {
+    final days = pair.$1;
+    final ev = pair.$2;
+    final badge = days == 0 ? '🔥 오늘 개막 · 임박 축제' : '⏳ 개막 D-$days · 임박 축제';
+    return _storyFromSpot(ev, ev.province, allItems, badgeOverride: badge);
+  }).toList();
+}
+
 DailyStoryItem pickTodayMunicipalStory({
   required List<DailyStoryItem> stories,
   required List<DiscoveryItem> allItems,
@@ -1629,81 +1713,40 @@ DailyStoryItem pickTodayMunicipalStory({
   DateTime? now,
 }) {
   final today = now ?? DateTime.now();
+  final todayDay = DateTime(today.year, today.month, today.day);
+  final dayOffset = todayDay.difference(DateTime(2026, 11, 15)).inDays.abs();
   final source = stories.isNotEmpty ? stories : kFallbackDailyMunicipalStories;
 
-  // 1. 특정 시·도를 선택한 경우 해당 시·도 공식 가이드북 웹 버전 우선
+  // 1. 특정 시·도를 선택한 경우: 임박(D-0~D-7) 축제 또는 해당 시·도 공식 가이드북 웹 버전 우선
   if (selectedProvince != '전체') {
+    final imminentProv = _pickImminentEventStories(allItems, todayDay, province: selectedProvince, maxCount: 2);
     final mergedProv = [
       ...source.where((s) => s.province == selectedProvince),
       ...kFallbackDailyMunicipalStories.where(
         (fb) => fb.province == selectedProvince && !source.any((s) => s.id == fb.id),
       ),
     ];
-    if (mergedProv.isNotEmpty) {
-      final seasonalProv = mergedProv.where((s) => s.months.isEmpty || s.months.contains(today.month)).toList();
-      final pool = seasonalProv.isNotEmpty ? seasonalProv : mergedProv;
-      final idx = today.difference(DateTime(2026, 11, 15)).inDays.abs() % pool.length;
-      return pool[idx];
+    final seasonalProv = mergedProv.where((s) => s.months.isEmpty || s.months.contains(today.month)).toList();
+    final baseProv = seasonalProv.isNotEmpty ? seasonalProv : mergedProv;
+    final pool = [...imminentProv, ...baseProv];
+    if (pool.isNotEmpty) {
+      return pool[dayOffset % pool.length];
     }
-    // 해당 시·도의 전용 가이드북 스토리가 아직 없으면 지자체 E-book + 대표 명소/축제를 결합해 즉시 생성
-    final provEbooks = allItems.where((e) => e.category == DiscoveryCategory.ebook && e.province == selectedProvince).toList();
     final provSpots = allItems
         .where((e) =>
             (e.category == DiscoveryCategory.event || e.category == DiscoveryCategory.attraction) &&
             e.province == selectedProvince)
         .toList();
     if (provSpots.isNotEmpty) {
-      final topSpot = provSpots.first;
-      final eb = provEbooks.isNotEmpty ? provEbooks.first : null;
-      final cleanCity = topSpot.regionLabel.startsWith(selectedProvince)
-          ? topSpot.regionLabel.substring(selectedProvince.length).trim()
-          : topSpot.regionLabel;
-      return DailyStoryItem(
-        id: topSpot.id,
-        province: selectedProvince,
-        city: cleanCity,
-        seasonBadge: topSpot.category == DiscoveryCategory.event ? '🎉 지금 주목할 지역 축제 스토리' : '🏞️ 계절 테마 로컬 명소 이야기',
-        sourceBook: eb != null ? eb.title : '$selectedProvince 공식 문화관광 자료',
-        months: const [],
-        title: topSpot.title,
-        subtitle: topSpot.address,
-        address: topSpot.address,
-        lat: topSpot.lat,
-        lng: topSpot.lng,
-        phone: topSpot.phone,
-        pullQuote: topSpot.pullQuote.isNotEmpty
-            ? topSpot.pullQuote
-            : (topSpot.subtitle.isNotEmpty ? topSpot.subtitle : '$selectedProvince에서 만나는 특별한 계절 여행지'),
-        paragraphs: [
-          if (topSpot.paragraphs.isNotEmpty)
-            ...topSpot.paragraphs
-          else if (topSpot.subtitle.isNotEmpty)
-            topSpot.subtitle,
-          if (eb != null) '${eb.title}(${eb.address})을 함께 열람하시면 주변 추천 산책코스와 로컬 먹거리 지도를 한눈에 확인하실 수 있습니다.',
-        ],
-        images: topSpot.effectiveGallery,
-        practicalHeader: topSpot.practicalHeader.isNotEmpty
-            ? topSpot.practicalHeader
-            : '$selectedProvince 추천 방문지 · 대중교통 및 자차 길찾기 바로 연결',
-        practicalInfo: topSpot.practicalInfo.isNotEmpty
-            ? topSpot.practicalInfo
-            : [
-                if (topSpot.address.isNotEmpty) PracticalInfoRow(label: '위치 주소', value: topSpot.address),
-                if (topSpot.phone.isNotEmpty) PracticalInfoRow(label: '문의 전화', value: topSpot.phone),
-              ],
-        pdfLinks: eb != null
-            ? (eb.pdfLinks.isNotEmpty
-                ? eb.pdfLinks
-                : [MunicipalPdfLink(label: '📖 ${eb.province} 공식 관광지도 열람', url: eb.externalUrl)])
-            : const [],
-      );
+      return _storyFromSpot(provSpots.first, selectedProvince, allItems);
     }
   }
 
-  // 2. 전체 보기: 현재 계절(월)에 어울리는 스토리를 필터링한 뒤 날짜별로 하루 한 편씩 순환 추천
+  // 2. 전체 보기: 임박(D-0~D-7) 신규 축제를 최우선으로 배치하고 계절별 지자체 스토리와 함께 순환
+  final imminentAll = _pickImminentEventStories(allItems, todayDay, maxCount: 4);
   final seasonal = source.where((s) => s.months.isEmpty || s.months.contains(today.month)).toList();
-  final pool = seasonal.isNotEmpty ? seasonal : source;
-  final dayOffset = DateTime(today.year, today.month, today.day).difference(DateTime(2026, 11, 15)).inDays.abs();
+  final basePool = seasonal.isNotEmpty ? seasonal : source;
+  final pool = [...imminentAll, ...basePool];
   return pool[dayOffset % pool.length];
 }
 

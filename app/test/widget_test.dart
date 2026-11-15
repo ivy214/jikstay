@@ -670,5 +670,37 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('日本語の本文パラグラフ'), findsOneWidget);
     });
+
+    test('임박(D-0~D-7) 신규 이벤트가 있으면 초기화면·지역 배너에 우선 노출', () {
+      final imminent = DiscoveryItem(
+        id: 'ev_imminent_test',
+        category: DiscoveryCategory.event,
+        title: '임박 테스트 불꽃축제',
+        province: '부산',
+        regionLabel: '부산 수영구',
+        address: '부산광역시 수영구 광안해변로',
+        lat: 35.153,
+        lng: 129.118,
+        imageUrl: 'https://example.com/fireworks.jpg',
+        startDate: '20261118',
+        endDate: '20261120',
+      );
+      final pickedAll = pickTodayMunicipalStory(
+        stories: kFallbackDailyMunicipalStories,
+        allItems: [...kBuiltInSeedDiscoveryItems, imminent],
+        selectedProvince: '전체',
+        now: DateTime(2026, 11, 15),
+      );
+      expect(pickedAll.id, 'ev_imminent_test');
+      expect(pickedAll.seasonBadge, contains('D-3'));
+
+      final pickedBusan = pickTodayMunicipalStory(
+        stories: kFallbackDailyMunicipalStories,
+        allItems: [...kBuiltInSeedDiscoveryItems, imminent],
+        selectedProvince: '부산',
+        now: DateTime(2026, 11, 15),
+      );
+      expect(pickedBusan.id, 'ev_imminent_test');
+    });
   });
 }

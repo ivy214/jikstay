@@ -1,0 +1,67 @@
+name: Weekly Travel Hub Refresh
+
+on:
+  schedule:
+    # 매주 월요일 06:00 KST (일요일 21:00 UTC)
+    - cron: "0 21 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests google-genai
+
+      - name: Refresh weekly festivals & incremental translations
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+          TOUR_API_KEY: ${{ secrets.TOUR_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python backend/weekly_hub_refresh.py
+
+      - name: Commit updated travel hub JSON
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/web/data/public_travel_hub.json app/web/data/translations_en.json app/web/data/translations_ja.json app/web/data/translations_zh.json
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "chore(data): weekly festival & translation refresh"
+            git push
+          fi
+
+      - name: Set up Flutter (only when Firebase secret is configured)
+        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY != '' }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.0"
+          channel: "stable"
+
+      - name: Build & deploy to Firebase Hosting
+        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY != '' }}
+        run: |
+          pushd app
+          flutter pub get
+          flutter build web --release --pwa-strategy=none
+          popd
+          mkdir -p firebase/public
+          cp -r app/build/web/* firebase/public/
+          npx --yes firebase-tools deploy --only hosting --project jikstay-lkxu1
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY }}
