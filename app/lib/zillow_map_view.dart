@@ -233,8 +233,8 @@ class _ZillowMapViewState extends State<ZillowMapView> {
         final left = (tx * _tileSize - cx) * scaleFactor + size.width / 2.0;
         final top = (ty * _tileSize - cy) * scaleFactor + size.height / 2.0;
         final drawSize = _tileSize * scaleFactor + 0.8;
-        final subdomain = const ['a', 'b', 'c', 'd'][(tx + ty).abs() % 4];
-        final url = 'https://$subdomain.basemaps.cartocdn.com/rastertiles/voyager/$tileZ/$tx/$ty.png';
+        final vworldUrl = 'https://xdworld.vworld.kr/2d/Base/service/$tileZ/$tx/$ty.png';
+        final osmFallbackUrl = 'https://tile.openstreetmap.org/$tileZ/$tx/$ty.png';
 
         tileWidgets.add(
           Positioned(
@@ -244,10 +244,15 @@ class _ZillowMapViewState extends State<ZillowMapView> {
             width: drawSize,
             height: drawSize,
             child: Image.network(
-              url,
+              vworldUrl,
               fit: BoxFit.fill,
               gaplessPlayback: true,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              errorBuilder: (_, _, _) => Image.network(
+                osmFallbackUrl,
+                fit: BoxFit.fill,
+                gaplessPlayback: true,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
             ),
           ),
         );
@@ -311,7 +316,7 @@ class _ZillowMapViewState extends State<ZillowMapView> {
                     child: CustomPaint(painter: _CleanMapBackdropPainter(zoom: _zoom)),
                   ),
 
-                  // 2. CartoDB Voyager 도로·지명 타일 레이어
+                  // 2. 국토교통부 VWorld 한국어 기본지도 (+ OpenStreetMap 폴백) 타일 레이어
                   Positioned.fill(child: _buildRasterTiles(size)),
 
                   // 3. Zillow 스타일 알약 마커 핀 레이어
@@ -380,19 +385,19 @@ class _ZillowMapViewState extends State<ZillowMapView> {
                     ),
                   ),
 
-                  // 6. 우하단 OSM/CARTO 저작권 표기
+                  // 6. 우하단 국토교통부 VWorld / OSM 저작권 표기
                   Positioned(
                     right: 8,
                     bottom: 6,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.78),
+                        color: Colors.white.withValues(alpha: 0.84),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
-                        '© OpenStreetMap · © CARTO · 한국관광공사 TourAPI',
-                        style: TextStyle(fontSize: 9.5, color: Color(0xFF64748B)),
+                        '© 국토교통부 VWorld · © OpenStreetMap · 한국관광공사 TourAPI',
+                        style: TextStyle(fontSize: 9.5, color: Color(0xFF475569)),
                       ),
                     ),
                   ),

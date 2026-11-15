@@ -409,7 +409,7 @@ cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 
 - **제품 정체성 전환 (`에어비앤비식 숙소 예약앱` 탈피 → `방문 유도형 올인원 로컬 여행 플랫폼`)**:
   - 첫 화면에서 복잡한 숙소 전용 필터(1박/일주일/한달·인원·편의시설 탭)를 걷어내고, **좌측 Zillow 스타일 인터랙티브 지도(`app/lib/zillow_map_view.dart`) + 우측 대표 이벤트 하이라이트 & 실시간 연동 로컬 피드(`app/lib/main.dart`)** 분할 뷰로 개편.
-  - 외부 지도 SDK 패키지 추가 없이 순수 Dart Web Mercator 타일(`CartoDB Voyager` + 화면 충돌 방지 알약 마커)로 구현해 번들 증가 거의 0 유지.
+  - 외부 지도 SDK 패키지 추가 없이 순수 Dart Web Mercator 타일(국토교통부 `VWorld` 한국어 기본지도 + `OpenStreetMap` 폴백 + 화면 충돌 방지 알약 마커)로 구현해 번들 증가 거의 0 유지.
 - **전국 17개 시·도 지자체 공식 관광지도(PDF/E-book) 및 볼거리·먹거리 균등 통합 (`backend/build_travel_hub.py`)**:
   - 서울·부산·대구·인천·광주·대전·울산·세종·경기·강원·충북·충남·전북(무주·진안·장수·전북생태관광 포함)·전남·경북·경남·제주 **17개 전 시·도 공식 관광안내도 PDF & E-book 포털 20종** 회원가입 없이 원클릭 열람 연동.
   - 한국관광공사 `KorService2`로 17개 시·도 균등 **볼거리(`12`)·먹거리(`39`) 280곳 + 진행중 전국 축제(`searchFestival2`) 34건** 및 **합법 안심숙소 1,769곳 위경도(`lat`/`lng`)** 통합.

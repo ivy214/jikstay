@@ -658,23 +658,34 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ActionChip(
-                  key: const Key('toggle_benefits_hub_btn'),
-                  backgroundColor: _showBenefitsHub ? const Color(0xFF0F172A) : const Color(0xFFFFFBEB),
-                  side: BorderSide(color: _showBenefitsHub ? const Color(0xFF0F172A) : const Color(0xFFFCD34D)),
-                  label: Text(
-                    lang == AppLang.ko
-                        ? (_showBenefitsHub ? '🗺️ 스토리·지도로' : '🎁 반값여행·E-book관')
-                        : (_showBenefitsHub ? '🗺️ Story & Map' : '🎁 50% Pass & PDFs'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: _showBenefitsHub ? Colors.white : const Color(0xFF92400E),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: InkWell(
+                    key: const Key('toggle_benefits_hub_btn'),
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => setState(() => _showBenefitsHub = !_showBenefitsHub),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _showBenefitsHub ? const Color(0xFF0F172A) : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: _showBenefitsHub ? const Color(0xFF0F172A) : const Color(0xFFFCD34D),
+                        ),
+                      ),
+                      child: Text(
+                        lang == AppLang.ko
+                            ? (_showBenefitsHub ? '🗺️ 스토리·지도로' : '🎁 반값여행·E-book관')
+                            : (_showBenefitsHub ? '🗺️ Story & Map' : '🎁 50% Pass & PDFs'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: _showBenefitsHub ? Colors.white : const Color(0xFF92400E),
+                        ),
+                      ),
                     ),
                   ),
-                  onPressed: () => setState(() => _showBenefitsHub = !_showBenefitsHub),
                 ),
               ),
               const Padding(
@@ -754,23 +765,31 @@ class _HomePageState extends State<HomePage> {
                                   final sel = _category == cat;
                                   return Padding(
                                     padding: const EdgeInsets.only(right: 6),
-                                    child: ChoiceChip(
+                                    child: InkWell(
                                       key: Key('cat_chip_${cat.name}'),
-                                      label: Text(trUi(cat.i18nKey, lang)),
-                                      selected: sel,
-                                      showCheckmark: false,
-                                      visualDensity: VisualDensity.compact,
-                                      selectedColor: cat.color,
-                                      backgroundColor: const Color(0xFFF8FAFC),
-                                      labelStyle: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: sel ? Colors.white : const Color(0xFF334155),
-                                      ),
-                                      onSelected: (_) => setState(() {
+                                      borderRadius: BorderRadius.circular(18),
+                                      onTap: () => setState(() {
                                         _category = cat;
                                         _feedVisibleCount = _feedPageSize;
                                       }),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: sel ? cat.color : const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(18),
+                                          border: Border.all(
+                                            color: sel ? cat.color : const Color(0xFFCBD5E1),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          trUi(cat.i18nKey, lang),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: sel ? Colors.white : const Color(0xFF334155),
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   );
                                 }),
