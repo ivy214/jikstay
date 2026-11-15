@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'detail_page.dart' show ListingDetailPage, StorageImage, validateUserReviewInput;
 import 'discovery_models.dart';
 import 'i18n.dart';
+import 'naver_place_info.dart';
 import 'review_auth.dart';
 import 'translation_store.dart';
 import 'web_utils.dart';
@@ -1124,6 +1125,10 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                         ),
                     ],
                   ),
+                  if (_current.raw['naver_category'] != null || _current.raw['naver_link'] != null) ...[
+                    const SizedBox(height: 12),
+                    NaverPlaceInfo(data: _current.raw, lang: lang, itemId: _current.id),
+                  ],
 
                   // 10. 해당 지자체 공식 관광지도 / 가이드북 PDF 연결
                   if (_current.category != DiscoveryCategory.ebook && bundle.ebooks.isNotEmpty) ...[

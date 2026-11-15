@@ -7,6 +7,7 @@ import 'package:jikstay/detail_page.dart';
 import 'package:jikstay/discovery_models.dart';
 import 'package:jikstay/i18n.dart';
 import 'package:jikstay/main.dart';
+import 'package:jikstay/naver_place_info.dart';
 import 'package:jikstay/spot_detail_sheet.dart';
 import 'package:jikstay/translation_store.dart';
 import 'package:jikstay/travel_hub.dart';
@@ -734,6 +735,34 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('주말 1박2일'), findsWidgets);
       expect(find.byKey(const Key('copy_trip_plan_url_btn')), findsOneWidget);
+    });
+  });
+
+  group('네이버 지역 검색 보강 정보', () {
+    test('공식 링크 종류별 라벨', () {
+      expect(officialLinkLabel('https://www.instagram.com/abc', AppLang.ko), '공식 인스타그램');
+      expect(officialLinkLabel('https://talk.naver.com/w43gsp', AppLang.ko), '네이버 톡톡 문의');
+      expect(officialLinkLabel('https://blog.naver.com/saemmoru', AppLang.en), 'Owner blog');
+      expect(officialLinkLabel('http://www.pensionsea.com/', AppLang.ja), '公式サイト');
+    });
+
+    testWidgets('업종·링크·출처 표시, 값이 없으면 숨김', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+          body: NaverPlaceInfo(
+            data: {'naver_category': '숙박>펜션', 'naver_link': 'https://www.instagram.com/abc'},
+            lang: AppLang.ko,
+          ),
+        ),
+      ));
+      expect(find.text('숙박 › 펜션'), findsOneWidget);
+      expect(find.byKey(const Key('naver_official_link_btn')), findsOneWidget);
+      expect(find.text('정보 출처: 네이버'), findsOneWidget);
+
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: NaverPlaceInfo(data: {'naver_link': 'javascript:alert(1)'}, lang: AppLang.ko)),
+      ));
+      expect(find.byKey(const Key('naver_place_info')), findsNothing);
     });
   });
 }

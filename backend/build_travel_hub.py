@@ -1384,7 +1384,69 @@ def _split_editorial_paragraphs(text: str, max_chars: int = 520) -> list[str]:
     return [p for p in (p1, p2) if p]
 
 
-def _fetch_naver_place_blog_snippets(query: str, max_items: int = 2) -> list[dict[str, str]]:
+_REGION_SUFFIX_RE = re.compile(r"(특별자치도|특별자치시|광역시|특별시|도|시|군|구|읍|면)$")
+_EDITION_TOKEN_RE = re.compile(r"^(\d{4}년?|제?\d+회|\d+th)$")
+
+
+def _region_tokens(region_label: str, province: str) -> set[str]:
+    toks: set[str] = set()
+    for t in f"{province} {region_label}".split():
+        t = t.strip()
+        if len(t) < 2:
+            continue
+        toks.add(t)
+        base = _REGION_SUFFIX_RE.sub("", t)
+        if len(base) >= 2:
+            toks.add(base)
+    return toks
+
+
+def is_relevant_place_snippet(place_title: str, region_label: str, province: str, snippet: dict[str, Any]) -> bool:
+    """블로그 글이 정말 이 장소에 관한 글인지 판정한다.
+
+    - 지역명·연도·회차를 뺀 장소 핵심 이름이 글 '제목'에 있어야 한다(본문에 지나가듯 언급된 글 제외).
+    - '중앙공원로 17' 처럼 도로명으로만 등장하면 제외.
+    - 핵심 이름이 짧아 흔한 경우(예: 중앙공원)는 지역명도 함께 있어야 한다.
+    """
+    def norm(s: str) -> str:
+        return re.sub(r"\s+", "", s or "")
+
+    rtoks = _region_tokens(region_label, province)
+    words = [w for w in re.sub(r"\([^)]*\)", " ", place_title or "").split() if w]
+    core_words = [
+        w for w in words
+        if w not in rtoks and _REGION_SUFFIX_RE.sub("", w) not in rtoks and not _EDITION_TOKEN_RE.match(w)
+    ] or words
+    core = norm(" ".join(core_words))
+    if len(core) < 2:
+        return False
+    title = norm(str(snippet.get("title") or ""))
+    summary = norm(str(snippet.get("summary") or ""))
+    # 전체 핵심 이름, 또는 여러 단어 이름이면 5자 이상 고유 단어(예: '얼음나라화천 산천어축제' → '산천어축제')
+    keys = [core]
+    if len(core_words) >= 2:
+        keys += [norm(w) for w in core_words if len(norm(w)) >= 5]
+    key = next((k for k in keys if k in title), "")
+    if not key:
+        return False
+    if re.search(re.escape(key) + r"(로|길)\d", title):
+        return False
+    # '목동파리공원점' 처럼 다른 가게의 지점명으로만 등장하는 경우
+    if "점" not in core and re.search(re.escape(key) + r"점", title):
+        return False
+    if len(key) < 6 and rtoks and not any(norm(t) in title + summary for t in rtoks):
+        return False
+    return True
+
+
+def _fetch_naver_place_blog_snippets(
+    query: str,
+    max_items: int = 2,
+    *,
+    place_title: str = "",
+    region_label: str = "",
+    province: str = "",
+) -> list[dict[str, str]]:
     nid = os.environ.get("NAVER_CLIENT_ID") or ""
     nsec = os.environ.get("NAVER_CLIENT_SECRET") or ""
     if not nid or not nsec or not query.strip():
@@ -1396,7 +1458,8 @@ def _fetch_naver_place_blog_snippets(query: str, max_items: int = 2) -> list[dic
         else {"X-Naver-Client-Id": nid, "X-Naver-Client-Secret": nsec}
     )
     api_url = NAVER_BLOG_HUB_URL if use_hub else NAVER_BLOG_LEGACY_URL
-    params: dict[str, Any] = {"query": query, "display": 5, "start": 1, "sort": "sim"}
+    # 관련성 필터로 걸러지는 글이 많으므로 후보를 넉넉히 받는다.
+    params: dict[str, Any] = {"query": query, "display": 10 if place_title else 5, "start": 1, "sort": "sim"}
     if use_hub:
         params["format"] = "json"
     spam_words = ("분양", "대출", "매매", "보험", "부동산", "원고료", "소정의 수수료")
@@ -1414,14 +1477,17 @@ def _fetch_naver_place_blog_snippets(query: str, max_items: int = 2) -> list[dic
                 continue
             if any(w in title or w in desc for w in spam_words):
                 continue
-            seen.add(link)
-            out.append({
+            snippet = {
                 "title": title[:72],
                 "summary": desc[:135],
                 "blogger": clean_html_text(it.get("bloggername", ""))[:24],
                 "postdate": str(it.get("postdate") or ""),
                 "link": link,
-            })
+            }
+            if place_title and not is_relevant_place_snippet(place_title, region_label, province, snippet):
+                continue
+            seen.add(link)
+            out.append(snippet)
             if len(out) >= max_items:
                 break
     except Exception:  # noqa: BLE001
@@ -1512,7 +1578,13 @@ def enrich_spots_and_festivals_details(
 
             q_suffix = "후기" if kind in ("food", "attraction") else "일정 후기"
             q_region = reg_label if reg_label else prov
-            info["naver_reviews"] = _fetch_naver_place_blog_snippets(f"{q_region} {title} {q_suffix}".strip(), max_items=2)
+            info["naver_reviews"] = _fetch_naver_place_blog_snippets(
+                f"{q_region} {title} {q_suffix}".strip(),
+                max_items=2,
+                place_title=title,
+                region_label=reg_label,
+                province=prov,
+            )
 
             with lock:
                 cache[cache_key] = info

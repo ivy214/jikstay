@@ -14,6 +14,7 @@ import 'amenities.dart';
 import 'demo_data.dart';
 import 'i18n.dart';
 import 'legal.dart';
+import 'naver_place_info.dart';
 import 'review_auth.dart';
 import 'translation_store.dart';
 import 'web_utils.dart';
@@ -973,6 +974,10 @@ class ListingDetailBody extends StatelessWidget {
                 .join(' · '),
             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
+        ],
+        if (data['naver_category'] != null || data['naver_link'] != null) ...[
+          const SizedBox(height: 12),
+          NaverPlaceInfo(data: data, lang: lang, itemId: listingId),
         ],
         const SizedBox(height: 18),
 

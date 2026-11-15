@@ -193,7 +193,10 @@ def fetch_naver_province_festivals() -> list[dict[str, Any]]:
 
             for m in re.finditer(r'class="area_text_box"', r.text):
                 pre = r.text[max(0, m.start() - 950) : m.start()]
-                block = r.text[m.start() : m.end() + 950]
+                # 태그 중간(class="…">)부터 자르면 속성 문자열이 제목으로 잡히므로 태그가 닫힌 뒤부터 읽는다.
+                tag_end = r.text.find(">", m.end())
+                body_start = tag_end + 1 if tag_end != -1 else m.end()
+                block = r.text[body_start : body_start + 950]
                 plain = html.unescape(re.sub(r"<[^>]+>", "\n", block))
                 lines = [re.sub(r"\s+", " ", ln).strip() for ln in plain.splitlines() if ln.strip()]
                 if not lines or "일시적인 오류" in lines[0]:
@@ -202,7 +205,7 @@ def fetch_naver_province_festivals() -> list[dict[str, Any]]:
                 title = ""
                 for ln in lines:
                     if ln not in ("area_text_box", "기간", "장소", "지도", "~") and len(ln) >= 3:
-                        if not re.match(r"^\d{4}\.\d{2}\.\d{2}", ln):
+                        if not re.match(r"^\d{4}\.\d{2}\.\d{2}", ln) and not re.search(r'[<>="]', ln):
                             title = normalize_place_name(ln)
                             break
                 if not title:
