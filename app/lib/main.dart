@@ -1137,6 +1137,7 @@ class _LiveLocalFeedPanel extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
               child: _DailyStoryHeroCard(
+                key: ValueKey('hero_${todayStory.id}_${todayStory.heroImage}'),
                 story: todayStory,
                 lang: lang,
                 onTap: onOpenTodayStory,
@@ -1361,6 +1362,7 @@ class _DailyStoryHeroCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _DailyStoryHeroCard({
+    super.key,
     required this.story,
     required this.lang,
     required this.onTap,
@@ -1375,7 +1377,11 @@ class _DailyStoryHeroCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            StorageImage(url: story.heroImage, cacheWidth: 960),
+            StorageImage(
+              key: ValueKey('hero_img_${story.id}_${story.heroImage}'),
+              url: story.heroImage,
+              cacheWidth: 960,
+            ),
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(

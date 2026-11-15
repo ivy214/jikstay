@@ -2289,6 +2289,7 @@ class StorageImage extends StatelessWidget {
     if (u.isEmpty) return _broken();
     return Image.network(
       u,
+      key: ValueKey(u),
       fit: fit,
       width: width,
       cacheWidth: cacheWidth,
