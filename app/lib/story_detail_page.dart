@@ -9,6 +9,7 @@ import 'detail_page.dart' show ListingDetailPage, StorageImage;
 import 'discovery_models.dart';
 import 'i18n.dart';
 import 'spot_detail_sheet.dart';
+import 'translation_store.dart';
 import 'web_utils.dart';
 
 class StoryDetailPage extends StatefulWidget {
@@ -79,12 +80,17 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
     await Clipboard.setData(ClipboardData(text: shareUrl));
     trackPortalEvent('share_story_link', {'story_id': _story.id});
     if (!mounted) return;
+    final lang = appLangNotifier.value;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          widget.lang == AppLang.ko
-              ? '스토리 링크가 복사되었습니다. 가족·동행에게 바로 공유해 보세요!'
-              : 'Story link copied to clipboard!',
+          pickLangText(
+            lang,
+            ko: '스토리 링크가 복사되었습니다. 가족·동행에게 바로 공유해 보세요!',
+            en: 'Story link copied to clipboard!',
+            ja: 'ストーリーのリンクをコピーしました！',
+            zh: '已複製故事連結，歡迎分享給親友！',
+          ),
         ),
       ),
     );
@@ -92,7 +98,18 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final lang = widget.lang;
+    return ValueListenableBuilder<AppLang>(
+      valueListenable: appLangNotifier,
+      builder: (context, activeLang, _) {
+        return ValueListenableBuilder<int>(
+          valueListenable: translationRevisionNotifier,
+          builder: (context, _, _) => _buildContent(context, activeLang),
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(BuildContext context, AppLang lang) {
     final anchorItem = _story.toDiscoveryItem();
     final bundle = buildConnectedBundle(anchorItem, widget.allItems, limitPerType: 2);
     final images = _story.images;
@@ -100,6 +117,16 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
     final otherStories = widget.allStories.where((s) => s.id != _story.id).take(4).toList();
     final screenW = MediaQuery.sizeOf(context).width;
     final isWide = screenW >= 720;
+    final tTitle = _story.tTitle(lang);
+    final tSubtitle = _story.tSubtitle(lang);
+    final tAddress = _story.tAddress(lang);
+    final tPullQuote = _story.tPullQuote(lang);
+    final tParagraphs = _story.tParagraphs(lang);
+    final tPracticalHeader = _story.tPracticalHeader(lang);
+    final tPracticalInfo = _story.tPracticalInfo(lang);
+    final tSeasonBadge = _story.tSeasonBadge(lang);
+    final tSourceBook = _story.tSourceBook(lang);
+    final tRegion = _story.tRegionLabel(lang);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFBF9),
@@ -110,7 +137,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
         shape: const Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
         leading: IconButton(
           key: const Key('story_back_btn'),
-          tooltip: lang == AppLang.ko ? '돌아가기' : 'Back',
+          tooltip: trUi('back_btn', lang),
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
           onPressed: () {
             if (Navigator.of(context).canPop()) {
@@ -121,19 +148,23 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
           },
         ),
         title: Text(
-          _story.sourceBook,
+          tSourceBook,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF334155)),
         ),
         actions: [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: LangSelectorButton(),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: TextButton.icon(
               key: const Key('story_share_btn'),
               onPressed: _copyShareLink,
               icon: const Icon(Icons.ios_share_rounded, size: 17),
-              label: Text(lang == AppLang.ko ? '공유' : 'Share'),
+              label: Text(trUi('share_btn', lang)),
             ),
           ),
         ],
@@ -171,12 +202,12 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                           border: Border.all(color: const Color(0xFFA7F3D0)),
                         ),
                         child: Text(
-                          _story.seasonBadge,
+                          tSeasonBadge,
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
                         ),
                       ),
                       Text(
-                        '${_story.province} ${_story.city} · ${_story.sourceBook}',
+                        '$tRegion · $tSourceBook',
                         style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
                       ),
                     ],
@@ -230,7 +261,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
 
                   // 3. 매거진 타이틀 & 지자체 책자 스타일 부제(주소)
                   Text(
-                    _story.title,
+                    tTitle,
                     style: TextStyle(
                       fontSize: isWide ? 28 : 22.5,
                       fontWeight: FontWeight.w900,
@@ -247,7 +278,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                       border: Border(bottom: BorderSide(color: Color(0xFFBBF7D0), width: 1.5)),
                     ),
                     child: Text(
-                      _story.subtitle.isNotEmpty ? _story.subtitle : _story.address,
+                      tSubtitle.isNotEmpty ? tSubtitle : tAddress,
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -258,7 +289,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                   const SizedBox(height: 20),
 
                   // 4. 핵심 설화·감성 한 줄 콜아웃 (Pull-Quote)
-                  if (_story.pullQuote.isNotEmpty) ...[
+                  if (tPullQuote.isNotEmpty) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
@@ -267,7 +298,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                         border: Border(left: BorderSide(color: Color(0xFF10B981), width: 4)),
                       ),
                       child: Text(
-                        '“${_story.pullQuote}”',
+                        '“$tPullQuote”',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -279,25 +310,8 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                     const SizedBox(height: 22),
                   ],
 
-                  // 해외 방문객용 영문 요약 병기
-                  if (lang != AppLang.ko && _story.enSummary.isNotEmpty) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      margin: const EdgeInsets.only(bottom: 18),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        _story.enSummary,
-                        style: const TextStyle(fontSize: 14.5, color: Color(0xFF1E3A8A), height: 1.65),
-                      ),
-                    ),
-                  ],
-
                   // 5. 지자체 공식 원문 스토리 본문 (가독성 최우선: 16.5px · 줄간격 1.88)
-                  ..._story.paragraphs.map(
+                  ...tParagraphs.map(
                     (p) => Padding(
                       padding: const EdgeInsets.only(bottom: 18),
                       child: Text(
@@ -314,7 +328,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                   const SizedBox(height: 8),
 
                   // 6. 방문 전 꼭 필요한 '핵심 탐방·편의 정보 박스' (《장수여행》 p.9 하단 초록 박스 모델)
-                  if (_story.practicalHeader.isNotEmpty || _story.practicalInfo.isNotEmpty) ...[
+                  if (tPracticalHeader.isNotEmpty || tPracticalInfo.isNotEmpty) ...[
                     Container(
                       key: const Key('story_practical_box'),
                       width: double.infinity,
@@ -326,7 +340,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (_story.practicalHeader.isNotEmpty)
+                          if (tPracticalHeader.isNotEmpty)
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -335,7 +349,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                                 borderRadius: BorderRadius.vertical(top: Radius.circular(12.5)),
                               ),
                               child: Text(
-                                '🌿 ${_story.practicalHeader}',
+                                '🌿 $tPracticalHeader',
                                 style: const TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w900,
@@ -347,7 +361,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: _story.practicalInfo
+                              children: tPracticalInfo
                                   .map(
                                     (row) => Padding(
                                       padding: const EdgeInsets.only(bottom: 8),
@@ -380,7 +394,13 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                   // 7. 정돈된 행동 영역: ① 원본 가이드북 PDF 열람 + ② 1줄 대중교통·내비 길찾기
                   if (_story.pdfLinks.isNotEmpty) ...[
                     Text(
-                      lang == AppLang.ko ? '공식 가이드북 & 관광지도 원본' : 'Official Municipal Guidebook & Map PDF',
+                      pickLangText(
+                        lang,
+                        ko: '공식 가이드북 & 관광지도 원본',
+                        en: 'Official Municipal Guidebook & Map PDF',
+                        ja: '自治体公式ガイドブック＆観光地図PDF',
+                        zh: '地方政府官方旅遊指南＆觀光地圖PDF',
+                      ),
                       style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)),
                     ),
                     const SizedBox(height: 8),
@@ -388,15 +408,17 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                       spacing: 8,
                       runSpacing: 8,
                       children: _story.pdfLinks
+                          .asMap()
+                          .entries
                           .map(
-                            (pl) => FilledButton.icon(
+                            (entry) => FilledButton.icon(
                               style: FilledButton.styleFrom(
                                 backgroundColor: const Color(0xFF1E3A8A),
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                               ),
-                              onPressed: () => _openUrl(pl.url, eventTag: 'open_municipal_pdf'),
+                              onPressed: () => _openUrl(entry.value.url, eventTag: 'open_municipal_pdf'),
                               icon: const Icon(Icons.menu_book_rounded, size: 17),
-                              label: Text(pl.localizedLabel(lang)),
+                              label: Text(_story.tPdfLabel(lang, entry.key, entry.value.localizedLabel(lang))),
                             ),
                           )
                           .toList(),
@@ -405,7 +427,13 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                   ],
 
                   Text(
-                    lang == AppLang.ko ? '바로 떠나기 · 대중교통 및 내비게이션 경로' : 'Directions & Public Transit',
+                    pickLangText(
+                      lang,
+                      ko: '바로 떠나기 · 대중교통 및 내비게이션 경로',
+                      en: 'Directions & Public Transit',
+                      ja: 'アクセス・公共交通ルート案内',
+                      zh: '立即出發・大眾運輸與導航路線',
+                    ),
                     style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)),
                   ),
                   const SizedBox(height: 8),
@@ -417,19 +445,19 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                         key: const Key('story_naver_route_btn'),
                         onPressed: () => _openUrl(anchorItem.naverRouteUrl, eventTag: 'click_transit_naver', countVisit: true),
                         icon: const Icon(Icons.map_outlined, size: 17, color: Color(0xFF03C75A)),
-                        label: Text(lang == AppLang.ko ? '🟢 네이버지도 길찾기' : '🟢 Naver Map'),
+                        label: Text(pickLangText(lang, ko: '🟢 네이버지도 길찾기', en: '🟢 Naver Map', ja: '🟢 NAVER地図', zh: '🟢 NAVER地圖')),
                       ),
                       OutlinedButton.icon(
                         key: const Key('story_kakao_route_btn'),
                         onPressed: () => _openUrl(anchorItem.kakaoRouteUrl, eventTag: 'click_transit_kakao', countVisit: true),
                         icon: const Icon(Icons.directions_bus_filled_rounded, size: 17, color: Color(0xFFD97706)),
-                        label: Text(lang == AppLang.ko ? '🟡 카카오 대중교통·내비' : '🟡 Kakao Transit'),
+                        label: Text(pickLangText(lang, ko: '🟡 카카오 대중교통·내비', en: '🟡 Kakao Transit', ja: '🟡 Kakao乗換案内', zh: '🟡 Kakao大眾運輸')),
                       ),
                       OutlinedButton.icon(
                         key: const Key('story_google_route_btn'),
                         onPressed: () => _openUrl(anchorItem.googleTransitUrl, eventTag: 'click_transit_google', countVisit: true),
                         icon: const Icon(Icons.train_rounded, size: 17, color: Color(0xFF2563EB)),
-                        label: Text(lang == AppLang.ko ? '🔵 Google 대중교통' : '🔵 Google Transit'),
+                        label: Text(pickLangText(lang, ko: '🔵 Google 대중교통', en: '🔵 Google Transit', ja: '🔵 Google乗換案内', zh: '🔵 Google大眾運輸')),
                       ),
                       if (_story.phone.isNotEmpty)
                         OutlinedButton.icon(
@@ -447,16 +475,24 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                       child: Divider(height: 1),
                     ),
                     Text(
-                      lang == AppLang.ko
-                          ? '✨ 이 이야기의 무대로 떠난다면, 함께 들르기 좋은 동선'
-                          : '✨ Suggested Nearby Stops for Your Trip',
+                      pickLangText(
+                        lang,
+                        ko: '✨ 이 이야기의 무대로 떠난다면, 함께 들르기 좋은 동선',
+                        en: '✨ Suggested Nearby Stops for Your Trip',
+                        ja: '✨ このストーリーの舞台と一緒に巡りたい周辺スポット',
+                        zh: '✨ 前往此故事舞台時，推薦順遊的周邊好去處',
+                      ),
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      lang == AppLang.ko
-                          ? '복잡한 검색 없이 가까운 로컬 식당과 볼거리, 합법 인증 숙소만 추렸습니다.'
-                          : 'Handpicked nearby dining, sights, and government-licensed stays.',
+                      pickLangText(
+                        lang,
+                        ko: '복잡한 검색 없이 가까운 로컬 식당과 볼거리, 합법 인증 숙소만 추렸습니다.',
+                        en: 'Handpicked nearby dining, sights, and government-licensed stays.',
+                        ja: '検索いらずで近くのローカル食堂・名所・公認宿泊施設を厳選しました。',
+                        zh: '無須繁瑣搜尋，為您精選鄰近的在地美食、景點與合法認證住宿。',
+                      ),
                       style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                     ),
                     const SizedBox(height: 14),
@@ -541,7 +577,13 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                       child: Divider(height: 1),
                     ),
                     Text(
-                      lang == AppLang.ko ? '📚 다른 지역의 공식 가이드북 스토리' : '📚 More Local Stories Across Korea',
+                      pickLangText(
+                        lang,
+                        ko: '📚 다른 지역의 공식 가이드북 스토리',
+                        en: '📚 More Local Stories Across Korea',
+                        ja: '📚 韓国各地の公式ガイドブック・ストーリー',
+                        zh: '📚 韓國各地官方旅遊指南故事',
+                      ),
                       style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
                     ),
                     const SizedBox(height: 12),
@@ -588,12 +630,12 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${st.seasonBadge} · ${st.province} ${st.city}',
+                                        '${st.tSeasonBadge(lang)} · ${st.tRegionLabel(lang)}',
                                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        st.title,
+                                        st.tTitle(lang),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
@@ -656,14 +698,14 @@ class _StoryNearbyStopTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.title,
+                      item.tTitle(lang),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${item.categoryBadgeText(lang)} · 약 ${distKm.toStringAsFixed(1)}km${item.couponTitle.isNotEmpty ? " · 🎁 ${item.couponTitle}" : ""}',
+                      '${item.categoryBadgeText(lang)} · ${pickLangText(lang, ko: '약 ${distKm.toStringAsFixed(1)}km', en: '${distKm.toStringAsFixed(1)}km away', ja: '約${distKm.toStringAsFixed(1)}km', zh: '約 ${distKm.toStringAsFixed(1)}km')}${item.couponTitle.isNotEmpty ? " · 🎁 ${item.tCouponTitle(lang)}" : ""}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),

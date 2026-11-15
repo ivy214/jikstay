@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'detail_page.dart' show ListingDetailPage, StorageImage, validateUserReviewInput;
 import 'discovery_models.dart';
 import 'i18n.dart';
+import 'translation_store.dart';
 import 'web_utils.dart';
 
 typedef SpotDetailPage = SpotDetailSheet;
@@ -290,99 +291,205 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
   }
 
   String _effectivePullQuote(DiscoveryItem item, String dateRange, AppLang lang) {
-    if (item.pullQuote.isNotEmpty) return item.pullQuote;
-    if (item.couponTitle.isNotEmpty) return item.couponTitle;
+    final pq = item.tPullQuote(lang);
+    if (pq.isNotEmpty) return pq;
+    final cp = item.tCouponTitle(lang);
+    if (cp.isNotEmpty) return cp;
+    final reg = item.tRegionLabel(lang);
     if (item.category == DiscoveryCategory.event && dateRange.isNotEmpty) {
-      return '${item.regionLabel} 대표 계절 행사 · $dateRange 개최';
+      return pickLangText(
+        lang,
+        ko: '$reg 대표 계절 행사 · $dateRange 개최',
+        en: '$reg Seasonal Festival · $dateRange',
+        ja: '$reg 季節の祭り・イベント · $dateRange',
+        zh: '$reg 季節慶典活動 · $dateRange',
+      );
     }
-    if (item.subtitle.isNotEmpty && item.subtitle != item.address) {
-      return item.subtitle.length > 110 ? '${item.subtitle.substring(0, 110)}…' : item.subtitle;
+    final sub = item.tSubtitle(lang);
+    final addr = item.tAddress(lang);
+    if (sub.isNotEmpty && sub != addr) {
+      return sub.length > 110 ? '${sub.substring(0, 110)}…' : sub;
     }
     return switch (item.category) {
-      DiscoveryCategory.food => '${item.regionLabel} 여행 동선에서 함께 들르기 좋은 지역 대표 로컬 식도락 명소',
-      DiscoveryCategory.event => '${item.regionLabel}의 계절 풍경과 지역 문화를 오감으로 만나는 현장 축제',
-      DiscoveryCategory.ebook => '${item.province} 지자체가 직접 발행한 공식 관광안내도와 추천 여행 가이드북',
-      _ => '${item.regionLabel}의 자연과 이야기를 가까이에서 만나는 로컬 추천 명소',
+      DiscoveryCategory.food => pickLangText(
+          lang,
+          ko: '$reg 여행 동선에서 함께 들르기 좋은 지역 대표 로컬 식도락 명소',
+          en: 'Beloved local dining spot in $reg along your travel route.',
+          ja: '$reg の旅ルートで立ち寄りたい人気のローカルグルメスポット。',
+          zh: '造訪 $reg 不可錯過的在地人氣美食餐廳。',
+        ),
+      DiscoveryCategory.event => pickLangText(
+          lang,
+          ko: '$reg의 계절 풍경과 지역 문화를 오감으로 만나는 현장 축제',
+          en: 'Experience seasonal scenery and local culture at this festival in $reg.',
+          ja: '$reg の季節の風景と地域文化を体感できる現地フェスティバル。',
+          zh: '親身感受 $reg 季節風景與在地文化的地方慶典。',
+        ),
+      DiscoveryCategory.ebook => pickLangText(
+          lang,
+          ko: '${trProvince(item.province, lang)} 지자체가 직접 발행한 공식 관광안내도와 추천 여행 가이드북',
+          en: 'Official tourist map & guidebook published by ${trProvince(item.province, lang)}.',
+          ja: '${trProvince(item.province, lang)} 自治体公式の観光案内図・旅行ガイドブック。',
+          zh: '${trProvince(item.province, lang)} 地方政府發行的官方旅遊地圖與指南。',
+        ),
+      _ => pickLangText(
+          lang,
+          ko: '$reg의 자연과 이야기를 가까이에서 만나는 로컬 추천 명소',
+          en: 'Discover nature and local heritage up close in $reg.',
+          ja: '$reg の自然と物語に出会えるおすすめ観光スポット。',
+          zh: '近距離感受 $reg 自然風光與故事的精選景點。',
+        ),
     };
   }
 
   List<String> _effectiveParagraphs(DiscoveryItem item, String dateRange, AppLang lang) {
-    if (item.paragraphs.isNotEmpty) return item.paragraphs;
+    final ps = item.tParagraphs(lang);
+    if (ps.isNotEmpty) return ps;
     final out = <String>[];
-    if (item.subtitle.isNotEmpty && item.subtitle != item.address) {
-      out.add(item.subtitle);
+    final sub = item.tSubtitle(lang);
+    final addr = item.tAddress(lang);
+    if (sub.isNotEmpty && sub != addr) {
+      out.add(sub);
     }
-    if (lang == AppLang.ko) {
-      switch (item.category) {
-        case DiscoveryCategory.food:
-          out.add(
-            '${item.regionLabel} 일대 여행객과 현지인이 즐겨 찾는 로컬 식도락 장소입니다. '
-            '계절이나 재료 소진 상황에 따라 운영시간·세부 메뉴 가격이 달라질 수 있으므로, '
-            '방문 전 아래 카카오 플레이스 또는 네이버 플레이스 바로가기를 통해 최신 메뉴판과 실시간 영업 여부를 함께 확인하시면 더욱 편리합니다.',
-          );
-          break;
-        case DiscoveryCategory.event:
-          out.add(
-            '${item.regionLabel}에서 진행되는 지역 문화·관광 행사${dateRange.isNotEmpty ? "($dateRange)" : ""}입니다. '
-            '현장 세부 타임테이블, 임시 주차장, 우천 시 운영 여부는 아래 네이버 검색·카카오 플레이스 및 지자체 공식 관광안내도를 통해 한눈에 확인하실 수 있습니다.',
-          );
-          break;
-        case DiscoveryCategory.ebook:
-          out.add(
-            '회원가입이나 별도 앱 설치 없이 지자체 문화관광 누리집이 발행한 고화질 원본 관광안내지도와 권역별 트레킹·맛집 코스를 즉시 열람하실 수 있습니다.',
-          );
-          break;
-        default:
-          out.add(
-            '${item.regionLabel}을 대표하는 탐방 명소로, 주변 로컬 식당·계절 축제·합법 인증 숙소와 함께 엮어 여유로운 여행 코스를 구성하기 좋습니다.',
-          );
-          break;
-      }
+    final reg = item.tRegionLabel(lang);
+    switch (item.category) {
+      case DiscoveryCategory.food:
+        out.add(
+          pickLangText(
+            lang,
+            ko: '$reg 일대 여행객과 현지인이 즐겨 찾는 로컬 식도락 장소입니다. 계절이나 재료 소진 상황에 따라 운영시간·세부 메뉴 가격이 달라질 수 있으므로, 방문 전 아래 카카오 플레이스 또는 네이버 플레이스 바로가기를 통해 최신 메뉴판과 실시간 영업 여부를 함께 확인하시면 더욱 편리합니다.',
+            en: 'A popular local eatery in $reg loved by travelers and residents alike. Hours and menu prices may vary by season—check Kakao Place or Naver Place below for the latest menu and live opening status.',
+            ja: '$reg エリアで旅行者と地元民に親しまれているローカルグルメスポットです。季節や仕入れ状況により営業時間やメニューが異なる場合がありますので、下記のKakao・NAVERプレイスから最新情報をご確認ください。',
+            zh: '$reg 一帶深受旅客與在地人喜愛的美食名店。營業時間與餐點價格可能依季節調整，建議出發前透過下方 Kakao Place 或 NAVER Place 確認最新菜單與營業狀態。',
+          ),
+        );
+        break;
+      case DiscoveryCategory.event:
+        out.add(
+          pickLangText(
+            lang,
+            ko: '$reg에서 진행되는 지역 문화·관광 행사${dateRange.isNotEmpty ? "($dateRange)" : ""}입니다. 현장 세부 타임테이블, 임시 주차장, 우천 시 운영 여부는 아래 네이버 검색·카카오 플레이스 및 지자체 공식 관광안내도를 통해 한눈에 확인하실 수 있습니다.',
+            en: 'A regional cultural festival in $reg${dateRange.isNotEmpty ? " ($dateRange)" : ""}. Check the links below for detailed schedules, temporary parking, and weather updates.',
+            ja: '$reg で開催される地域文化・観光イベント${dateRange.isNotEmpty ? "（$dateRange）" : ""}です。タイムテーブルや臨時駐車場などは下記リンクからご確認いただけます。',
+            zh: '於 $reg 舉辦的地方文化觀光慶典${dateRange.isNotEmpty ? "（$dateRange）" : ""}，詳細活動時刻表與停車資訊可透過下方連結查詢。',
+          ),
+        );
+        break;
+      case DiscoveryCategory.ebook:
+        out.add(
+          pickLangText(
+            lang,
+            ko: '회원가입이나 별도 앱 설치 없이 지자체 문화관광 누리집이 발행한 고화질 원본 관광안내지도와 권역별 트레킹·맛집 코스를 즉시 열람하실 수 있습니다.',
+            en: 'Open the official high-resolution municipal tourist map, trekking routes, and local dining guides instantly without sign-up.',
+            ja: '会員登録やアプリ不要で、自治体公式の高画質観光地図・トレッキングコース・グルメガイドをすぐにご覧いただけます。',
+            zh: '免註冊、免下載 App，即可立即瀏覽地方政府官方發行的高畫質旅遊地圖與推薦步道、美食路線。',
+          ),
+        );
+        break;
+      default:
+        out.add(
+          pickLangText(
+            lang,
+            ko: '$reg을 대표하는 탐방 명소로, 주변 로컬 식당·계절 축제·합법 인증 숙소와 함께 엮어 여유로운 여행 코스를 구성하기 좋습니다.',
+            en: 'A signature attraction in $reg—pair it with nearby local restaurants, seasonal events, and government-licensed stays for a relaxed itinerary.',
+            ja: '$reg を代表する見どころスポットです。周辺のローカル食堂や季節の祭り、公認宿泊施設と合わせてゆったり巡るのがおすすめです。',
+            zh: '$reg 的代表性觀光景點，非常適合搭配周邊在地美食、季節慶典與合法認證住宿，規劃悠閒的一日行程。',
+          ),
+        );
+        break;
     }
     return out;
   }
 
-  List<PracticalInfoRow> _effectivePracticalRows(DiscoveryItem item, String dateRange) {
-    if (item.practicalInfo.isNotEmpty) return item.practicalInfo;
+  List<PracticalInfoRow> _effectivePracticalRows(DiscoveryItem item, String dateRange, AppLang lang) {
+    final tInfo = item.tPracticalInfo(lang);
+    if (tInfo.isNotEmpty) return tInfo;
     final rows = <PracticalInfoRow>[];
     if (dateRange.isNotEmpty) {
-      rows.add(PracticalInfoRow(label: '행사 기간', value: dateRange));
+      rows.add(PracticalInfoRow(
+        label: pickLangText(lang, ko: '행사 기간', en: 'Dates', ja: '開催期間', zh: '活動期間'),
+        value: dateRange,
+      ));
     }
-    if (item.address.isNotEmpty) {
-      rows.add(PracticalInfoRow(label: '위치 주소', value: item.address));
+    final addr = item.tAddress(lang);
+    if (addr.isNotEmpty) {
+      rows.add(PracticalInfoRow(
+        label: pickLangText(lang, ko: '위치 주소', en: 'Address', ja: '住所', zh: '地址'),
+        value: addr,
+      ));
     }
     if (item.phone.isNotEmpty) {
-      rows.add(PracticalInfoRow(label: '문의 전화', value: item.phone));
+      rows.add(PracticalInfoRow(
+        label: pickLangText(lang, ko: '문의 전화', en: 'Phone', ja: 'お問い合わせ', zh: '聯絡電話'),
+        value: item.phone,
+      ));
     }
-    if (item.couponTitle.isNotEmpty) {
-      rows.add(PracticalInfoRow(label: '방문 혜택', value: item.couponTitle));
+    final cp = item.tCouponTitle(lang);
+    if (cp.isNotEmpty) {
+      rows.add(PracticalInfoRow(
+        label: pickLangText(lang, ko: '방문 혜택', en: 'Visit Perk', ja: '来店特典', zh: '造訪優惠'),
+        value: cp,
+      ));
     }
     return rows;
   }
 
   String _effectivePracticalHeader(DiscoveryItem item, AppLang lang) {
-    if (item.practicalHeader.isNotEmpty) return item.practicalHeader;
-    if (lang != AppLang.ko) return 'Essential Visitor Information';
+    final h = item.tPracticalHeader(lang);
+    if (h.isNotEmpty) return h;
     return switch (item.category) {
-      DiscoveryCategory.food => '방문 전 필수 확인 · 대표 메뉴 · 영업시간 · 편의안내',
-      DiscoveryCategory.event => '행사 관람 필수 확인 · 일정 · 장소 · 관람안내',
-      DiscoveryCategory.ebook => '지자체 공식 가이드북 · 원본 PDF 이용 안내',
-      _ => '탐방 전 필수 확인 · 위치 · 운영 · 편의안내',
+      DiscoveryCategory.food => pickLangText(
+          lang,
+          ko: '방문 전 필수 확인 · 대표 메뉴 · 영업시간 · 편의안내',
+          en: 'Essential Info · Signature Menu · Hours · Access',
+          ja: '訪問前の確認事項・看板メニュー・営業時間',
+          zh: '行前必看資訊・招牌餐點・營業時間',
+        ),
+      DiscoveryCategory.event => pickLangText(
+          lang,
+          ko: '행사 관람 필수 확인 · 일정 · 장소 · 관람안내',
+          en: 'Festival Guide · Schedule · Venue · Info',
+          ja: 'イベント案内・日程・会場・アクセス',
+          zh: '活動指南・日期・地點・參觀資訊',
+        ),
+      DiscoveryCategory.ebook => pickLangText(
+          lang,
+          ko: '지자체 공식 가이드북 · 원본 PDF 이용 안내',
+          en: 'Official Municipal Guidebook & PDF Info',
+          ja: '自治体公式ガイドブック・PDF利用案内',
+          zh: '地方政府官方旅遊指南・PDF 使用說明',
+        ),
+      _ => pickLangText(
+          lang,
+          ko: '탐방 전 필수 확인 · 위치 · 운영 · 편의안내',
+          en: 'Essential Visitor Info · Hours · Access',
+          ja: '訪問前の確認事項・場所・営業時間',
+          zh: '行前必看資訊・位置・開放時間',
+        ),
     };
   }
 
   @override
   Widget build(BuildContext context) {
-    final lang = widget.lang;
+    return ListenableBuilder(
+      listenable: Listenable.merge([appLangNotifier, translationRevisionNotifier]),
+      builder: (context, _) => _buildContent(context, appLangNotifier.value),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, AppLang lang) {
     final bundle = buildConnectedBundle(_current, widget.allItems);
     final dateRange = _fmtDateRange(_current.startDate, _current.endDate);
     final gallery = _current.effectiveGallery;
     final activeHero = (gallery.isNotEmpty && _heroIndex < gallery.length) ? gallery[_heroIndex] : '';
     final pullQuote = _effectivePullQuote(_current, dateRange, lang);
     final paragraphs = _effectiveParagraphs(_current, dateRange, lang);
-    final practicalRows = _effectivePracticalRows(_current, dateRange);
+    final practicalRows = _effectivePracticalRows(_current, dateRange, lang);
     final practicalHeader = _effectivePracticalHeader(_current, lang);
     final freshBadge = _current.dynamicFreshnessBadge(lang);
+    final tTitle = _current.tTitle(lang);
+    final tAddr = _current.tAddress(lang);
+    final tRegion = _current.tRegionLabel(lang);
 
     final screenW = MediaQuery.sizeOf(context).width;
     final isWide = screenW >= 720;
@@ -396,7 +503,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
         shape: const Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
         leading: IconButton(
           key: const Key('spot_back_btn'),
-          tooltip: lang == AppLang.ko ? '돌아가기' : 'Back',
+          tooltip: trUi('back_btn', lang),
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
           onPressed: () {
             if (Navigator.of(context).canPop()) {
@@ -407,19 +514,23 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
           },
         ),
         title: Text(
-          '${_current.regionLabel} · ${_current.categoryBadgeText(lang)} 상세 가이드',
+          '$tRegion · ${_current.categoryBadgeText(lang)}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF334155)),
         ),
         actions: [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: LangSelectorButton(),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: TextButton.icon(
               key: const Key('spot_share_btn'),
               onPressed: _copyShareLink,
               icon: const Icon(Icons.ios_share_rounded, size: 17),
-              label: Text(lang == AppLang.ko ? '공유' : 'Share'),
+              label: Text(trUi('share_btn', lang)),
             ),
           ),
         ],
@@ -457,7 +568,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                           border: Border.all(color: const Color(0xFFA7F3D0)),
                         ),
                         child: Text(
-                          '${_current.categoryEmoji} ${_current.province} · ${_current.categoryBadgeText(lang)}',
+                          '${_current.categoryEmoji} ${trProvince(_current.province, lang)} · ${_current.categoryBadgeText(lang)}',
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
                         ),
                       ),
@@ -480,9 +591,15 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                             color: const Color(0xFFFEF3C7),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Text(
-                            '🎁 지역 상생 추천 · 방문혜택',
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                          child: Text(
+                            pickLangText(
+                              lang,
+                              ko: '🎁 지역 상생 추천 · 방문혜택',
+                              en: '🎁 Local Partner · Visit Perk',
+                              ja: '🎁 地域パートナー・来店特典',
+                              zh: '🎁 在地合作推薦・造訪優惠',
+                            ),
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
                           ),
                         ),
                       if (_current.reviewCount > 0)
@@ -499,7 +616,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                           ),
                         ),
                       Text(
-                        '${_current.regionLabel} · 공식 관광데이터 & 로컬 플레이스 연동',
+                        '$tRegion · ${pickLangText(lang, ko: '공식 관광데이터 & 로컬 플레이스 연동', en: 'Official Tourism Data & Local Place', ja: '公式観光データ＆ローカル連携', zh: '官方觀光資料與在地情報串聯')}',
                         style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
                       ),
                     ],
@@ -553,7 +670,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
 
                   // 3. 매거진 타이틀 & 지자체 책자 스타일 부제(주소·행사기간 + 그린 언더라인)
                   Text(
-                    _current.title,
+                    tTitle,
                     style: TextStyle(
                       fontSize: isWide ? 28 : 22.5,
                       fontWeight: FontWeight.w900,
@@ -571,8 +688,8 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                     ),
                     child: Text(
                       [
-                        if (_current.address.isNotEmpty) _current.address,
-                        if (dateRange.isNotEmpty) '행사기간: $dateRange',
+                        if (tAddr.isNotEmpty) tAddr,
+                        if (dateRange.isNotEmpty) '${pickLangText(lang, ko: '행사기간', en: 'Dates', ja: '開催期間', zh: '活動期間')}: $dateRange',
                       ].join(' · '),
                       style: const TextStyle(
                         fontSize: 14,
@@ -1287,6 +1404,7 @@ class _ConnectedHorizontalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
+    final lang = appLangNotifier.value;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -1344,14 +1462,14 @@ class _ConnectedHorizontalRow extends StatelessWidget {
                                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
                                 ),
                               Text(
-                                it.title,
+                                it.tTitle(lang),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '${dist < 1.0 ? "${(dist * 1000).round()}m" : "${dist.toStringAsFixed(1)}km"} · ${it.regionLabel}',
+                                '${dist < 1.0 ? "${(dist * 1000).round()}m" : "${dist.toStringAsFixed(1)}km"} · ${it.tRegionLabel(lang)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),

@@ -515,7 +515,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '[${mkt.province} ${mkt.city}] ${mkt.title} (${mkt.days.join("·")}일장)',
+                                  '[${trProvince(mkt.province, lang)} ${mkt.tCity(lang)}] ${mkt.tTitle(lang)} (${mkt.days.join("·")}${pickLangText(lang, ko: '일장', en: ' Market', ja: '日市', zh: '日市')})',
                                   style: const TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w800,
@@ -524,7 +524,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '별미·특산: ${mkt.specialty}',
+                                  '${pickLangText(lang, ko: '별미·특산', en: 'Specialty', ja: '名物', zh: '特產')}: ${mkt.tSpecialty(lang)}',
                                   style: const TextStyle(fontSize: 12, color: Color(0xFF92400E)),
                                 ),
                               ],
@@ -732,7 +732,7 @@ class _CalendarEventTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      it.title,
+                      it.tTitle(lang),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),

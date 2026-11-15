@@ -20,7 +20,9 @@ from datetime import date, timedelta
 import html
 import json
 import os
+import pathlib
 import re
+import sys
 import threading
 import time
 from typing import Any
@@ -1761,11 +1763,22 @@ def main() -> None:
     ap.add_argument("--top-per-bucket", type=int, default=5)
     ap.add_argument("--upload", action="store_true", help="보강된 상위 숙소 정보를 Firestore에 반영")
     ap.add_argument("--upload-spots", action="store_true", help="수집된 전국 축제·볼거리·먹거리 스팟을 Firestore spots에 동기화")
+    ap.add_argument("--skip-translate", action="store_true", help="다국어 번들(EN/JA/ZH) 증분 번역 단계 건너뛰기")
     args = ap.parse_args()
 
     build_hub_json(args.out, upload_spots=args.upload_spots)
     if args.enrich_stays:
         enrich_top_stays_with_tour_details(per_bucket_top=args.top_per_bucket, upload=args.upload)
+    if not args.skip_translate:
+        try:
+            import subprocess
+            print("[다국어] 신규·변경 장소/이벤트 증분 번역(EN/JA/ZH) 실행 중...")
+            subprocess.run(
+                [sys.executable, str(pathlib.Path(__file__).with_name("translate_hub.py")), "--gemini", "--skip-stays"],
+                check=False,
+            )
+        except Exception as exc:
+            print(f"[WARN] 다국어 증분 번역 생략: {exc}")
 
 
 if __name__ == "__main__":

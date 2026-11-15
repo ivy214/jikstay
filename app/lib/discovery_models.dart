@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'i18n.dart';
+import 'translation_store.dart';
 
 enum DiscoveryCategory {
   all('cat_all', Icons.auto_awesome_rounded, Color(0xFF1E293B)),
@@ -106,6 +107,10 @@ class TraditionalMarketInfo {
   });
 
   bool opensOnDay(int dayOfMonth) => days.contains(dayOfMonth % 10);
+
+  String tTitle(AppLang lang) => TranslationStore.field(lang, 'markets', id, 'title', title);
+  String tCity(AppLang lang) => TranslationStore.field(lang, 'markets', id, 'city', city);
+  String tSpecialty(AppLang lang) => TranslationStore.field(lang, 'markets', id, 'specialty', specialty);
 }
 
 class PortalBannerSlide {
@@ -202,6 +207,117 @@ class DailyStoryItem {
   });
 
   String get heroImage => images.isNotEmpty ? images.first : '';
+
+  String _lookup(AppLang lang, String key, String fallback, {String? itemAltKey}) {
+    if (lang == AppLang.ko) return fallback;
+    final fromStory = TranslationStore.field(lang, 'stories', id, key, '');
+    if (fromStory.isNotEmpty) return fromStory;
+    final fromItem = TranslationStore.field(lang, 'items', id, itemAltKey ?? key, '');
+    if (fromItem.isNotEmpty) return fromItem;
+    return fallback;
+  }
+
+  String tSeasonBadge(AppLang lang) {
+    final v = _lookup(lang, 'season_badge', '');
+    if (v.isNotEmpty) return v;
+    if (lang == AppLang.ko) return seasonBadge;
+    return pickLangText(
+      lang,
+      ko: seasonBadge,
+      en: '📖 Featured Local Story',
+      ja: '📖 今注目のローカルストーリー',
+      zh: '📖 精選在地旅遊故事',
+    );
+  }
+
+  String tSourceBook(AppLang lang) {
+    final v = _lookup(lang, 'source_book', '');
+    if (v.isNotEmpty) return v;
+    if (lang == AppLang.ko) return sourceBook;
+    final prov = trProvince(province, lang);
+    return pickLangText(
+      lang,
+      ko: sourceBook,
+      en: '$prov Official Tourism Guide',
+      ja: '$prov 公式観光ガイド',
+      zh: '$prov 官方旅遊指南',
+    );
+  }
+
+  String tTitle(AppLang lang) => _lookup(lang, 'title', title);
+
+  String tSubtitle(AppLang lang) {
+    final v = _lookup(lang, 'subtitle', '', itemAltKey: 'addr');
+    if (v.isNotEmpty) return v;
+    if (lang == AppLang.en && enSummary.isNotEmpty) return enSummary;
+    return subtitle;
+  }
+
+  String tAddress(AppLang lang) => _lookup(lang, 'address', address, itemAltKey: 'addr');
+
+  String tPullQuote(AppLang lang) {
+    final v = _lookup(lang, 'pull_quote', '');
+    if (v.isNotEmpty) return v;
+    if (lang == AppLang.en && enSummary.isNotEmpty) return enSummary;
+    return pullQuote;
+  }
+
+  List<String> tParagraphs(AppLang lang) {
+    if (lang == AppLang.ko) return paragraphs;
+    final fromStory = TranslationStore.stringList(lang, 'stories', id, 'paragraphs', const []);
+    if (fromStory.isNotEmpty) return fromStory;
+    final fromItem = TranslationStore.stringList(lang, 'items', id, 'paragraphs', const []);
+    if (fromItem.isNotEmpty) return fromItem;
+    if (lang == AppLang.en && enSummary.isNotEmpty) return [enSummary];
+    return paragraphs;
+  }
+
+  String tPracticalHeader(AppLang lang) {
+    final v = _lookup(lang, 'practical_header', '');
+    if (v.isNotEmpty) return v;
+    if (lang == AppLang.ko) return practicalHeader;
+    return pickLangText(
+      lang,
+      ko: practicalHeader,
+      en: 'Essential Visitor Info · Hours · Access · Contact',
+      ja: '訪問前の確認事項・営業時間・アクセス・お問い合わせ',
+      zh: '行前必看資訊・開放時間・交通・聯絡方式',
+    );
+  }
+
+  List<PracticalInfoRow> tPracticalInfo(AppLang lang) {
+    if (lang == AppLang.ko) return practicalInfo;
+    final rows = TranslationStore.practicalRows(lang, 'stories', id);
+    final chosen = rows.isNotEmpty ? rows : TranslationStore.practicalRows(lang, 'items', id);
+    if (chosen.isNotEmpty) {
+      return chosen
+          .map((r) => PracticalInfoRow(label: r['label'] ?? '', value: r['value'] ?? ''))
+          .toList();
+    }
+    return practicalInfo;
+  }
+
+  String tPdfLabel(AppLang lang, int index, String fallback) {
+    if (lang == AppLang.ko) return fallback;
+    final list = TranslationStore.stringList(lang, 'stories', id, 'pdf_labels', const []);
+    if (index >= 0 && index < list.length && list[index].isNotEmpty) {
+      return list[index];
+    }
+    return fallback;
+  }
+
+  String tRegionLabel(AppLang lang) {
+    if (lang == AppLang.ko) return '$province $city'.trim();
+    final prov = trProvince(province, lang);
+    final c = tCity(lang);
+    return c.isNotEmpty ? '$prov · $c' : prov;
+  }
+
+  String tCity(AppLang lang) {
+    if (lang == AppLang.ko) return city;
+    final reg = TranslationStore.field(lang, 'items', id, 'region_label', '');
+    return reg;
+  }
 
   DiscoveryItem toDiscoveryItem() {
     return DiscoveryItem(
@@ -343,6 +459,95 @@ class DiscoveryItem {
   String get googleTransitUrl =>
       'https://www.google.com/maps/dir/?api=1&destination=${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}&travelmode=transit';
 
+  String _tSection() =>
+      category == DiscoveryCategory.stay
+          ? 'stays'
+          : (raw['is_story'] == true ? 'stories' : 'items');
+
+  String _fromRawOrStore(AppLang lang, String key, String fallback, {String? storeKey}) {
+    if (lang == AppLang.ko) return fallback;
+    final i18n = raw['i18n'];
+    if (i18n is Map && i18n[lang.code] is Map) {
+      final v = (i18n[lang.code][key] ?? '').toString().trim();
+      if (v.isNotEmpty) return v;
+    }
+    return TranslationStore.field(lang, _tSection(), id, storeKey ?? key, fallback);
+  }
+
+  String tTitle(AppLang lang) => _fromRawOrStore(lang, 'title', title);
+
+  String tRegionLabel(AppLang lang) {
+    if (lang == AppLang.ko) return regionLabel;
+    final sec = _tSection();
+    final v = TranslationStore.field(
+      lang,
+      sec,
+      id,
+      sec == 'stays' ? 'region' : 'region_label',
+      '',
+    );
+    if (v.isNotEmpty) return v;
+    return trProvince(province, lang);
+  }
+
+  String tAddress(AppLang lang) {
+    if (lang == AppLang.ko) return address;
+    final sec = _tSection();
+    final storeKey = sec == 'stories' ? 'address' : (sec == 'stays' ? 'region' : 'addr');
+    return _fromRawOrStore(lang, 'addr', address, storeKey: storeKey);
+  }
+
+  String tSubtitle(AppLang lang) {
+    if (lang == AppLang.ko) return subtitle;
+    final i18n = raw['i18n'];
+    if (i18n is Map && i18n[lang.code] is Map) {
+      final ov = (i18n[lang.code]['overview'] ?? i18n[lang.code]['summary'] ?? '').toString().trim();
+      if (ov.isNotEmpty) return ov;
+    }
+    final sec = _tSection();
+    if (sec == 'stays') {
+      return TranslationStore.field(lang, 'stays', id, 'summary', subtitle);
+    }
+    final ov = TranslationStore.field(lang, sec, id, 'overview', '');
+    if (ov.isNotEmpty) return ov;
+    final pq = TranslationStore.field(lang, sec, id, 'pull_quote', '');
+    if (pq.isNotEmpty) return pq;
+    return subtitle;
+  }
+
+  String tPullQuote(AppLang lang) =>
+      TranslationStore.field(lang, _tSection(), id, 'pull_quote', pullQuote);
+
+  List<String> tParagraphs(AppLang lang) =>
+      TranslationStore.stringList(lang, _tSection(), id, 'paragraphs', paragraphs);
+
+  String tPracticalHeader(AppLang lang) {
+    if (lang == AppLang.ko) return practicalHeader;
+    final v = TranslationStore.field(lang, _tSection(), id, 'practical_header', '');
+    if (v.isNotEmpty) return v;
+    return pickLangText(
+      lang,
+      ko: practicalHeader,
+      en: 'Essential Info · Hours · Access · Contact',
+      ja: '訪問前の確認事項・営業時間・アクセス',
+      zh: '行前必看資訊・營業時間・交通方式',
+    );
+  }
+
+  List<PracticalInfoRow> tPracticalInfo(AppLang lang) {
+    if (lang == AppLang.ko) return practicalInfo;
+    final rows = TranslationStore.practicalRows(lang, _tSection(), id);
+    if (rows.isNotEmpty) {
+      return rows
+          .map((r) => PracticalInfoRow(label: r['label'] ?? '', value: r['value'] ?? ''))
+          .toList();
+    }
+    return practicalInfo;
+  }
+
+  String tCouponTitle(AppLang lang) =>
+      TranslationStore.field(lang, _tSection(), id, 'coupon_title', couponTitle);
+
   /// 포털 동적 선도(Freshness) 배지: 마감임박 축제 / 진행중 축제 / 실시간 인기 업장 자동 산출
   String? dynamicFreshnessBadge(AppLang lang, {DateTime? now}) {
     final todayDate = now ?? DateTime.now();
@@ -353,21 +558,45 @@ class DiscoveryItem {
       if (ed != null) {
         final daysLeft = ed.difference(today).inDays;
         if (daysLeft >= 0 && daysLeft <= 5) {
-          return lang == AppLang.ko ? '⏰ 마감 D-$daysLeft' : '⏰ Ends in ${daysLeft}d';
+          return pickLangText(
+            lang,
+            ko: '⏰ 마감 D-$daysLeft',
+            en: '⏰ Ends in ${daysLeft}d',
+            ja: '⏰ 終了まで$daysLeft日',
+            zh: '⏰ 倒數 $daysLeft 天結束',
+          );
         }
         if (sd != null && !today.isBefore(sd) && !today.isAfter(ed)) {
-          return lang == AppLang.ko ? '🎊 지금 진행중' : '🎊 Live Now';
+          return pickLangText(
+            lang,
+            ko: '🎊 지금 진행중',
+            en: '🎊 Live Now',
+            ja: '🎊 開催中',
+            zh: '🎊 現正舉辦中',
+          );
         }
       }
       if (sd != null) {
         final daysUntil = sd.difference(today).inDays;
         if (daysUntil > 0 && daysUntil <= 14) {
-          return lang == AppLang.ko ? '📅 개막 D-$daysUntil' : '📅 In ${daysUntil}d';
+          return pickLangText(
+            lang,
+            ko: '📅 개막 D-$daysUntil',
+            en: '📅 Opens in ${daysUntil}d',
+            ja: '📅 開幕まで$daysUntil日',
+            zh: '📅 距開幕 $daysUntil 天',
+          );
         }
       }
     }
     if (outboundClicks >= 5 || reviewCount >= 2) {
-      return lang == AppLang.ko ? '🔥 실시간 인기' : '🔥 Trending';
+      return pickLangText(
+        lang,
+        ko: '🔥 실시간 인기',
+        en: '🔥 Trending',
+        ja: '🔥 人気上昇中',
+        zh: '🔥 即時熱門',
+      );
     }
     return null;
   }
@@ -382,19 +611,23 @@ class DiscoveryItem {
   };
 
   String categoryBadgeText(AppLang lang) => switch (category) {
-    DiscoveryCategory.event => lang == AppLang.ko ? '축제·행사' : 'Event',
-    DiscoveryCategory.attraction => lang == AppLang.ko ? '볼거리' : 'Sight',
-    DiscoveryCategory.food => lang == AppLang.ko ? '먹거리' : 'Food',
-    DiscoveryCategory.stay => lang == AppLang.ko ? '안심숙소' : 'Stay',
-    DiscoveryCategory.ebook => lang == AppLang.ko ? '공식 관광지도' : 'Guide PDF',
-    DiscoveryCategory.all => '전체',
+    DiscoveryCategory.event => pickLangText(lang, ko: '축제·행사', en: 'Event', ja: '祭り・イベント', zh: '慶典活動'),
+    DiscoveryCategory.attraction => pickLangText(lang, ko: '볼거리', en: 'Sight', ja: '観光名所', zh: '必訪景點'),
+    DiscoveryCategory.food => pickLangText(lang, ko: '먹거리', en: 'Food', ja: 'グルメ', zh: '在地美食'),
+    DiscoveryCategory.stay => pickLangText(lang, ko: '안심숙소', en: 'Stay', ja: '公認宿', zh: '合法住宿'),
+    DiscoveryCategory.ebook => pickLangText(lang, ko: '공식 관광지도', en: 'Guide PDF', ja: '公式ガイド', zh: '官方指南'),
+    DiscoveryCategory.all => pickLangText(lang, ko: '전체', en: 'All', ja: 'すべて', zh: '全部'),
   };
 
-  String pinShortLabel() {
-    final shortTitle = title.length > 8 ? '${title.substring(0, 8)}…' : title;
+  String pinShortLabel([AppLang lang = AppLang.ko]) {
+    final name = tTitle(lang);
+    final shortTitle = name.length > 8 ? '${name.substring(0, 8)}…' : name;
     if (category == DiscoveryCategory.stay && priceKrw != null && priceKrw! > 0) {
       final man = (priceKrw! / 10000).round();
-      return '$categoryEmoji ${man > 0 ? "₩$man만" : shortTitle}';
+      if (lang == AppLang.ko && man > 0) {
+        return '$categoryEmoji ₩$man만';
+      }
+      return '$categoryEmoji $shortTitle';
     }
     if (isSponsored && couponTitle.isNotEmpty) {
       return '🎁 $shortTitle';
@@ -1320,6 +1553,50 @@ const List<DailyStoryItem> kFallbackDailyMunicipalStories = [
     ],
     enSummary: 'A Natural Monument camellia forest of 1,500 native trees surrounding historic Baengnyeonsa Temple in Gangjin.',
   ),
+  DailyStoryItem(
+    id: 'story_seoul_visitseoul_guide',
+    province: '서울',
+    city: '종로·중구·성수',
+    seasonBadge: '🏙️ 웹 버전 공식 투어가이드',
+    sourceBook: '서울관광재단 비짓서울 《2026 서울관광안내서》 웹 에디션',
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    title: '서울 공식 투어가이드 — 고궁 산책부터 한강·성수 로컬 코스까지',
+    subtitle: '서울특별시 중구·종로구 일대 (12MB PDF 핵심 요약 웹 버전)',
+    address: '서울특별시 종로구 사직로 161 (경복궁·북촌·남산·한강 권역)',
+    lat: 37.5796,
+    lng: 126.9770,
+    phone: '02-120',
+    pullQuote: '12MB 대용량 PDF를 내려받지 않아도, 서울 5대 권역 핵심 명소와 교통·맛집 동선을 웹 매거진으로 바로 읽어보세요',
+    paragraphs: [
+      '서울관광재단(Visit Seoul)이 발간한 《2026 서울관광안내서》는 도심 고궁(경복궁·창덕궁·덕수궁)과 북촌 한옥마을의 천년 역사부터, 남산 서울타워·청계천 야경, 성수동·연남동 로컬 감성 골목, 한강공원 피크닉까지 서울의 매력을 권역별로 정리한 공식 종합 가이드북입니다.',
+      '직스테이 로컬은 12MB PDF 전체를 내려받기 전에도 모바일·PC에서 1초 만에 핵심 코스를 훑어보고, 바로 대중교통 길찾기와 주변 로컬 맛집·합법 인증 도시민박(한옥·외국인관광도시민박)까지 이어볼 수 있도록 가벼운 웹 매거진 버전으로 재구성했습니다.',
+    ],
+    images: [
+      'https://tong.visitkorea.or.kr/cms/resource/43/4056543_image2_1.jpg',
+      'https://tong.visitkorea.or.kr/cms/resource/50/3509850_image2_1.jpg',
+      'https://tong.visitkorea.or.kr/cms/resource/83/3077783_image2_1.JPG',
+    ],
+    practicalHeader: '《2026 서울관광안내서》 핵심 권역 · 대중교통 패스 · 다국어 안내',
+    practicalInfo: [
+      PracticalInfoRow(label: '핵심 5대 권역', value: '도심 고궁·북촌 / 홍대·연남 / 강남·잠실 / 성수·건대 / 여의도·한강'),
+      PracticalInfoRow(label: '추천 교통패스', value: '기후동행카드(관광권) · 티머니 · 공항철도 AREX'),
+      PracticalInfoRow(label: '종합 안내전화', value: '다산콜센터 02-120 / 관광통역안내 1330 (한·영·일·중)'),
+      PracticalInfoRow(label: '원본 책자', value: '비짓서울 공식 2026 가이드북 PDF (12MB) 무료 제공'),
+    ],
+    pdfLinks: [
+      MunicipalPdfLink(
+        label: '📥 비짓서울 공식 가이드북 원본 PDF (12MB)',
+        labelEn: '📥 VisitSeoul Official 2026 Guidebook PDF (12MB)',
+        url: 'https://korean.visitseoul.net/comm/getFile?srvcId=GUIDEBOOK&parentSn=1154&fileTy=ATTACH&fileNo=8',
+      ),
+      MunicipalPdfLink(
+        label: '🌐 비짓서울 가이드북 & 지도 모음',
+        labelEn: '🌐 VisitSeoul Maps & Guides Portal',
+        url: 'https://korean.visitseoul.net/map-guide-book',
+      ),
+    ],
+    enSummary: 'Web edition of Visit Seoul’s Official 2026 Guidebook—explore royal palaces, Bukchon Hanok Village, Seongsu, and Hangang River routes instantly without downloading the 12MB PDF.',
+  ),
 ];
 
 /// 계절(월)·선택 지역·오늘 날짜에 맞춰 '하루 단 한 편' 주인공 로컬 스토리를 선정한다.
@@ -1332,12 +1609,17 @@ DailyStoryItem pickTodayMunicipalStory({
   final today = now ?? DateTime.now();
   final source = stories.isNotEmpty ? stories : kFallbackDailyMunicipalStories;
 
-  // 1. 특정 시·도를 선택한 경우 해당 시·도 스토리 우선
+  // 1. 특정 시·도를 선택한 경우 해당 시·도 공식 가이드북 웹 버전 우선
   if (selectedProvince != '전체') {
-    final inProv = source.where((s) => s.province == selectedProvince).toList();
-    if (inProv.isNotEmpty) {
-      final seasonalProv = inProv.where((s) => s.months.isEmpty || s.months.contains(today.month)).toList();
-      final pool = seasonalProv.isNotEmpty ? seasonalProv : inProv;
+    final mergedProv = [
+      ...source.where((s) => s.province == selectedProvince),
+      ...kFallbackDailyMunicipalStories.where(
+        (fb) => fb.province == selectedProvince && !source.any((s) => s.id == fb.id),
+      ),
+    ];
+    if (mergedProv.isNotEmpty) {
+      final seasonalProv = mergedProv.where((s) => s.months.isEmpty || s.months.contains(today.month)).toList();
+      final pool = seasonalProv.isNotEmpty ? seasonalProv : mergedProv;
       final idx = today.difference(DateTime(2026, 11, 15)).inDays.abs() % pool.length;
       return pool[idx];
     }

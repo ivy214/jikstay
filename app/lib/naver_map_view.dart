@@ -386,7 +386,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    '${_selectedPinItem!.categoryEmoji} ${_selectedPinItem!.regionLabel} · ${_selectedPinItem!.categoryBadgeText(lang)}',
+                                    '${_selectedPinItem!.categoryEmoji} ${_selectedPinItem!.tRegionLabel(lang)} · ${_selectedPinItem!.categoryBadgeText(lang)}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -397,7 +397,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    _selectedPinItem!.title,
+                                    _selectedPinItem!.tTitle(lang),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -419,7 +419,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                         ),
                                         onPressed: () => widget.onOpenDetailPage(_selectedPinItem!),
                                         child: Text(
-                                          lang == AppLang.ko ? '📖 상세 보기' : '📖 Details',
+                                          trUi('view_detail_btn', lang),
                                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                                         ),
                                       ),
@@ -556,7 +556,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${it.categoryEmoji} ${it.province} · ${it.categoryBadgeText(lang)}',
+                                      '${it.categoryEmoji} ${trProvince(it.province, lang)} · ${it.categoryBadgeText(lang)}',
                                       style: TextStyle(
                                         fontSize: 10.5,
                                         fontWeight: FontWeight.w800,
@@ -565,7 +565,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      it.title,
+                                      it.tTitle(lang),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -777,7 +777,7 @@ class _MapPinPill extends StatelessWidget {
           ],
         ),
         child: Text(
-          item.pinShortLabel(),
+          item.pinShortLabel(appLangNotifier.value),
           maxLines: 1,
           style: TextStyle(
             fontSize: selected ? 12 : 11,

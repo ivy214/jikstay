@@ -8,6 +8,7 @@ import 'package:jikstay/discovery_models.dart';
 import 'package:jikstay/i18n.dart';
 import 'package:jikstay/main.dart';
 import 'package:jikstay/spot_detail_sheet.dart';
+import 'package:jikstay/translation_store.dart';
 import 'package:jikstay/travel_hub.dart';
 
 void main() {
@@ -594,6 +595,80 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
       expect(find.byType(SpotDetailSheet), findsOneWidget);
+    });
+
+    testWidgets('다국어(EN/JA) 전환 시 스토리 배너·피드 카드·상세 페이지 번역 반영 검증', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() {
+        tester.binding.setSurfaceSize(null);
+        appLangNotifier.value = AppLang.ko;
+        TranslationStore.clearForTest();
+      });
+
+      final storyId = kFallbackDailyMunicipalStories.first.id;
+      final firstFeedId = kBuiltInSeedDiscoveryItems.first.id;
+      TranslationStore.seedForTest(AppLang.en, {
+        'stories': {
+          storyId: {
+            'title': 'Translated English Story Title',
+            'season_badge': 'Autumn Forest Trail',
+            'source_book': 'Jangsu Official Guide p.9',
+            'subtitle': 'Jangsu-gun, Jeonbuk',
+            'address': '10-18 Mulppuraengi-gil, Jangsu-gun',
+            'pull_quote': 'Translated English Pull Quote',
+            'paragraphs': ['Translated English story paragraph body.'],
+          },
+        },
+        'items': {
+          firstFeedId: {
+            'title': 'Translated First Feed Spot',
+            'region_label': 'Jeonbuk',
+            'addr': 'Muju-gun, Jeonbuk',
+            'overview': 'Seasonal trekking festival in Jeonbuk',
+          },
+        },
+      });
+      TranslationStore.seedForTest(AppLang.ja, {
+        'stories': {
+          storyId: {
+            'title': '日本語ストーリータイトル',
+            'season_badge': '秋の森トレイル',
+            'source_book': '長水郡公式ガイド p.9',
+            'subtitle': '全北・長水郡',
+            'address': '全北特別自治道長水郡',
+            'pull_quote': '日本語の抜粋フレーズ',
+            'paragraphs': ['日本語の本文パラグラフ。'],
+          },
+        },
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomePage(
+            initialDemoMode: true,
+            seedItemsOverride: kBuiltInSeedDiscoveryItems,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 영어로 전환
+      selectAppLang(AppLang.en);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Translated English Story Title'), findsWidgets);
+      expect(find.textContaining('Translated First Feed Spot'), findsWidgets);
+      expect(find.text('📖 Stories & Feed'), findsWidgets);
+
+      // 일본어로 전환
+      selectAppLang(AppLang.ja);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('日本語ストーリータイトル'), findsWidgets);
+      expect(find.text('📖 ストーリー・一覧'), findsWidgets);
+
+      // 스토리 상세 페이지에서도 일본어 본문 확인
+      await tester.tap(find.byKey(const Key('open_daily_story_btn')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('日本語の本文パラグラフ'), findsOneWidget);
     });
   });
 }

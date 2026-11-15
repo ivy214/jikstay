@@ -15,6 +15,29 @@ enum AppLang {
 
 final ValueNotifier<AppLang> appLangNotifier = ValueNotifier<AppLang>(AppLang.ko);
 
+/// 언어 변경 시 온디맨드 번역 번들 로드 등을 연결하기 위한 콜백.
+void Function(AppLang lang)? onAppLangSelected;
+
+void selectAppLang(AppLang next) {
+  appLangNotifier.value = next;
+  onAppLangSelected?.call(next);
+}
+
+String pickLangText(
+  AppLang lang, {
+  required String ko,
+  required String en,
+  String? ja,
+  String? zh,
+}) {
+  return switch (lang) {
+    AppLang.ko => ko,
+    AppLang.en => en,
+    AppLang.ja => ja ?? en,
+    AppLang.zh => zh ?? en,
+  };
+}
+
 AppLang parseAppLang(String? raw) {
   final s = (raw ?? '').trim().toLowerCase();
   if (s.startsWith('en')) return AppLang.en;
@@ -312,6 +335,90 @@ String trUi(String key, AppLang lang) {
       AppLang.ja: 'ニックネーム（1〜24文字）と口コミ本文（4〜600文字）をご確認ください。',
       AppLang.zh: '請確認暱稱（1-24字）與評價內容（4-600字）。',
     },
+    'more_stories_title': {
+      AppLang.ko: '📚 함께 읽어볼 지자체 가이드북 스토리',
+      AppLang.en: '📚 More Municipal Guidebook Stories',
+      AppLang.ja: '📚 あわせて読みたい自治体ガイドブック・ストーリー',
+      AppLang.zh: '📚 更多地方政府官方旅遊指南故事',
+    },
+    'today_local_story': {
+      AppLang.ko: '📖 오늘의 로컬 스토리',
+      AppLang.en: '📖 Today’s Local Story',
+      AppLang.ja: '📖 本日のローカルストーリー',
+      AppLang.zh: '📖 今日在地故事',
+    },
+    'read_story_btn': {
+      AppLang.ko: '스토리 상세 보기',
+      AppLang.en: 'Read Story',
+      AppLang.ja: 'ストーリーを読む',
+      AppLang.zh: '閱讀完整故事',
+    },
+    'connected_nearby_hint': {
+      AppLang.ko: '주변 맛집·명소·숙소 연결 보기',
+      AppLang.en: 'Connected nearby places',
+      AppLang.ja: '周辺のグルメ・名所・宿を見る',
+      AppLang.zh: '查看周邊美食・景點・住宿',
+    },
+    'all_korea_curated': {
+      AppLang.ko: '전국 큐레이션',
+      AppLang.en: 'All Korea',
+      AppLang.ja: '韓国全域',
+      AppLang.zh: '韓國全區',
+    },
+    'back_btn': {
+      AppLang.ko: '돌아가기',
+      AppLang.en: 'Back',
+      AppLang.ja: '戻る',
+      AppLang.zh: '返回',
+    },
+    'share_btn': {
+      AppLang.ko: '공유',
+      AppLang.en: 'Share',
+      AppLang.ja: '共有',
+      AppLang.zh: '分享',
+    },
+    'link_copied': {
+      AppLang.ko: '링크가 복사되었습니다!',
+      AppLang.en: 'Link copied to clipboard!',
+      AppLang.ja: 'リンクをコピーしました！',
+      AppLang.zh: '已複製連結！',
+    },
+    'naver_map_reviews': {
+      AppLang.ko: '네이버 정보·지도',
+      AppLang.en: 'Map & Reviews',
+      AppLang.ja: '地図・口コミ',
+      AppLang.zh: '地圖與評價',
+    },
+    'open_naver_map_btn': {
+      AppLang.ko: '🟢 네이버 지도로 크게 열기',
+      AppLang.en: '🟢 Open in Naver Map',
+      AppLang.ja: '🟢 NAVER地図で大きく開く',
+      AppLang.zh: '🟢 在 NAVER 地圖中開啟',
+    },
+    'naver_map_food_btn': {
+      AppLang.ko: '🍲 네이버지도 맛집 ↗',
+      AppLang.en: '🍲 Naver Food ↗',
+      AppLang.ja: '🍲 NAVER グルメ ↗',
+      AppLang.zh: '🍲 NAVER 美食 ↗',
+    },
+    'naver_map_sight_btn': {
+      AppLang.ko: '🏞️ 네이버지도 명소 ↗',
+      AppLang.en: '🏞️ Naver Sights ↗',
+      AppLang.ja: '🏞️ NAVER 名所 ↗',
+      AppLang.zh: '🏞️ NAVER 景點 ↗',
+    },
+    'view_detail_btn': {
+      AppLang.ko: '📖 상세 보기',
+      AppLang.en: '📖 View Details',
+      AppLang.ja: '📖 詳細を見る',
+      AppLang.zh: '📖 查看詳情',
+    },
+    'naver_directions_btn': {
+      AppLang.ko: '🟢 네이버 지도·길찾기 ↗',
+      AppLang.en: '🟢 Naver Map & Directions ↗',
+      AppLang.ja: '🟢 NAVER地図・ルート案内 ↗',
+      AppLang.zh: '🟢 NAVER 地圖與導航 ↗',
+    },
   };
   return table[key]?[lang] ?? table[key]?[AppLang.ko] ?? key;
 }
@@ -370,7 +477,7 @@ class LangSelectorButton extends StatelessWidget {
         return PopupMenuButton<AppLang>(
           tooltip: 'Language / 언어 선택',
           initialValue: lang,
-          onSelected: (next) => appLangNotifier.value = next,
+          onSelected: selectAppLang,
           itemBuilder: (_) => AppLang.values
               .map((l) => PopupMenuItem<AppLang>(
                     value: l,

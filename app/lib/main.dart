@@ -21,6 +21,7 @@ import 'local_calendar_view.dart';
 import 'naver_map_view.dart';
 import 'spot_detail_sheet.dart';
 import 'story_detail_page.dart';
+import 'translation_store.dart';
 import 'travel_hub.dart';
 import 'web_utils.dart';
 
@@ -265,6 +266,10 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    onAppLangSelected = (next) => TranslationStore.ensureLoaded(next);
+    if (appLangNotifier.value != AppLang.ko) {
+      TranslationStore.ensureLoaded(appLangNotifier.value);
+    }
     if (widget.seedItemsOverride != null) {
       _allItems = widget.seedItemsOverride!;
       _offlineSeedMode = true;
@@ -635,9 +640,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppLang>(
-      valueListenable: appLangNotifier,
-      builder: (context, lang, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([appLangNotifier, translationRevisionNotifier]),
+      builder: (context, _) {
+        final lang = appLangNotifier.value;
         final screenW = MediaQuery.sizeOf(context).width;
         final feedItems = _filteredItems();
 
@@ -748,9 +754,21 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       child: Text(
-                        lang == AppLang.ko
-                            ? (_showBenefitsHub ? '📖 로컬 스토리로' : '🎁 반값여행·E-book관')
-                            : (_showBenefitsHub ? '📖 Local Stories' : '🎁 50% Pass & PDFs'),
+                        _showBenefitsHub
+                            ? pickLangText(
+                                lang,
+                                ko: '📖 로컬 스토리로',
+                                en: '📖 Local Stories',
+                                ja: '📖 ローカルストーリーへ',
+                                zh: '📖 回到在地故事',
+                              )
+                            : pickLangText(
+                                lang,
+                                ko: '🎁 반값여행·E-book관',
+                                en: '🎁 50% Pass & PDFs',
+                                ja: '🎁 半額支援・PDFガイド',
+                                zh: '🎁 半價補助・官方指南',
+                              ),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -1137,7 +1155,7 @@ class _LiveLocalFeedPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      lang == AppLang.ko ? '📚 함께 읽어볼 지자체 가이드북 스토리' : '📚 More Municipal Guidebook Stories',
+                      trUi('more_stories_title', lang),
                       style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: Color(0xFF334155)),
                     ),
                     const SizedBox(height: 8),
@@ -1162,21 +1180,21 @@ class _LiveLocalFeedPanel extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${st.province} ${st.city} · ${st.seasonBadge}',
+                                      '${st.tRegionLabel(lang)} · ${st.tSeasonBadge(lang)}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      st.title,
+                                      st.tTitle(lang),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      st.sourceBook,
+                                      st.tSourceBook(lang),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
@@ -1204,11 +1222,17 @@ class _LiveLocalFeedPanel extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${trUi('live_feed_title', lang)} (${selectedProvince == '전체' ? (lang == AppLang.ko ? '전국 큐레이션' : 'All Korea') : trProvince(selectedProvince, lang)})',
+                    '${trUi('live_feed_title', lang)} (${selectedProvince == '전체' ? trUi('all_korea_curated', lang) : trProvince(selectedProvince, lang)})',
                     style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
                   ),
                   Text(
-                    lang == AppLang.ko ? '$totalAreaCount곳 연결됨' : '$totalAreaCount places',
+                    pickLangText(
+                      lang,
+                      ko: '$totalAreaCount곳 연결됨',
+                      en: '$totalAreaCount places',
+                      ja: '$totalAreaCount件掲載',
+                      zh: '共 $totalAreaCount 處',
+                    ),
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
                   ),
                 ],
@@ -1225,9 +1249,13 @@ class _LiveLocalFeedPanel extends StatelessWidget {
                 padding: const EdgeInsets.all(40),
                 child: Center(
                   child: Text(
-                    lang == AppLang.ko
-                        ? '선택한 조건에 일치하는 장소가 없습니다.\n검색어를 지우거나 다른 지역·테마를 선택해 보세요.'
-                        : 'No matching places found. Clear your search or try another province.',
+                    pickLangText(
+                      lang,
+                      ko: '선택한 조건에 일치하는 장소가 없습니다.\n검색어를 지우거나 다른 지역·테마를 선택해 보세요.',
+                      en: 'No matching places found. Clear your search or try another province.',
+                      ja: '条件に一致するスポットが見つかりませんでした。検索条件を変更してみてください。',
+                      zh: '找不到符合條件的地點，請清除搜尋關鍵字或切換其他地區與主題。',
+                    ),
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 13.5, color: Color(0xFF64748B), height: 1.5),
                   ),
@@ -1306,9 +1334,13 @@ class _LiveLocalFeedPanel extends StatelessWidget {
                     onPressed: onLoadMore,
                     icon: const Icon(Icons.expand_more_rounded, size: 18),
                     label: Text(
-                      lang == AppLang.ko
-                          ? '더 보기 ($shownCount / ${feedItems.length})'
-                          : 'Load More ($shownCount / ${feedItems.length})',
+                      pickLangText(
+                        lang,
+                        ko: '더 보기 ($shownCount / ${feedItems.length})',
+                        en: 'Load More ($shownCount / ${feedItems.length})',
+                        ja: 'もっと見る ($shownCount / ${feedItems.length})',
+                        zh: '載入更多 ($shownCount / ${feedItems.length})',
+                      ),
                     ),
                   ),
                 ),
@@ -1372,7 +1404,7 @@ class _DailyStoryHeroCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      lang == AppLang.ko ? '📖 $dateTag' : '📖 Today’s Local Story',
+                      lang == AppLang.ko ? '📖 $dateTag' : trUi('today_local_story', lang),
                       style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white),
                     ),
                   ),
@@ -1383,7 +1415,7 @@ class _DailyStoryHeroCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      story.seasonBadge,
+                      story.tSeasonBadge(lang),
                       style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
                     ),
                   ),
@@ -1395,7 +1427,7 @@ class _DailyStoryHeroCard extends StatelessWidget {
               left: 16,
               right: 16,
               child: Text(
-                '${story.province} ${story.city} · ${story.sourceBook}',
+                '${story.tRegionLabel(lang)} · ${story.tSourceBook(lang)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -1412,11 +1444,10 @@ class _DailyStoryHeroCard extends StatelessWidget {
   }
 
   Widget _buildTextPanel({required bool isWide, required String dateTag}) {
-    final summaryText = lang != AppLang.ko && story.enSummary.isNotEmpty
-        ? story.enSummary
-        : (story.pullQuote.isNotEmpty
-            ? story.pullQuote
-            : (story.paragraphs.isNotEmpty ? story.paragraphs.first : story.subtitle));
+    final pq = story.tPullQuote(lang);
+    final ps = story.tParagraphs(lang);
+    final sub = story.tSubtitle(lang);
+    final summaryText = pq.isNotEmpty ? pq : (ps.isNotEmpty ? ps.first : sub);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(isWide ? 24 : 16, isWide ? 22 : 14, isWide ? 24 : 16, isWide ? 22 : 16),
@@ -1426,13 +1457,15 @@ class _DailyStoryHeroCard extends StatelessWidget {
         children: [
           if (story.heroImage.isEmpty || isWide) ...[
             Text(
-              isWide ? '${story.province} ${story.city} · ${story.sourceBook}' : '📖 $dateTag · ${story.seasonBadge}',
+              isWide
+                  ? '${story.tRegionLabel(lang)} · ${story.tSourceBook(lang)}'
+                  : '${lang == AppLang.ko ? '📖 $dateTag' : trUi('today_local_story', lang)} · ${story.tSeasonBadge(lang)}',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
             ),
             const SizedBox(height: 8),
           ],
           Text(
-            story.title,
+            story.tTitle(lang),
             style: TextStyle(
               fontSize: isWide ? 23 : 19,
               fontWeight: FontWeight.w900,
@@ -1457,7 +1490,7 @@ class _DailyStoryHeroCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  lang == AppLang.ko ? '📍 ${story.subtitle}' : '📍 ${story.address}',
+                  lang == AppLang.ko ? '📍 ${story.subtitle}' : '📍 ${story.tAddress(lang)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
@@ -1474,7 +1507,7 @@ class _DailyStoryHeroCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      lang == AppLang.ko ? '스토리 상세 보기' : 'Read Story',
+                      trUi('read_story_btn', lang),
                       style: const TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w800,
@@ -1615,7 +1648,7 @@ class _LiveFeedItemCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          '${item.categoryEmoji} ${item.province} · ${item.categoryBadgeText(lang)}',
+                          '${item.categoryEmoji} ${trProvince(item.province, lang)} · ${item.categoryBadgeText(lang)}',
                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: item.category.color),
                         ),
                       ),
@@ -1638,9 +1671,15 @@ class _LiveFeedItemCard extends StatelessWidget {
                             color: const Color(0xFFFEF3C7),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
-                            '🎁 방문혜택 쿠폰',
-                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+                          child: Text(
+                            pickLangText(
+                              lang,
+                              ko: '🎁 방문혜택 쿠폰',
+                              en: '🎁 Visit Perk',
+                              ja: '🎁 来店特典',
+                              zh: '🎁 造訪優惠',
+                            ),
+                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
                           ),
                         ),
                       if (item.reviewCount > 0)
@@ -1652,7 +1691,7 @@ class _LiveFeedItemCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    item.title,
+                    item.tTitle(lang),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
@@ -1660,8 +1699,8 @@ class _LiveFeedItemCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     item.couponTitle.isNotEmpty
-                        ? item.couponTitle
-                        : (item.subtitle.isNotEmpty ? item.subtitle : item.address),
+                        ? item.tCouponTitle(lang)
+                        : (item.tSubtitle(lang).isNotEmpty ? item.tSubtitle(lang) : item.tAddress(lang)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1676,7 +1715,7 @@ class _LiveFeedItemCard extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          lang == AppLang.ko ? '주변 맛집·명소·숙소 연결 보기' : 'Connected nearby places',
+                          trUi('connected_nearby_hint', lang),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF2563EB)),
@@ -1685,11 +1724,17 @@ class _LiveFeedItemCard extends StatelessWidget {
                       if (item.category == DiscoveryCategory.ebook && item.externalUrl.isNotEmpty)
                         InkWell(
                           onTap: () => onOpenEbookDirect(item.externalUrl),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
                             child: Text(
-                              '즉시 열람 ↗',
-                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
+                              pickLangText(
+                                lang,
+                                ko: '즉시 열람 ↗',
+                                en: 'Open PDF ↗',
+                                ja: '今すぐ開く ↗',
+                                zh: '立即開啟 ↗',
+                              ),
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
                             ),
                           ),
                         ),
