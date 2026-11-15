@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 호스트 영업신고증 업로드 절차 폐지에 따라 클라이언트 파일 업로드 전면 차단.
+    // 숙소 사진은 외부 공식 URL 링크만 사용하며, 기존 listings/ 자산만 읽기 허용.
+    match /listings/{listingId}/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

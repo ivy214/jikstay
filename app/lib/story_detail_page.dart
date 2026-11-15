@@ -1,0 +1,626 @@
+// 지자체 공식 가이드북(PDF)·문화관광 누리집 원문 기반 매거진형 스토리 상세 페이지.
+// 가독성(줄간격 1.88, 본문 폭 760px 제한), 핵심 탐방정보 박스(《장수여행》 p.9 모델),
+// 원본 PDF 직링크, 3사 대중교통 길찾기, 과하지 않은 주변 동선 추천을 하나로 통합한다.
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import 'detail_page.dart' show ListingDetailPage, StorageImage;
+import 'discovery_models.dart';
+import 'i18n.dart';
+import 'spot_detail_sheet.dart';
+import 'web_utils.dart';
+
+class StoryDetailPage extends StatefulWidget {
+  final DailyStoryItem story;
+  final List<DailyStoryItem> allStories;
+  final List<DiscoveryItem> allItems;
+  final AppLang lang;
+  final bool offlineMode;
+  final WidgetBuilder homeBuilder;
+
+  const StoryDetailPage({
+    super.key,
+    required this.story,
+    required this.allStories,
+    required this.allItems,
+    required this.lang,
+    required this.homeBuilder,
+    this.offlineMode = false,
+  });
+
+  @override
+  State<StoryDetailPage> createState() => _StoryDetailPageState();
+}
+
+class _StoryDetailPageState extends State<StoryDetailPage> {
+  late DailyStoryItem _story;
+  int _heroIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _story = widget.story;
+    _onEnterStory(_story);
+  }
+
+  void _onEnterStory(DailyStoryItem st) {
+    syncPortalParams(region: st.province, storyId: st.id);
+    trackPortalEvent('view_story_page', {
+      'story_id': st.id,
+      'province': st.province,
+      'title': st.title,
+    });
+  }
+
+  Future<void> _openUrl(String rawUrl, {String eventTag = 'story_external_open', bool countVisit = false}) async {
+    trackPortalEvent(eventTag, {
+      'story_id': _story.id,
+      'province': _story.province,
+      'url': rawUrl,
+    });
+    if (countVisit) {
+      await recordOutboundVisitClick(_story.toDiscoveryItem(), offlineMode: widget.offlineMode);
+    }
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https' && uri.scheme != 'tel')) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _copyShareLink() async {
+    final shareUrl = 'https://jikstay-lkxu1.web.app/?story=${Uri.encodeComponent(_story.id)}';
+    await Clipboard.setData(ClipboardData(text: shareUrl));
+    trackPortalEvent('share_story_link', {'story_id': _story.id});
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          widget.lang == AppLang.ko
+              ? '스토리 링크가 복사되었습니다. 가족·동행에게 바로 공유해 보세요!'
+              : 'Story link copied to clipboard!',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lang = widget.lang;
+    final anchorItem = _story.toDiscoveryItem();
+    final bundle = buildConnectedBundle(anchorItem, widget.allItems, limitPerType: 2);
+    final images = _story.images;
+    final activeHero = (images.isNotEmpty && _heroIndex < images.length) ? images[_heroIndex] : '';
+    final otherStories = widget.allStories.where((s) => s.id != _story.id).take(4).toList();
+    final screenW = MediaQuery.sizeOf(context).width;
+    final isWide = screenW >= 720;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFBF9),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        shape: const Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+        leading: IconButton(
+          key: const Key('story_back_btn'),
+          tooltip: lang == AppLang.ko ? '돌아가기' : 'Back',
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushReplacement(MaterialPageRoute(builder: widget.homeBuilder));
+            }
+          },
+        ),
+        title: Text(
+          _story.sourceBook,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF334155)),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton.icon(
+              key: const Key('story_share_btn'),
+              onPressed: _copyShareLink,
+              icon: const Icon(Icons.ios_share_rounded, size: 17),
+              label: Text(lang == AppLang.ko ? '공유' : 'Share'),
+            ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(horizontal: isWide ? 28 : 16, vertical: isWide ? 28 : 18),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Container(
+              padding: EdgeInsets.all(isWide ? 34 : 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x0A0F172A), blurRadius: 24, offset: Offset(0, 8)),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. 계절·테마 태그 & 출처 표기
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFA7F3D0)),
+                        ),
+                        child: Text(
+                          _story.seasonBadge,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
+                        ),
+                      ),
+                      Text(
+                        '${_story.province} ${_story.city} · ${_story.sourceBook}',
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 2. 매거진 화보형 포토 그리드 (대표 사진 + 썸네일 갤러리)
+                  if (activeHero.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: SizedBox(
+                        height: isWide ? 350 : 225,
+                        width: double.infinity,
+                        child: StorageImage(url: activeHero, cacheWidth: 1080),
+                      ),
+                    ),
+                    if (images.length > 1) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: isWide ? 84 : 74,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: images.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (_, idx) {
+                            final selected = idx == _heroIndex;
+                            return InkWell(
+                              onTap: () => setState(() => _heroIndex = idx),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                width: isWide ? 116 : 96,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: selected ? const Color(0xFF059669) : const Color(0xFFE2E8F0),
+                                    width: selected ? 2.5 : 1,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: StorageImage(url: images[idx], cacheWidth: 320),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                  ],
+
+                  // 3. 매거진 타이틀 & 지자체 책자 스타일 부제(주소)
+                  Text(
+                    _story.title,
+                    style: TextStyle(
+                      fontSize: isWide ? 28 : 22.5,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF14532D),
+                      height: 1.28,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.only(bottom: 10),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Color(0xFFBBF7D0), width: 1.5)),
+                    ),
+                    child: Text(
+                      _story.subtitle.isNotEmpty ? _story.subtitle : _story.address,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 4. 핵심 설화·감성 한 줄 콜아웃 (Pull-Quote)
+                  if (_story.pullQuote.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF8FAFC),
+                        border: Border(left: BorderSide(color: Color(0xFF10B981), width: 4)),
+                      ),
+                      child: Text(
+                        '“${_story.pullQuote}”',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E293B),
+                          height: 1.65,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                  ],
+
+                  // 해외 방문객용 영문 요약 병기
+                  if (lang != AppLang.ko && _story.enSummary.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      margin: const EdgeInsets.only(bottom: 18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _story.enSummary,
+                        style: const TextStyle(fontSize: 14.5, color: Color(0xFF1E3A8A), height: 1.65),
+                      ),
+                    ),
+                  ],
+
+                  // 5. 지자체 공식 원문 스토리 본문 (가독성 최우선: 16.5px · 줄간격 1.88)
+                  ..._story.paragraphs.map(
+                    (p) => Padding(
+                      padding: const EdgeInsets.only(bottom: 18),
+                      child: Text(
+                        p,
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          color: Color(0xFF1E293B),
+                          height: 1.88,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // 6. 방문 전 꼭 필요한 '핵심 탐방·편의 정보 박스' (《장수여행》 p.9 하단 초록 박스 모델)
+                  if (_story.practicalHeader.isNotEmpty || _story.practicalInfo.isNotEmpty) ...[
+                    Container(
+                      key: const Key('story_practical_box'),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7FEE7).withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF86EFAC), width: 1.3),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_story.practicalHeader.isNotEmpty)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF16A34A),
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(12.5)),
+                              ),
+                              child: Text(
+                                '🌿 ${_story.practicalHeader}',
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: _story.practicalInfo
+                                  .map(
+                                    (row) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: RichText(
+                                        text: TextSpan(
+                                          style: const TextStyle(fontSize: 14, height: 1.55, color: Color(0xFF1E293B)),
+                                          children: [
+                                            TextSpan(
+                                              text: '• ${row.label} : ',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w900,
+                                                color: Color(0xFF15803D),
+                                              ),
+                                            ),
+                                            TextSpan(text: row.value),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                  ],
+
+                  // 7. 정돈된 행동 영역: ① 원본 가이드북 PDF 열람 + ② 1줄 대중교통·내비 길찾기
+                  if (_story.pdfLinks.isNotEmpty) ...[
+                    Text(
+                      lang == AppLang.ko ? '공식 가이드북 & 관광지도 원본' : 'Official Municipal Guidebook & Map PDF',
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _story.pdfLinks
+                          .map(
+                            (pl) => FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF1E3A8A),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                              ),
+                              onPressed: () => _openUrl(pl.url, eventTag: 'open_municipal_pdf'),
+                              icon: const Icon(Icons.menu_book_rounded, size: 17),
+                              label: Text(pl.localizedLabel(lang)),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+
+                  Text(
+                    lang == AppLang.ko ? '바로 떠나기 · 대중교통 및 내비게이션 경로' : 'Directions & Public Transit',
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        key: const Key('story_naver_route_btn'),
+                        onPressed: () => _openUrl(anchorItem.naverRouteUrl, eventTag: 'click_transit_naver', countVisit: true),
+                        icon: const Icon(Icons.map_outlined, size: 17, color: Color(0xFF03C75A)),
+                        label: Text(lang == AppLang.ko ? '🟢 네이버지도 길찾기' : '🟢 Naver Map'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('story_kakao_route_btn'),
+                        onPressed: () => _openUrl(anchorItem.kakaoRouteUrl, eventTag: 'click_transit_kakao', countVisit: true),
+                        icon: const Icon(Icons.directions_bus_filled_rounded, size: 17, color: Color(0xFFD97706)),
+                        label: Text(lang == AppLang.ko ? '🟡 카카오 대중교통·내비' : '🟡 Kakao Transit'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('story_google_route_btn'),
+                        onPressed: () => _openUrl(anchorItem.googleTransitUrl, eventTag: 'click_transit_google', countVisit: true),
+                        icon: const Icon(Icons.train_rounded, size: 17, color: Color(0xFF2563EB)),
+                        label: Text(lang == AppLang.ko ? '🔵 Google 대중교통' : '🔵 Google Transit'),
+                      ),
+                      if (_story.phone.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => _openUrl('tel:${_story.phone.replaceAll(' ', '')}', eventTag: 'click_phone'),
+                          icon: const Icon(Icons.call_outlined, size: 17),
+                          label: Text(_story.phone),
+                        ),
+                    ],
+                  ),
+
+                  // 8. 자연스러운 다음 발걸음 (선택 과부하 없이 핵심 동선 2곳씩만 엄선)
+                  if (bundle.foods.isNotEmpty || bundle.events.isNotEmpty || bundle.stays.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 26),
+                      child: Divider(height: 1),
+                    ),
+                    Text(
+                      lang == AppLang.ko
+                          ? '✨ 이 이야기의 무대로 떠난다면, 함께 들르기 좋은 동선'
+                          : '✨ Suggested Nearby Stops for Your Trip',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      lang == AppLang.ko
+                          ? '복잡한 검색 없이 가까운 로컬 식당과 볼거리, 합법 인증 숙소만 추렸습니다.'
+                          : 'Handpicked nearby dining, sights, and government-licensed stays.',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 14),
+                    ...[...bundle.foods, ...bundle.events, ...bundle.attractions, ...bundle.stays]
+                        .take(5)
+                        .map(
+                          (it) => _StoryNearbyStopTile(
+                            item: it,
+                            anchor: anchorItem,
+                            lang: lang,
+                            onTap: () {
+                              if (it.category == DiscoveryCategory.stay) {
+                                Navigator.of(context).push(MaterialPageRoute(
+                                  builder: (_) => ListingDetailPage(
+                                    listingId: it.id,
+                                    homeBuilder: widget.homeBuilder,
+                                  ),
+                                ));
+                              } else {
+                                showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (_) => SpotDetailSheet(
+                                    item: it,
+                                    allItems: widget.allItems,
+                                    lang: lang,
+                                    offlineMode: widget.offlineMode,
+                                    onSelectConnectedItem: (_) {},
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                  ],
+
+                  // 9. 다른 계절·지역 스토리 이어 읽기
+                  if (otherStories.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Divider(height: 1),
+                    ),
+                    Text(
+                      lang == AppLang.ko ? '📚 다른 지역의 공식 가이드북 스토리' : '📚 More Local Stories Across Korea',
+                      style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 12),
+                    ...otherStories.map(
+                      (st) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            setState(() {
+                              _story = st;
+                              _heroIndex = 0;
+                            });
+                            _onEnterStory(st);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              children: [
+                                if (st.heroImage.isNotEmpty)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: SizedBox(
+                                      width: 84,
+                                      height: 72,
+                                      child: StorageImage(url: st.heroImage, cacheWidth: 220),
+                                    ),
+                                  ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${st.seasonBadge} · ${st.province} ${st.city}',
+                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        st.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right_rounded, color: Color(0xFF64748B)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StoryNearbyStopTile extends StatelessWidget {
+  final DiscoveryItem item;
+  final DiscoveryItem anchor;
+  final AppLang lang;
+  final VoidCallback onTap;
+
+  const _StoryNearbyStopTile({
+    required this.item,
+    required this.anchor,
+    required this.lang,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final distKm = haversineKm(anchor.lat, anchor.lng, item.lat, item.lng);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              Text(item.categoryEmoji, style: const TextStyle(fontSize: 20)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${item.categoryBadgeText(lang)} · 약 ${distKm.toStringAsFixed(1)}km${item.couponTitle.isNotEmpty ? " · 🎁 ${item.couponTitle}" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFF94A3B8)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

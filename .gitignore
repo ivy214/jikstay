@@ -1,0 +1,26 @@
+# 비밀 키 — 절대 커밋 금지
+serviceAccountKey.json
+**/serviceAccountKey*.json
+client_secret.json
+youtube_token.json
+.env
+.env.*
+!.env.example
+
+# 로컬 빌드·캐시·로그 생성물
+backend/.venv/
+backend/output/
+firebase/output/
+firebase/.firebase/
+output/
+smoke_out/
+__pycache__/
+*.pyc
+*.log
+*TEMP_MPY*
+app/build/
+app/.dart_tool/
+app/ephemeral/
+firebase/public/
+firebase/node_modules/
+firebase/functions/node_modules/

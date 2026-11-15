@@ -1,0 +1,31 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default"
+    }
+  ],
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*"],
+    "headers": [
+      {
+        "source": "/@(index.html|flutter_bootstrap.js|flutter_service_worker.js|main.dart.js)",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+      }
+    ],
+    "rewrites": [
+      { "source": "/go", "function": "goRedirect", "region": "asia-northeast3" },
+      { "source": "/sitemap.xml", "function": "serveSitemap", "region": "asia-northeast3" },
+      { "source": "/robots.txt", "function": "serveRobots", "region": "asia-northeast3" },
+      { "source": "**", "function": "serveApp", "region": "asia-northeast3" }
+    ]
+  }
+}

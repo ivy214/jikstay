@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidClickIncrement() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['outbound_clicks'])
+        && request.resource.data.outbound_clicks is int
+        && request.resource.data.outbound_clicks == resource.data.get('outbound_clicks', 0) + 1;
+    }
+
+    // 리뷰 서브컬렉션 생성과 원자적 배치(WriteBatch)로 묶인 평점 합산만 허용한다.
+    function isValidReviewAggregateUpdate(listingId) {
+      let diff = request.resource.data.diff(resource.data).affectedKeys();
+      let rid = request.resource.data.get('last_review_id', '');
+      let validRid = rid is string && rid.size() >= 6 && rid.size() <= 64 && !rid.matches('.*[/].*');
+      let safeRid = validRid ? rid : '_invalid_';
+      let revPath = /databases/$(database)/documents/listings/$(listingId)/reviews/$(safeRid);
+      return validRid
+        && diff.hasOnly(['review_count', 'score_sum', 'last_review_id'])
+        && diff.hasAll(['review_count', 'score_sum', 'last_review_id'])
+        && !exists(revPath)
+        && existsAfter(revPath)
+        && request.resource.data.review_count is int
+        && request.resource.data.review_count == resource.data.get('review_count', 0) + 1
+        && request.resource.data.score_sum is int
+        && request.resource.data.score_sum == resource.data.get('score_sum', 0) + getAfter(revPath).data.score;
+    }
+
+    function isValidSpotReviewAggregateUpdate(spotId) {
+      let diff = request.resource.data.diff(resource.data).affectedKeys();
+      let rid = request.resource.data.get('last_review_id', '');
+      let validRid = rid is string && rid.size() >= 6 && rid.size() <= 64 && !rid.matches('.*[/].*');
+      let safeRid = validRid ? rid : '_invalid_';
+      let revPath = /databases/$(database)/documents/spots/$(spotId)/reviews/$(safeRid);
+      return validRid
+        && diff.hasOnly(['review_count', 'score_sum', 'last_review_id'])
+        && diff.hasAll(['review_count', 'score_sum', 'last_review_id'])
+        && !exists(revPath)
+        && existsAfter(revPath)
+        && request.resource.data.review_count is int
+        && request.resource.data.review_count == resource.data.get('review_count', 0) + 1
+        && request.resource.data.score_sum is int
+        && request.resource.data.score_sum == resource.data.get('score_sum', 0) + getAfter(revPath).data.score;
+    }
+
+    function isValidReviewPayload(targetIdField, expectedTargetId) {
+      return request.resource.data.keys().hasAll([targetIdField, 'nickname', 'score', 'comment', 'lang', 'created_at'])
+        && request.resource.data.keys().hasOnly([targetIdField, 'nickname', 'score', 'comment', 'visit_tag', 'lang', 'created_at'])
+        && request.resource.data[targetIdField] == expectedTargetId
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() >= 1
+        && request.resource.data.nickname.size() <= 24
+        && request.resource.data.score is int
+        && request.resource.data.score >= 1
+        && request.resource.data.score <= 5
+        && request.resource.data.comment is string
+        && request.resource.data.comment.size() >= 4
+        && request.resource.data.comment.size() <= 600
+        && (!('visit_tag' in request.resource.data)
+            || (request.resource.data.visit_tag is string
+                && request.resource.data.visit_tag.size() <= 24))
+        && request.resource.data.lang in ['ko', 'en', 'ja', 'zh']
+        && request.resource.data.created_at == request.time;
+    }
+
+    // 1. 숙소: 공공 인허가 API 기반으로 선별된 active 숙소만 공개.
+    //    호스트 입점 신청·승인 절차 없이 Admin SDK 큐레이션 워커로만 생성·관리하며,
+    //    클라이언트는 클릭수(+1) 또는 원자적 리뷰 평점 합산만 갱신할 수 있다.
+    match /listings/{listingId} {
+      allow read: if resource.data.status == "active";
+
+      allow update: if resource.data.status == "active"
+        && (isValidClickIncrement() || isValidReviewAggregateUpdate(listingId));
+
+      allow create, delete: if false;
+
+      // 2. 숙소 사용자 별점(score 1~5) 및 후기(review):
+      match /reviews/{reviewId} {
+        allow read: if true;
+
+        allow create: if get(/databases/$(database)/documents/listings/$(listingId)).data.status == "active"
+          && getAfter(/databases/$(database)/documents/listings/$(listingId)).data.get('last_review_id', '') == reviewId
+          && isValidReviewPayload('listing_id', listingId);
+
+        allow update, delete: if false;
+      }
+    }
+
+    // 3. 전국 17개 시·도 로컬 스팟 (축제·행사, 볼거리·명소, 로컬 먹거리·카페):
+    //    방문 혜택 쿠폰·길찾기·전화 클릭수(CPC 과금 지표) +1 및 방문자 별점·후기 원자적 집계만 허용.
+    match /spots/{spotId} {
+      allow read: if resource.data.status == "active";
+
+      allow update: if resource.data.status == "active"
+        && (isValidClickIncrement() || isValidSpotReviewAggregateUpdate(spotId));
+
+      allow create, delete: if false;
+
+      match /reviews/{reviewId} {
+        allow read: if true;
+
+        allow create: if get(/databases/$(database)/documents/spots/$(spotId)).data.status == "active"
+          && getAfter(/databases/$(database)/documents/spots/$(spotId)).data.get('last_review_id', '') == reviewId
+          && isValidReviewPayload('spot_id', spotId);
+
+        allow update, delete: if false;
+      }
+    }
+
+    // 호스트 신청서(host_applications) 등 그 외 모든 경로 전면 차단
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

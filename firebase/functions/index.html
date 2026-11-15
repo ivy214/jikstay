@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="전국 17개 시·도 지자체 공식 관광지도 PDF, 실시간 축제·오일장, 로컬 맛집 방문쿠폰과 합법 안심숙소를 연결하는 직스테이 로컬 포털">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="직스테이 로컬 - 지자체 관광지도 PDF · 축제 · 맛집 · 안심숙소 포털">
+  <meta property="og:description" content="전국 17개 시·도 공식 가이드북 PDF, 대중교통 길찾기, 주변 맛집 쿠폰과 합법 숙소를 한눈에 확인하세요.">
+
+  <!--
+    Uncomment the tag below to lay the app out underneath the parts of the
+    screen that the device obstructs, such as a display cutout, the rounded
+    corners of the screen, or a home indicator.
+
+    Without it, the browser keeps the app clear of them, and `SafeArea` and
+    `MediaQuery.paddingOf` report no padding. With it, the app covers the whole
+    screen, and it is up to the app to keep its own content out of the way,
+    which is what `SafeArea` is for.
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="직스테이">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>직스테이 로컬 - 지자체 관광지도 PDF · 축제 · 맛집 · 안심숙소 포털</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { margin: 0; padding: 0; background: #f8f9fa; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    #jikstay-splash {
+      position: fixed; inset: 0; z-index: 9999; background: #f8f9fa;
+      display: flex; flex-direction: column; align-items: center;
+      transition: opacity 0.25s ease-out;
+    }
+    #jikstay-splash.fade-out { opacity: 0; pointer-events: none; }
+    .js-splash-bar {
+      width: 100%; height: 56px; background: #ffffff; border-bottom: 1px solid #e9ecef;
+      display: flex; align-items: center; padding: 0 20px; box-sizing: border-box;
+      font-weight: 700; font-size: 18px; color: #212529; gap: 8px;
+    }
+    .js-splash-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff5a36; display: inline-block; }
+    .js-splash-hero {
+      width: 100%; max-width: 960px; padding: 28px 16px 12px; box-sizing: border-box; text-align: center;
+    }
+    .js-splash-badge {
+      display: inline-block; background: #fff0ec; color: #ff5a36; font-size: 12px; font-weight: 700;
+      padding: 5px 12px; border-radius: 20px; margin-bottom: 10px;
+    }
+    .js-splash-title { font-size: 20px; font-weight: 800; color: #212529; margin: 0 0 6px; }
+    .js-splash-sub { font-size: 13px; color: #6c757d; margin: 0 0 20px; }
+    .js-splash-grid {
+      width: 100%; max-width: 960px; padding: 0 16px; box-sizing: border-box;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;
+    }
+    .js-skel {
+      height: 280px; border-radius: 12px; background: linear-gradient(90deg, #eceef1 25%, #f5f6f8 50%, #eceef1 75%);
+      background-size: 200% 100%; animation: js-shimmer 1.3s infinite;
+    }
+    @keyframes js-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+  <div id="jikstay-splash" aria-hidden="true">
+    <div class="js-splash-bar"><span class="js-splash-dot"></span>직스테이 로컬</div>
+    <div class="js-splash-hero">
+      <div class="js-splash-badge">하루 한 편 · 지자체 공식 가이드북 스토리</div>
+      <p class="js-splash-title">오늘, 떠나고 싶어지는 한국의 숨은 로컬 이야기</p>
+      <p class="js-splash-sub">계절·테마별 지역 스토리와 주변 동선을 불러오는 중입니다...</p>
+    </div>
+    <div class="js-splash-grid">
+      <div class="js-skel"></div>
+      <div class="js-skel"></div>
+      <div class="js-skel"></div>
+    </div>
+  </div>
+  <script>
+    window.addEventListener("flutter-first-frame", function () {
+      var el = document.getElementById("jikstay-splash");
+      if (!el) return;
+      el.classList.add("fade-out");
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 280);
+    });
+    window.jikstaySyncUrl = function (listingId) {
+      try {
+        var url = new URL(window.location.href);
+        if (listingId) { url.searchParams.set("id", listingId); }
+        else { url.searchParams.delete("id"); }
+        window.history.replaceState({}, "", url.toString());
+      } catch (_) {}
+    };
+    window.jikstaySyncPortalParams = function (region, spotId, storyId) {
+      try {
+        var url = new URL(window.location.href);
+        if (region && region !== "전체") { url.searchParams.set("region", region); }
+        else { url.searchParams.delete("region"); }
+        if (spotId) { url.searchParams.set("spot", spotId); }
+        else { url.searchParams.delete("spot"); }
+        if (storyId) { url.searchParams.set("story", storyId); }
+        else { url.searchParams.delete("story"); }
+        window.history.replaceState({}, "", url.toString());
+      } catch (_) {}
+    };
+    window.jikstayTrackEvent = function (eventName, payloadJson) {
+      try {
+        var params = payloadJson ? JSON.parse(payloadJson) : {};
+        if (typeof window.gtag === "function") {
+          window.gtag("event", eventName, params);
+        } else if (Array.isArray(window.dataLayer)) {
+          window.dataLayer.push(Object.assign({ event: eventName }, params));
+        }
+        window.__jikstayEvents = window.__jikstayEvents || [];
+        if (window.__jikstayEvents.length > 50) window.__jikstayEvents.shift();
+        window.__jikstayEvents.push({ event: eventName, params: params, ts: Date.now() });
+      } catch (_) {}
+    };
+    window.jikstayCurrentOrigin = function () {
+      return window.location.origin || "";
+    };
+    window.jikstayFetchText = function (url) {
+      return fetch(url, { cache: "default" })
+        .then(function (r) { return r.ok ? r.text() : ""; })
+        .catch(function () { return ""; });
+    };
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
