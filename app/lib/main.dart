@@ -23,6 +23,7 @@ import 'spot_detail_sheet.dart';
 import 'story_detail_page.dart';
 import 'translation_store.dart';
 import 'travel_hub.dart';
+import 'trip_planner.dart';
 import 'web_utils.dart';
 
 enum HomeViewMode { feed, calendar, map }
@@ -198,6 +199,7 @@ class DirectStayApp extends StatelessWidget {
     final initialRegion = params['region'];
     final initialSpotId = params['spot'];
     final initialStoryId = params['story'];
+    final initialPlanParam = params['plan'];
     final demoMode = params['demo'] == '1' || params['demo'] == 'true';
 
     Widget homeBuilder(BuildContext _) => HomePage(initialDemoMode: demoMode);
@@ -217,6 +219,7 @@ class DirectStayApp extends StatelessWidget {
               initialRegion: initialRegion,
               initialSpotId: initialSpotId,
               initialStoryId: initialStoryId,
+              initialPlanParam: initialPlanParam,
             ),
     );
   }
@@ -228,6 +231,7 @@ class HomePage extends StatefulWidget {
   final String? initialRegion;
   final String? initialSpotId;
   final String? initialStoryId;
+  final String? initialPlanParam;
 
   const HomePage({
     super.key,
@@ -236,6 +240,7 @@ class HomePage extends StatefulWidget {
     this.initialRegion,
     this.initialSpotId,
     this.initialStoryId,
+    this.initialPlanParam,
   });
 
   @override
@@ -472,6 +477,53 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _openTripPlanner({TripPlan? initialPlan}) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => TripPlannerDialog(
+        allItems: _allItems,
+        initialProvince: _selectedProvince,
+        initialPlan: initialPlan,
+        onOpenItem: _openItemSheet,
+      ),
+    );
+  }
+
+  Widget _buildTripPlannerPill(AppLang lang) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        key: const Key('trip_planner_btn'),
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openTripPlanner(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F766E),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.route_rounded, size: 14, color: Colors.white),
+              const SizedBox(width: 4),
+              Text(
+                pickLangText(
+                  lang,
+                  ko: '여행코스',
+                  en: 'Trip Planner',
+                  ja: '旅行プラン',
+                  zh: '行程规划',
+                ),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _applyInitialPortalDeepLink() {
     if (_initialDeepLinkHandled || !mounted) return;
     _initialDeepLinkHandled = true;
@@ -488,6 +540,15 @@ class _HomePageState extends State<HomePage> {
           _openStoryDetail(st);
           return;
         }
+      }
+    }
+
+    final initPlan = (widget.initialPlanParam ?? '').trim();
+    if (initPlan.isNotEmpty) {
+      final decoded = decodeTripPlanParam(initPlan, _allItems);
+      if (decoded != null) {
+        _openTripPlanner(initialPlan: decoded);
+        return;
       }
     }
 
@@ -875,6 +936,7 @@ class _HomePageState extends State<HomePage> {
                                           label: trUi('view_naver_map', lang),
                                           activeColor: const Color(0xFF03C75A),
                                         ),
+                                        _buildTripPlannerPill(lang),
                                         Container(
                                           width: 1,
                                           height: 18,
@@ -948,6 +1010,7 @@ class _HomePageState extends State<HomePage> {
                                   label: trUi('view_naver_map', lang),
                                   activeColor: const Color(0xFF03C75A),
                                 ),
+                                _buildTripPlannerPill(lang),
                               ],
                             ],
                           ),

@@ -10,6 +10,7 @@ import 'package:jikstay/main.dart';
 import 'package:jikstay/spot_detail_sheet.dart';
 import 'package:jikstay/translation_store.dart';
 import 'package:jikstay/travel_hub.dart';
+import 'package:jikstay/trip_planner.dart';
 
 void main() {
   group('지역 필터', () {
@@ -701,6 +702,38 @@ void main() {
         now: DateTime(2026, 11, 15),
       );
       expect(pickedBusan.id, 'ev_imminent_test');
+    });
+
+    testWidgets('주말 1박2일·외국인 3·5일 여행코스 자동 생성 및 URL 인코딩/디코딩 검증', (tester) async {
+      appLangNotifier.value = AppLang.ko;
+      final plan = generateTripPlan(
+        allItems: kBuiltInSeedDiscoveryItems,
+        province: '전체',
+        days: 2,
+        foreignerOnly: false,
+      );
+      expect(plan.stops, isNotEmpty);
+
+      final encoded = encodeTripPlanParam(plan);
+      final decoded = decodeTripPlanParam(encoded, kBuiltInSeedDiscoveryItems);
+      expect(decoded, isNotNull);
+      expect(decoded!.days, 2);
+      expect(decoded.stops.length, plan.stops.length);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomePage(
+            initialDemoMode: true,
+            seedItemsOverride: kBuiltInSeedDiscoveryItems,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('trip_planner_btn')).first);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('주말 1박2일'), findsWidgets);
+      expect(find.byKey(const Key('copy_trip_plan_url_btn')), findsOneWidget);
     });
   });
 }

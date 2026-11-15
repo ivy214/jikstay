@@ -272,6 +272,49 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko") {
     .replace(/<\/body>/i, `  ${seoNoscript}\n</body>`);
 }
 
+function buildPlanOgHtml(template, rawPlan, origin, rawLang = "ko") {
+  const lang = normalizeLang(rawLang);
+  const htmlLang = lang === "zh" ? "zh-Hant" : lang;
+  const parts = String(rawPlan || "").split(":");
+  const days = Math.max(1, Math.min(5, parseInt((parts[0] || "d2").replace(/^d/, ""), 10) || 2));
+  const prov = parts[1] && parts[1] !== "전체" ? parts[1] : (lang === "ko" ? "대한민국" : "Korea");
+  const provEn = PROVINCE_EN[prov] || prov;
+  const titleText =
+    lang === "ko"
+      ? `${prov} ${days - 1}박${days}일 추천 여행코스 · 축제·맛집·합법숙소 | 직스테이 로컬`
+      : lang === "ja"
+        ? `${prov} ${days}日間おすすめ旅行プラン・公認宿 | Jikstay Korea`
+        : lang === "zh"
+          ? `${prov} ${days}日推薦行程・慶典美食與合法住宿 | Jikstay 韓國`
+          : `${provEn} ${days}-Day Korea Trip Itinerary & Verified Stays | Jikstay Korea`;
+  const descText =
+    lang === "ko"
+      ? `${prov} 임박 축제, 로컬 맛집, 수수료 0원 합법 안심숙소를 반경 55km 동선으로 묶은 맞춤 여행코스입니다.`
+      : `Custom ${days}-day ${provEn} itinerary combining local festivals, top food spots & 0% fee verified stays.`;
+  const canon = `${origin}/?plan=${encodeURIComponent(rawPlan)}${lang === "ko" ? "" : `&lang=${encodeURIComponent(lang)}`}`;
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "TouristTrip",
+    name: titleText,
+    description: descText,
+    url: canon,
+    touristType: lang === "ko" ? "Domestic Weekend Travelers" : "International Travelers",
+  }).replace(/</g, "\\u003c");
+  const escT = escapeHtml(titleText);
+  const escD = escapeHtml(descText);
+  const noscript = `<noscript id="jikstay-seo"><article><h1>${escT}</h1><p>${escD}</p></article></noscript>`;
+  return template
+    .replace(/<html\b[^>]*>/i, `<html lang="${htmlLang}">`)
+    .replace(/<title>[\s\S]*?<\/title>/, `<title>${escT}</title>`)
+    .replace(/<meta\s+name="description"\s+content="[^"]*">/, `<meta name="description" content="${escD}">`)
+    .replace(/<meta\s+property="og:title"\s+content="[^"]*">/, `<meta property="og:title" content="${escT}">`)
+    .replace(
+      /<meta\s+property="og:description"\s+content="[^"]*">/,
+      `<meta property="og:description" content="${escD}">\n  <meta property="og:url" content="${escapeHtml(canon)}">\n  <script type="application/ld+json">${jsonLd}</script>`
+    )
+    .replace(/<\/body>/i, `  ${noscript}\n</body>`);
+}
+
 function buildRegionOgHtml(template, province, origin, rawLang = "ko") {
   const lang = normalizeLang(rawLang);
   const htmlLang = lang === "zh" ? "zh-Hant" : lang;
@@ -379,6 +422,14 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
     } catch (err) {
       console.error("Spot OG tag injection failed:", err);
     }
+  }
+
+  const rawPlan = typeof req.query.plan === "string" ? req.query.plan.trim() : "";
+  if (rawPlan) {
+    const html = buildPlanOgHtml(template, rawPlan, origin, rawLang);
+    res.set("Cache-Control", "public, max-age=300, s-maxage=600");
+    res.status(200).send(html);
+    return;
   }
 
   if (PROVINCES_17.includes(rawRegion)) {
