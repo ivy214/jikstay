@@ -31,13 +31,11 @@ STAYS_PATH = ROOT / "app" / "web" / "data" / "public_stays_index.json"
 OUT_DIR = ROOT / "app" / "web" / "data"
 CACHE_PATH = ROOT / "backend" / "translation_cache.json"
 
-MODEL_NAME = "gemini-3.8-flash"
+MODEL_NAME = "gemini-3.5-flash-lite"
 LANGS = ("en", "ja", "zh")
 
 _CACHE_LOCK = threading.Lock()
-_GEMINI_RATE_LOCK = threading.Lock()
-_LAST_GEMINI_CALL = 0.0
-GEMINI_MIN_INTERVAL_SEC = 13.2  # Free Tier 5 RPM 안전 준수
+GEMINI_MIN_INTERVAL_SEC = 0.0  # gemini-3.5-flash-lite: 4K RPM / 150K RPD
 
 
 def load_env() -> None:
@@ -88,26 +86,18 @@ def call_llm_json(
                 text = (resp.choices[0].message.content or "").strip()
             else:
                 assert gemini_client is not None
-                with _GEMINI_RATE_LOCK:
-                    global _LAST_GEMINI_CALL
-                    now = time.monotonic()
-                    wait = GEMINI_MIN_INTERVAL_SEC - (now - _LAST_GEMINI_CALL)
-                    if wait > 0:
-                        time.sleep(wait)
-                    _LAST_GEMINI_CALL = time.monotonic()
                 resp = gemini_client.models.generate_content(
                     model=MODEL_NAME,
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         temperature=0.2,
-                        thinking_config=types.ThinkingConfig(thinking_level="LOW"),
                         http_options=types.HttpOptions(
                             timeout=45000,
                             retry_options=types.HttpRetryOptions(
                                 attempts=4,
-                                initial_delay=2.0,
-                                max_delay=15.0,
+                                initial_delay=1.5,
+                                max_delay=12.0,
                                 http_status_codes=[429, 500, 502, 503, 504],
                             ),
                         ),
@@ -286,9 +276,9 @@ def main() -> None:
         if st.get("listing_id")
     ]
 
-    workers = 1 if gemini_client else 8
-    item_bs = 6 if gemini_client else 6
-    stay_bs = 80 if gemini_client else 30
+    workers = 8
+    item_bs = 8
+    stay_bs = 35
 
     stories_out = process_section(openai_client, gemini_client, "story", story_records, cache, batch_size=3, max_workers=workers)
     items_out = process_section(openai_client, gemini_client, "item", item_records, cache, batch_size=item_bs, max_workers=workers)
