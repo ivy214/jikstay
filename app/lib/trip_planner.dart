@@ -74,6 +74,18 @@ List<String> listSubRegions(List<DiscoveryItem> allItems, String province) {
   return ['전체', ...sorted.take(30)];
 }
 
+bool _isNightItem(DiscoveryItem it) {
+  final text = '${it.title} ${it.subtitle}'.toLowerCase();
+  const nightKeywords = ['야간', '밤길', '야경', '불빛', '별빛', '달빛', '야시장', '나이트', 'night'];
+  return nightKeywords.any(text.contains);
+}
+
+bool _isMorningItem(DiscoveryItem it) {
+  final text = '${it.title} ${it.subtitle}'.toLowerCase();
+  const morningKeywords = ['모닝', '아침', '새벽', '일출', 'morning'];
+  return morningKeywords.any(text.contains);
+}
+
 bool _isForeignerEligibleStay(DiscoveryItem s) {
   if (s.category != DiscoveryCategory.stay) return false;
   if (s.title.contains('내국인 전용')) return false;
@@ -130,7 +142,7 @@ TripPlan generateTripPlan({
       return b.priorityScore.compareTo(a.priorityScore);
     });
   final spotAnchors = anchorPool
-      .where((it) => it.category == DiscoveryCategory.attraction || it.category == DiscoveryCategory.ebook)
+      .where((it) => it.category == DiscoveryCategory.attraction)
       .toList()
     ..sort((a, b) => b.priorityScore.compareTo(a.priorityScore));
 
@@ -138,8 +150,8 @@ TripPlan generateTripPlan({
     if (theme == TripTheme.food || theme == TripTheme.hanok) ...spotAnchors else ...eventAnchors,
     if (theme == TripTheme.food || theme == TripTheme.hanok) ...eventAnchors else ...spotAnchors,
   ];
-  if (anchors.isEmpty && anchorPool.isNotEmpty) {
-    anchors.add(anchorPool.first);
+  if (anchors.isEmpty) {
+    anchors.addAll(anchorPool.where((it) => it.category != DiscoveryCategory.ebook && it.category != DiscoveryCategory.stay));
   }
 
   final usedIds = <String>{};
@@ -150,13 +162,26 @@ TripPlan generateTripPlan({
     List<DiscoveryCategory> categories, {
     bool preferHanok = false,
     bool stayFilter = false,
+    bool excludeNight = false,
+    bool excludeMorning = false,
   }) {
-    final candidates = nearbyPool.where((it) {
+    var candidates = nearbyPool.where((it) {
       if (usedIds.contains(it.id)) return false;
       if (!categories.contains(it.category)) return false;
       if (stayFilter && foreignerOnly && !_isForeignerEligibleStay(it)) return false;
+      if (excludeNight && _isNightItem(it)) return false;
+      if (excludeMorning && _isMorningItem(it)) return false;
       return true;
     }).toList();
+    // 필터 후 후보가 전혀 없으면 시간대 제약만 완화
+    if (candidates.isEmpty && (excludeNight || excludeMorning)) {
+      candidates = nearbyPool.where((it) {
+        if (usedIds.contains(it.id)) return false;
+        if (!categories.contains(it.category)) return false;
+        if (stayFilter && foreignerOnly && !_isForeignerEligibleStay(it)) return false;
+        return true;
+      }).toList();
+    }
     if (candidates.isEmpty) return null;
 
     candidates.sort((a, b) {
@@ -202,14 +227,18 @@ TripPlan generateTripPlan({
       dayAnchor = anchors[(seedOffset + d - 1) % anchors.length];
     }
 
-    final morning = d == 1 && dayAnchor != null && !usedIds.contains(dayAnchor.id)
+    final morning = d == 1 &&
+            dayAnchor != null &&
+            !usedIds.contains(dayAnchor.id) &&
+            dayAnchor.category != DiscoveryCategory.ebook &&
+            !_isNightItem(dayAnchor)
         ? (() {
             usedIds.add(dayAnchor!.id);
             return dayAnchor;
           })()
         : (theme == TripTheme.festival
-            ? pickNearest(dayAnchor, [DiscoveryCategory.event, DiscoveryCategory.attraction])
-            : pickNearest(dayAnchor, [DiscoveryCategory.attraction, DiscoveryCategory.ebook, DiscoveryCategory.event]));
+            ? pickNearest(dayAnchor, [DiscoveryCategory.event, DiscoveryCategory.attraction], excludeNight: true)
+            : pickNearest(dayAnchor, [DiscoveryCategory.attraction, DiscoveryCategory.event], excludeNight: true));
 
     final anchorForDay = morning ?? dayAnchor;
     if (morning != null) stops.add(TripStop(day: d, slotKey: 'morning', item: morning));
@@ -218,8 +247,8 @@ TripPlan generateTripPlan({
     if (lunch != null) stops.add(TripStop(day: d, slotKey: 'lunch', item: lunch));
 
     final afternoon = theme == TripTheme.food
-        ? pickNearest(anchorForDay, [DiscoveryCategory.food, DiscoveryCategory.event, DiscoveryCategory.attraction])
-        : pickNearest(anchorForDay, [DiscoveryCategory.event, DiscoveryCategory.attraction]);
+        ? pickNearest(anchorForDay, [DiscoveryCategory.food, DiscoveryCategory.event, DiscoveryCategory.attraction], excludeMorning: true)
+        : pickNearest(anchorForDay, [DiscoveryCategory.event, DiscoveryCategory.attraction], excludeMorning: true);
     if (afternoon != null) stops.add(TripStop(day: d, slotKey: 'afternoon', item: afternoon));
 
     if (d < clampedDays) {
@@ -363,12 +392,14 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
     );
   }
 
-  String _slotLabel(String slotKey, AppLang lang) => switch (slotKey) {
+  String _slotLabel(TripStop stop, AppLang lang) => switch (stop.slotKey) {
         'morning' => pickLangText(lang, ko: '오전 코스', en: 'Morning', ja: '午前', zh: '上午'),
         'lunch' => pickLangText(lang, ko: '로컬 미식', en: 'Local Food', ja: 'ご当地グルメ', zh: '当地美食'),
-        'afternoon' => pickLangText(lang, ko: '오후 · 축제', en: 'Afternoon / Event', ja: '午後・祭り', zh: '下午・庆典'),
+        'afternoon' => _isNightItem(stop.item)
+            ? pickLangText(lang, ko: '오후 · 야간', en: 'Afternoon / Night', ja: '午後・夜間', zh: '下午・夜间')
+            : pickLangText(lang, ko: '오후 · 축제', en: 'Afternoon / Event', ja: '午後・祭り', zh: '下午・庆典'),
         'stay' => pickLangText(lang, ko: '수수료 0원 숙박', en: '0% Fee Stay', ja: '手数料0円宿', zh: '0手续费住宿'),
-        _ => slotKey,
+        _ => stop.slotKey,
       };
 
   String _themeLabel(TripTheme t, AppLang lang) => switch (t) {
@@ -642,7 +673,7 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
                                       ),
                                     ),
                                     title: Text(
-                                      '${_slotLabel(stop.slotKey, lang)} · ${it.tTitle(lang)}',
+                                      '${_slotLabel(stop, lang)} · ${it.tTitle(lang)}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
