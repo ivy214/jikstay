@@ -1368,6 +1368,268 @@ def refresh_stays_lightweight_index(
     return len(lightweight)
 
 
+def _split_editorial_paragraphs(text: str, max_chars: int = 520) -> list[str]:
+    clean = (text or "").strip()
+    if not clean:
+        return []
+    clean = clean[:max_chars].strip()
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?다요음함])\s+", clean) if s.strip()]
+    if len(sentences) <= 2 or len(clean) < 180:
+        return [clean]
+    mid = len(sentences) // 2
+    p1 = " ".join(sentences[:mid]).strip()
+    p2 = " ".join(sentences[mid:]).strip()
+    return [p for p in (p1, p2) if p]
+
+
+def _fetch_naver_place_blog_snippets(query: str, max_items: int = 2) -> list[dict[str, str]]:
+    nid = os.environ.get("NAVER_CLIENT_ID") or ""
+    nsec = os.environ.get("NAVER_CLIENT_SECRET") or ""
+    if not nid or not nsec or not query.strip():
+        return []
+    use_hub = len(nsec) >= 20 or os.environ.get("NAVER_API_MODE", "").lower() == "hub"
+    headers = (
+        {"X-NCP-APIGW-API-KEY-ID": nid, "X-NCP-APIGW-API-KEY": nsec}
+        if use_hub
+        else {"X-Naver-Client-Id": nid, "X-Naver-Client-Secret": nsec}
+    )
+    api_url = NAVER_BLOG_HUB_URL if use_hub else NAVER_BLOG_LEGACY_URL
+    params: dict[str, Any] = {"query": query, "display": 5, "start": 1, "sort": "sim"}
+    if use_hub:
+        params["format"] = "json"
+    spam_words = ("분양", "대출", "매매", "보험", "부동산", "원고료", "소정의 수수료")
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    try:
+        r = requests.get(api_url, headers=headers, params=params, timeout=7)
+        if r.status_code != 200:
+            return []
+        for it in r.json().get("items") or []:
+            link = str(it.get("link") or "").strip()
+            title = clean_html_text(it.get("title", ""))
+            desc = clean_html_text(it.get("description", ""))
+            if not link.startswith("http") or link in seen:
+                continue
+            if any(w in title or w in desc for w in spam_words):
+                continue
+            seen.add(link)
+            out.append({
+                "title": title[:72],
+                "summary": desc[:135],
+                "blogger": clean_html_text(it.get("bloggername", ""))[:24],
+                "postdate": str(it.get("postdate") or ""),
+                "link": link,
+            })
+            if len(out) >= max_items:
+                break
+    except Exception:  # noqa: BLE001
+        return []
+    return out
+
+
+def enrich_spots_and_festivals_details(
+    items: list[dict[str, Any]],
+    cache_path: str = "output/curated_stays_cache/spot_editorial_detail_cache.json",
+) -> None:
+    """전국 축제·먹거리·볼거리에 TourAPI 상세(개요·대표메뉴·영업시간·갤러리) + 네이버 방문 후기를 보강한다."""
+    cache: dict[str, dict[str, Any]] = {}
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                cache = loaded
+        except Exception:  # noqa: BLE001
+            cache = {}
+
+    lock = threading.Lock()
+    dirty = False
+
+    def _fmt_ymd(raw: str) -> str:
+        s = (raw or "").strip()
+        return f"{s[:4]}.{s[4:6]}.{s[6:8]}" if len(s) == 8 else s
+
+    def _enrich_one(d: dict[str, Any]) -> None:
+        nonlocal dirty
+        cid = str(d.get("content_id") or "").strip()
+        kind = str(d.get("kind") or "attraction").strip()
+        title = str(d.get("title") or "").strip()
+        prov = str(d.get("province") or "").strip()
+        reg_label = str(d.get("region_label") or prov).strip()
+        cache_key = f"{kind}:{cid or title}"
+
+        with lock:
+            info = cache.get(cache_key)
+
+        if info is None:
+            info = {}
+            ctype = {"event": "15", "food": "39", "attraction": "12"}.get(kind, "12")
+            overview = ""
+            homepage = ""
+            if cid:
+                com = _tour_get("detailCommon2", {"contentId": cid}, timeout=9)
+                if com:
+                    c_items = (com.get("items") or {}).get("item") or []
+                    if isinstance(c_items, dict):
+                        c_items = [c_items]
+                    if c_items:
+                        overview = _strip_overview_html(c_items[0].get("overview", ""))
+                        hp_raw = str(c_items[0].get("homepage") or "")
+                        m_hp = re.search(r'https?://[^\s"<>\']+', hp_raw)
+                        if m_hp:
+                            homepage = m_hp.group(0)
+
+                intro_map: dict[str, str] = {}
+                intro = _tour_get("detailIntro2", {"contentId": cid, "contentTypeId": ctype}, timeout=9)
+                if intro:
+                    i_items = (intro.get("items") or {}).get("item") or []
+                    if isinstance(i_items, dict):
+                        i_items = [i_items]
+                    if i_items and isinstance(i_items[0], dict):
+                        for k, v in i_items[0].items():
+                            if v:
+                                intro_map[k] = _strip_overview_html(str(v))
+
+                extra_imgs: list[str] = []
+                img_body = _tour_get("detailImage2", {"contentId": cid, "imageYN": "Y", "numOfRows": 4}, timeout=8)
+                if img_body:
+                    im_items = (img_body.get("items") or {}).get("item") or []
+                    if isinstance(im_items, dict):
+                        im_items = [im_items]
+                    for im in im_items:
+                        u = _https(str(im.get("originimgurl") or im.get("smallimageurl") or ""))
+                        if u and u not in extra_imgs:
+                            extra_imgs.append(u)
+                        if len(extra_imgs) >= 4:
+                            break
+                info["extra_images"] = extra_imgs
+                info["overview"] = overview[:560]
+                if homepage:
+                    info["homepage"] = homepage
+                info["intro"] = intro_map
+
+            q_suffix = "후기" if kind in ("food", "attraction") else "일정 후기"
+            q_region = reg_label if reg_label else prov
+            info["naver_reviews"] = _fetch_naver_place_blog_snippets(f"{q_region} {title} {q_suffix}".strip(), max_items=2)
+
+            with lock:
+                cache[cache_key] = info
+                dirty = True
+
+        # 항목에 스토리형 필드 조합·주입
+        primary_img = str(d.get("image_url") or "").strip()
+        gallery = [primary_img] if primary_img else []
+        for u in info.get("extra_images") or []:
+            if u and u not in gallery:
+                gallery.append(u)
+            if len(gallery) >= 4:
+                break
+        if gallery:
+            d["images"] = gallery
+
+        intro_m: dict[str, str] = info.get("intro") or {}
+        overview_txt = str(info.get("overview") or "").strip()
+        paragraphs = _split_editorial_paragraphs(overview_txt)
+
+        p_rows: list[dict[str, str]] = []
+        pull_quote = ""
+
+        if kind == "food":
+            p_header = "방문 전 필수 확인 · 대표 메뉴 · 영업시간 · 편의안내"
+            first_m = intro_m.get("firstmenu", "")[:60]
+            treat_m = intro_m.get("treatmenu", "")[:90]
+            open_t = intro_m.get("opentimefood", "")[:70]
+            rest_d = intro_m.get("restdatefood", "")[:50]
+            park_f = intro_m.get("parkingfood", "")[:50]
+            pack_f = intro_m.get("packing", "")[:35]
+            tel_f = intro_m.get("infocenterfood", "")[:40] or str(d.get("tel") or "")
+            if first_m:
+                p_rows.append({"label": "대표 메뉴", "value": first_m})
+                pull_quote = f"대표 별미: {first_m}" + (f" · {treat_m}" if treat_m and treat_m != first_m else "")
+            if treat_m and treat_m != first_m:
+                p_rows.append({"label": "취급 메뉴", "value": treat_m})
+            if open_t:
+                p_rows.append({"label": "영업 시간", "value": open_t})
+            if rest_d:
+                p_rows.append({"label": "쉬는 날", "value": rest_d})
+            if park_f:
+                p_rows.append({"label": "주차 안내", "value": park_f})
+            if pack_f:
+                p_rows.append({"label": "포장 안내", "value": pack_f})
+            if tel_f:
+                p_rows.append({"label": "문의 전화", "value": tel_f})
+        elif kind == "event":
+            p_header = "행사 관람 필수 확인 · 일정 · 장소 · 프로그램 안내"
+            sd, ed = _fmt_ymd(str(d.get("start_date") or "")), _fmt_ymd(str(d.get("end_date") or ""))
+            if sd or ed:
+                p_rows.append({"label": "행사 기간", "value": f"{sd} ~ {ed}".strip(" ~")})
+            ev_place = intro_m.get("eventplace", "")[:70] or str(d.get("addr") or "")
+            play_t = intro_m.get("playtime", "")[:70]
+            fee = intro_m.get("usetimefestival", "")[:70]
+            spon = intro_m.get("sponsor1", "")[:40]
+            tel_e = intro_m.get("sponsor1tel", "")[:40] or str(d.get("tel") or "")
+            prog = intro_m.get("program", "")[:240]
+            if ev_place:
+                p_rows.append({"label": "행사 장소", "value": ev_place})
+            if play_t:
+                p_rows.append({"label": "운영 시간", "value": play_t})
+            if fee:
+                p_rows.append({"label": "이용 요금", "value": fee})
+            if spon or tel_e:
+                p_rows.append({"label": "주최·문의", "value": " · ".join(x for x in (spon, tel_e) if x)})
+            if prog and len(paragraphs) < 2:
+                paragraphs.append(f"주요 프로그램: {prog}")
+            if ev_place:
+                pull_quote = f"{reg_label} 계절 추천 축제 · {ev_place}" + (f" ({sd} ~ {ed})" if sd else "")
+        else:
+            p_header = "탐방 전 필수 확인 · 관람시간 · 주차 · 편의안내"
+            use_t = intro_m.get("usetime", "")[:70]
+            rest_a = intro_m.get("restdate", "")[:50]
+            exp_g = intro_m.get("expguide", "")[:90]
+            park_a = intro_m.get("parking", "")[:50]
+            tel_a = intro_m.get("infocenter", "")[:50] or str(d.get("tel") or "")
+            if use_t:
+                p_rows.append({"label": "이용 시간", "value": use_t})
+            if rest_a:
+                p_rows.append({"label": "쉬는 날", "value": rest_a})
+            if exp_g:
+                p_rows.append({"label": "체험 안내", "value": exp_g})
+            if park_a:
+                p_rows.append({"label": "주차 안내", "value": park_a})
+            if tel_a:
+                p_rows.append({"label": "문의 안내", "value": tel_a})
+
+        if not p_rows and d.get("addr"):
+            p_rows.append({"label": "위치 주소", "value": str(d["addr"])})
+        if not pull_quote:
+            if d.get("coupon_title"):
+                pull_quote = str(d["coupon_title"])
+            elif paragraphs:
+                pull_quote = paragraphs[0][:95] + ("…" if len(paragraphs[0]) > 95 else "")
+
+        if overview_txt:
+            d["overview"] = overview_txt[:220]
+        if paragraphs:
+            d["paragraphs"] = paragraphs[:3]
+        if pull_quote:
+            d["pull_quote"] = pull_quote[:130]
+        if p_rows:
+            d["practical_header"] = p_header
+            d["practical_info"] = p_rows[:6]
+        if info.get("homepage") and not d.get("url"):
+            d["url"] = info["homepage"]
+        if info.get("naver_reviews"):
+            d["naver_reviews"] = info["naver_reviews"]
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        list(pool.map(_enrich_one, items))
+
+    if dirty:
+        os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
 def upload_spots_to_firestore(spots_and_events: list[dict[str, Any]]) -> int:
     """전국 로컬 스팟(축제·볼거리·먹거리)을 Firestore spots 컬렉션에 업서트한다 (클릭수·평점·쿠폰 설정 보존)."""
     from firebase_client import db
@@ -1424,6 +1686,11 @@ def build_hub_json(
     spots = fetch_17_provinces_spots(per_province_attractions=8, per_province_foods=8)
     prov_counts = {p: sum(1 for s in spots if s.get("province") == p) for p in PROVINCE_17_ORDER}
     print(f"  → 전국 17개 시도 명소·맛집 총 {len(spots)}건 수집: {prov_counts}")
+
+    print("[2.5/5] 전국 축제·먹거리·볼거리 매거진 상세정보(TourAPI + 네이버 방문기) 보강 중...")
+    enrich_spots_and_festivals_details([*festivals, *spots])
+    enriched_cnt = sum(1 for x in [*festivals, *spots] if x.get("paragraphs") or x.get("naver_reviews"))
+    print(f"  → 매거진 상세·방문기 보강 완료: {enriched_cnt}/{len(festivals) + len(spots)}건")
 
     print("[3/5] 한국관광공사 공식 추천 여행코스(contentTypeId=25) 조회 중...")
     courses = fetch_travel_courses(limit=12)

@@ -141,6 +141,22 @@ class PracticalInfoRow {
   const PracticalInfoRow({required this.label, required this.value});
 }
 
+class NaverPlaceReviewSnippet {
+  final String title;
+  final String summary;
+  final String blogger;
+  final String postdate;
+  final String link;
+
+  const NaverPlaceReviewSnippet({
+    required this.title,
+    required this.summary,
+    this.blogger = '',
+    this.postdate = '',
+    required this.link,
+  });
+}
+
 /// 지자체 발행 PDF 가이드북·문화관광 페이지 원문 기반 '하루 한 편 로컬 스토리' 모델
 class DailyStoryItem {
   final String id;
@@ -198,7 +214,12 @@ class DailyStoryItem {
       lat: lat,
       lng: lng,
       imageUrl: heroImage,
+      galleryImages: images,
       subtitle: pullQuote.isNotEmpty ? pullQuote : subtitle,
+      pullQuote: pullQuote,
+      paragraphs: paragraphs,
+      practicalHeader: practicalHeader,
+      practicalInfo: practicalInfo,
       phone: phone,
       priorityScore: 150,
       pdfLinks: pdfLinks,
@@ -225,7 +246,13 @@ class DiscoveryItem {
   final double lat;
   final double lng;
   final String imageUrl;
+  final List<String> galleryImages;
   final String subtitle;
+  final String pullQuote;
+  final List<String> paragraphs;
+  final String practicalHeader;
+  final List<PracticalInfoRow> practicalInfo;
+  final List<NaverPlaceReviewSnippet> naverReviews;
   final String externalUrl;
   final String mapUrl;
   final String phone;
@@ -252,7 +279,13 @@ class DiscoveryItem {
     required this.lat,
     required this.lng,
     this.imageUrl = '',
+    this.galleryImages = const [],
     this.subtitle = '',
+    this.pullQuote = '',
+    this.paragraphs = const [],
+    this.practicalHeader = '',
+    this.practicalInfo = const [],
+    this.naverReviews = const [],
     this.externalUrl = '',
     this.mapUrl = '',
     this.phone = '',
@@ -270,7 +303,30 @@ class DiscoveryItem {
     this.raw = const {},
   });
 
+  List<String> get effectiveGallery =>
+      galleryImages.isNotEmpty ? galleryImages : (imageUrl.isNotEmpty ? [imageUrl] : const []);
+
   double get averageRating => reviewCount > 0 ? scoreSum / reviewCount : 0.0;
+
+  String get _searchLocationPrefix => (regionLabel.isNotEmpty ? regionLabel : province).trim();
+
+  /// 카카오 플레이스(카카오맵 장소 상세·방문자 별점·사진·메뉴) 검색 직결 링크
+  String get kakaoPlaceUrl =>
+      'https://map.kakao.com/?q=${Uri.encodeComponent('$_searchLocationPrefix $title'.trim())}';
+
+  /// 네이버 플레이스(영업시간·메뉴판·방문자 영수증 리뷰) 직결 링크
+  String get naverPlaceUrl =>
+      'https://map.naver.com/p/search/${Uri.encodeComponent('$_searchLocationPrefix $title'.trim())}';
+
+  /// 네이버 통합검색(블로그 방문기·최신 소식·상세 안내) 직결 링크
+  String get naverSearchUrl {
+    final suffix = switch (category) {
+      DiscoveryCategory.food => '메뉴 영업시간 후기',
+      DiscoveryCategory.event => '일정 주차 후기',
+      _ => '방문기 코스 정보',
+    };
+    return 'https://search.naver.com/search.naver?query=${Uri.encodeComponent('$_searchLocationPrefix $title $suffix'.trim())}';
+  }
 
   /// 네이버지도 검색·길찾기 링크 (PC·모바일 겸용)
   String get naverRouteUrl => mapUrl.isNotEmpty
@@ -361,7 +417,13 @@ class DiscoveryItem {
       lat: lat,
       lng: lng,
       imageUrl: imageUrl,
+      galleryImages: galleryImages,
       subtitle: subtitle,
+      pullQuote: pullQuote,
+      paragraphs: paragraphs,
+      practicalHeader: practicalHeader,
+      practicalInfo: practicalInfo,
+      naverReviews: naverReviews,
       externalUrl: externalUrl,
       mapUrl: mapUrl,
       phone: phone,
@@ -511,19 +573,78 @@ DiscoveryItem? parseSpotJson(Map<String, dynamic> m, {required DiscoveryCategory
     }
   }
 
+  final parsedImages = <String>[];
+  if (m['images'] is List) {
+    for (final rawImg in (m['images'] as List)) {
+      final s = rawImg.toString().trim();
+      if (s.isNotEmpty && !parsedImages.contains(s)) parsedImages.add(s);
+    }
+  }
+  final primaryImg = (m['image_url'] ?? m['image'] ?? (parsedImages.isNotEmpty ? parsedImages.first : '')).toString();
+  if (primaryImg.isNotEmpty && !parsedImages.contains(primaryImg)) {
+    parsedImages.insert(0, primaryImg);
+  }
+
+  final parsedParagraphs = <String>[];
+  if (m['paragraphs'] is List) {
+    for (final p in (m['paragraphs'] as List)) {
+      final s = p.toString().trim();
+      if (s.isNotEmpty) parsedParagraphs.add(s);
+    }
+  }
+
+  final parsedPracticalInfo = <PracticalInfoRow>[];
+  if (m['practical_info'] is List) {
+    for (final r in (m['practical_info'] as List)) {
+      if (r is Map) {
+        final l = (r['label'] ?? '').toString().trim();
+        final v = (r['value'] ?? '').toString().trim();
+        if (l.isNotEmpty && v.isNotEmpty) {
+          parsedPracticalInfo.add(PracticalInfoRow(label: l, value: v));
+        }
+      }
+    }
+  }
+
+  final parsedNaverReviews = <NaverPlaceReviewSnippet>[];
+  if (m['naver_reviews'] is List) {
+    for (final rv in (m['naver_reviews'] as List)) {
+      if (rv is Map) {
+        final link = (rv['link'] ?? '').toString().trim();
+        final rTitle = (rv['title'] ?? '').toString().trim();
+        final rSum = (rv['summary'] ?? '').toString().trim();
+        if (link.isNotEmpty && rTitle.isNotEmpty) {
+          parsedNaverReviews.add(NaverPlaceReviewSnippet(
+            title: rTitle,
+            summary: rSum,
+            blogger: (rv['blogger'] ?? '').toString().trim(),
+            postdate: (rv['postdate'] ?? '').toString().trim(),
+            link: link,
+          ));
+        }
+      }
+    }
+  }
+
   return DiscoveryItem(
     id: id,
     category: cat,
     title: title,
     province: prov,
     regionLabel: (m['region_label'] ?? m['city'] ?? prov).toString(),
-    address: (m['addr'] ?? m['materials'] ?? '').toString(),
+    address: (m['addr'] ?? m['address'] ?? m['materials'] ?? '').toString(),
     lat: useLat,
     lng: useLng,
-    imageUrl: (m['image_url'] ?? '').toString(),
-    subtitle: (m['materials'] ?? m['overview'] ?? m['addr'] ?? '').toString(),
+    imageUrl: primaryImg,
+    galleryImages: parsedImages,
+    subtitle: (m['materials'] ?? m['overview'] ?? m['summary'] ?? m['addr'] ?? '').toString(),
+    pullQuote: (m['pull_quote'] ?? m['summary'] ?? '').toString(),
+    paragraphs: parsedParagraphs,
+    practicalHeader: (m['practical_header'] ?? '').toString(),
+    practicalInfo: parsedPracticalInfo,
+    naverReviews: parsedNaverReviews,
     externalUrl: (m['url'] ?? m['article_url'] ?? '').toString(),
-    mapUrl: (m['map_url'] ?? 'https://map.naver.com/p/search/${Uri.encodeComponent('$prov $title')}').toString(),
+    mapUrl: (m['map_url'] ?? m['naver_map_url'] ?? 'https://map.naver.com/p/search/${Uri.encodeComponent('$prov $title')}').toString(),
     phone: (m['tel'] ?? '').toString(),
     startDate: sDate,
     endDate: eDate,
@@ -974,6 +1095,17 @@ const List<DiscoveryItem> kBuiltInSeedDiscoveryItems = [
     startDate: '20261101',
     endDate: '20261215',
     subtitle: '지자체 공식 생태 트레킹 및 야간 문화행사',
+    pullQuote: '구천동 33경 계곡을 따라 걷는 청정 숲길 트레킹과 무주 밤하늘 문화 체험',
+    paragraphs: [
+      '청정 자연특별시 무주 구천동 계곡과 덕유산 탐방로를 무대로 펼쳐지는 계절 생태 트레킹 행사입니다. 완만한 어사길 무장애 탐방로부터 향적봉 조망 코스까지 남녀노소 편안하게 걸을 수 있습니다.',
+      '주말마다 지역 농특산물 장터와 야간 생태 해설 프로그램이 함께 열려 구천동 로컬 식당·안심숙소와 연계한 1박 2일 힐링 코스로 인기가 높습니다.',
+    ],
+    practicalHeader: '행사 관람 필수 확인 · 일정 · 장소 · 프로그램 안내',
+    practicalInfo: [
+      PracticalInfoRow(label: '행사 기간', value: '2026.11.01 ~ 2026.12.15'),
+      PracticalInfoRow(label: '행사 장소', value: '무주군 설천면 구천동 탐방안내소 및 어사길 일원'),
+      PracticalInfoRow(label: '이용 요금', value: '무료 (일부 체험 프로그램 현장 접수)'),
+    ],
     mapUrl: 'https://map.naver.com/p/search/%EB%AC%B4%EC%A3%BC%20%EA%B5%AC%EC%B2%9C%EB%8F%99',
     priorityScore: 135,
   ),
@@ -987,6 +1119,26 @@ const List<DiscoveryItem> kBuiltInSeedDiscoveryItems = [
     lat: 35.6495,
     lng: 127.5190,
     subtitle: '장수 특산 한우 & 사과 후식 로컬 맛집',
+    pullQuote: '해발 500m 청정 장수고원에서 자란 한우 숯불구이와 아삭한 장수사과 후식 한 상',
+    paragraphs: [
+      '금강 발원지 뜬봉샘과 논개사당 탐방 전후로 현지인과 여행객이 즐겨 찾는 장수읍 대표 한우 전문 로컬 식당입니다. 고원 지대 일교차 속에서 자란 장수 한우 특유의 고소한 육향과 직접 담근 제철 산나물 찬이 어우러집니다.',
+      '점심 시간대에는 진하게 우려낸 한우국밥과 육회비빔밥이 인기가 높으며, 직스테이 로컬 화면을 제시하시면 음료 또는 계절 사과 후식 혜택을 받으실 수 있습니다.',
+    ],
+    practicalHeader: '방문 전 필수 확인 · 대표 메뉴 · 영업시간 · 편의안내',
+    practicalInfo: [
+      PracticalInfoRow(label: '대표 메뉴', value: '장수 한우 등심·갈비살 / 한우육회비빔밥 / 한우국밥'),
+      PracticalInfoRow(label: '영업 시간', value: '11:00 ~ 21:00 (평일 브레이크타임 15:00~17:00)'),
+      PracticalInfoRow(label: '주차 안내', value: '전용 주차장 무료 이용 가능'),
+    ],
+    naverReviews: [
+      NaverPlaceReviewSnippet(
+        title: '장수 뜬봉샘 산책 후 들른 장수 한우명가 육회비빔밥 내돈내산 후기',
+        summary: '뜬봉샘 생태공원 1시간 코스 걷고 점심 먹으러 방문했는데 한우 국밥 국물이 정말 진하고 반찬이 깔끔해서 부모님도 만족하셨어요.',
+        blogger: '고원산책자',
+        postdate: '20261102',
+        link: 'https://search.naver.com/search.naver?query=%EC%9E%A5%EC%88%98%20%ED%95%9C%EC%9A%B0%20%EB%A7%9B%EC%A7%91',
+      ),
+    ],
     isSponsored: true,
     couponTitle: '직스테이 방문 혜택 · 화면 제시 시 음료/후식 서비스',
     mapUrl: 'https://map.naver.com/p/search/%EC%9E%A5%EC%88%98%20%ED%95%9C%EC%9A%B0',
@@ -1002,6 +1154,16 @@ const List<DiscoveryItem> kBuiltInSeedDiscoveryItems = [
     lat: 35.7556,
     lng: 127.4122,
     subtitle: '진안군 대표 명승지 · 트레킹 명소',
+    pullQuote: '미슐랭 그린가이드 별 세 개 명소 — 거센 비바람에도 흔들리지 않는 80여 기 자연석 돌탑의 신비',
+    paragraphs: [
+      '말의 두 귀를 닮은 암마이봉과 숫마이봉 아래 자리한 마이산 탑사는 이갑룡 처사가 30여 년에 걸쳐 쌓아 올린 80여 기의 돌탑 군락으로 세계적인 주목을 받는 명승지입니다.',
+      '남부주차장에서 탑영제 호수 데크길을 따라 이어지는 숲길은 경사가 완만해 사계절 산책 코스로 사랑받습니다.',
+    ],
+    practicalHeader: '탐방 전 필수 확인 · 관람시간 · 주차 · 편의안내',
+    practicalInfo: [
+      PracticalInfoRow(label: '이용 시간', value: '09:00 ~ 18:00 (동절기 17:00 마감)'),
+      PracticalInfoRow(label: '주차 안내', value: '마이산 남부·북부 공영주차장 이용'),
+    ],
     mapUrl: 'https://map.naver.com/p/search/%EB%A7%88%EC%9D%B4%EC%82%B0%20%ED%83%91%EC%82%AC',
     priorityScore: 118,
   ),

@@ -297,7 +297,12 @@ class _HomePageState extends State<HomePage> {
               lat: disc.lat,
               lng: disc.lng,
               imageUrl: disc.imageUrl,
+              galleryImages: disc.galleryImages,
               subtitle: disc.subtitle,
+              pullQuote: disc.pullQuote,
+              paragraphs: disc.paragraphs,
+              practicalHeader: disc.practicalHeader,
+              practicalInfo: disc.practicalInfo,
               phone: disc.phone,
               priorityScore: disc.priorityScore,
               pdfLinks: disc.pdfLinks,
@@ -511,22 +516,39 @@ class _HomePageState extends State<HomePage> {
 
   void _openItemSheet(DiscoveryItem item) {
     setState(() => _selectedItemId = item.id);
-    syncPortalParams(
-      region: _selectedProvince,
-      spotId: item.category == DiscoveryCategory.stay ? null : item.id,
-    );
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    // 1) 일일 공식 가이드북 스토리 항목이면 매거진 스토리 상세 페이지로 직행
+    for (final st in _dailyStories) {
+      if (st.id == item.id) {
+        _openStoryDetail(st);
+        return;
+      }
+    }
+
+    // 2) 합법 인증 숙소 항목이면 숙소 전체 상세 페이지로 직행
+    if (item.category == DiscoveryCategory.stay) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ListingDetailPage(
+          listingId: item.id,
+          homeBuilder: (_) => HomePage(initialDemoMode: widget.initialDemoMode),
+        ),
+      ));
+      return;
+    }
+
+    // 3) 축제·식당·볼거리·E-book 모두 팝업 없이 StoryDetailPage와 동일한 매거진 전체 페이지로 전환
+    syncPortalParams(region: _selectedProvince, spotId: item.id);
+    Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => SpotDetailSheet(
         item: item,
         allItems: _allItems,
         lang: appLangNotifier.value,
         offlineMode: _offlineSeedMode || widget.initialDemoMode,
+        homeBuilder: (_) => HomePage(initialDemoMode: widget.initialDemoMode),
         onSelectConnectedItem: (next) {
-          setState(() => _selectedItemId = next.id);
+          if (mounted) {
+            setState(() => _selectedItemId = next.id);
+          }
         },
         onOpenFullStayPage: (stayId) {
           Navigator.of(context).push(MaterialPageRoute(
@@ -538,6 +560,7 @@ class _HomePageState extends State<HomePage> {
         },
         onOpenStoryPage: _openStoryById,
         onStatsUpdated: (itemId, rCount, sSum) {
+          if (!mounted) return;
           setState(() {
             _allItems = _allItems
                 .map((e) => e.id == itemId ? e.copyWithStats(reviewCount: rCount, scoreSum: sSum) : e)
@@ -545,7 +568,7 @@ class _HomePageState extends State<HomePage> {
           });
         },
       ),
-    );
+    ));
   }
 
   Future<void> _openExternalUrl(String rawUrl) async {

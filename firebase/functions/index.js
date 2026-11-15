@@ -255,7 +255,10 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko") {
   const storyBodyHtml = Array.isArray(spot.paragraphs)
     ? spot.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("")
     : "";
-  const seoNoscript = `<noscript id="jikstay-seo"><article><h1>${escapedTitle}</h1><p>${escapedDesc}</p>${storyBodyHtml}</article></noscript>`;
+  const practicalHtml = Array.isArray(spot.practical_info) && spot.practical_info.length > 0
+    ? `<ul>${spot.practical_info.map((r) => `<li>${escapeHtml(r.label || "")}: ${escapeHtml(r.value || "")}</li>`).join("")}</ul>`
+    : "";
+  const seoNoscript = `<noscript id="jikstay-seo"><article><h1>${escapedTitle}</h1><p>${escapedDesc}</p>${storyBodyHtml}${practicalHtml}</article></noscript>`;
 
   return template
     .replace(/<html>/i, `<html lang="${htmlLang}">`)

@@ -36,12 +36,19 @@ class StoryDetailPage extends StatefulWidget {
 class _StoryDetailPageState extends State<StoryDetailPage> {
   late DailyStoryItem _story;
   int _heroIndex = 0;
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _story = widget.story;
     _onEnterStory(_story);
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
   }
 
   void _onEnterStory(DailyStoryItem st) {
@@ -132,6 +139,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
         ],
       ),
       body: SingleChildScrollView(
+        controller: _scrollCtrl,
         padding: EdgeInsets.symmetric(horizontal: isWide ? 28 : 16, vertical: isWide ? 28 : 18),
         child: Center(
           child: ConstrainedBox(
@@ -467,20 +475,60 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                                     homeBuilder: widget.homeBuilder,
                                   ),
                                 ));
-                              } else {
-                                showModalBottomSheet<void>(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  backgroundColor: Colors.transparent,
-                                  builder: (_) => SpotDetailSheet(
-                                    item: it,
-                                    allItems: widget.allItems,
-                                    lang: lang,
-                                    offlineMode: widget.offlineMode,
-                                    onSelectConnectedItem: (_) {},
-                                  ),
-                                );
+                                return;
                               }
+                              for (final st in widget.allStories) {
+                                if (st.id == it.id) {
+                                  setState(() {
+                                    _story = st;
+                                    _heroIndex = 0;
+                                  });
+                                  _onEnterStory(st);
+                                  if (_scrollCtrl.hasClients) {
+                                    _scrollCtrl.animateTo(
+                                      0,
+                                      duration: const Duration(milliseconds: 260),
+                                      curve: Curves.easeOutCubic,
+                                    );
+                                  }
+                                  return;
+                                }
+                              }
+                              Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => SpotDetailSheet(
+                                  item: it,
+                                  allItems: widget.allItems,
+                                  lang: lang,
+                                  offlineMode: widget.offlineMode,
+                                  homeBuilder: widget.homeBuilder,
+                                  onSelectConnectedItem: (_) {},
+                                  onOpenFullStayPage: (stayId) {
+                                    Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => ListingDetailPage(
+                                        listingId: stayId,
+                                        homeBuilder: widget.homeBuilder,
+                                      ),
+                                    ));
+                                  },
+                                  onOpenStoryPage: (storyId) {
+                                    for (final s in widget.allStories) {
+                                      if (s.id == storyId) {
+                                        Navigator.of(context).push(MaterialPageRoute(
+                                          builder: (_) => StoryDetailPage(
+                                            story: s,
+                                            allStories: widget.allStories,
+                                            allItems: widget.allItems,
+                                            lang: lang,
+                                            offlineMode: widget.offlineMode,
+                                            homeBuilder: widget.homeBuilder,
+                                          ),
+                                        ));
+                                        return;
+                                      }
+                                    }
+                                  },
+                                ),
+                              ));
                             },
                           ),
                         ),
@@ -508,6 +556,13 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                               _heroIndex = 0;
                             });
                             _onEnterStory(st);
+                            if (_scrollCtrl.hasClients) {
+                              _scrollCtrl.animateTo(
+                                0,
+                                duration: const Duration(milliseconds: 260),
+                                curve: Curves.easeOutCubic,
+                              );
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.all(12),

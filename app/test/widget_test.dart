@@ -486,28 +486,53 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('장수 한우명가 로컬식당'), findsWidgets);
 
-      // 4. 방문혜택 쿠폰 식당 카드 클릭 → 상세 연결 시트(지자체 공식 E-book + 카카오/구글 길찾기 + 주변 명소/축제) 오픈
+      // 4. 방문혜택 쿠폰 식당 카드 클릭 → 팝업(BottomSheet) 없이 StoryDetailPage와 동일한 전체 상세 페이지 전환
       await tester.tap(foodCard);
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('sheet_directions_btn')), findsOneWidget);
-      expect(find.byKey(const Key('sheet_kakao_route_btn')), findsOneWidget);
-      expect(find.byKey(const Key('sheet_google_transit_btn')), findsOneWidget);
-      expect(find.textContaining('장수군청 공식 관광안내도'), findsWidgets);
-      expect(find.textContaining('관광안내지도 PDF 원본'), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(SpotDetailSheet), findsOneWidget);
+      expect(find.byKey(const Key('spot_practical_box')), findsOneWidget);
+      expect(find.byKey(const Key('spot_place_search_box')), findsOneWidget);
+      expect(find.byKey(const Key('spot_kakao_place_btn')), findsOneWidget);
+      expect(find.byKey(const Key('spot_naver_place_btn')), findsOneWidget);
+      expect(find.byKey(const Key('spot_naver_search_btn')), findsOneWidget);
 
-      // 4. 방문 혜택 쿠폰 버튼 클릭 → 현장 제시용 쿠폰 다이얼로그 확인
-      await tester.tap(find.byKey(const Key('sheet_coupon_btn')));
-      await tester.pumpAndSettle();
-      expect(find.text('직스테이 로컬 방문 혜택 쿠폰'), findsOneWidget);
-      await tester.tap(find.text('닫기'));
-      await tester.pumpAndSettle();
-
-      // 스크롤 후 주변 연결 코스(반경 매칭) 확인
       final sheetScrollable = find.descendant(
         of: find.byType(SpotDetailSheet),
         matching: find.byType(Scrollable),
       ).first;
+
+      // 4-1. 방문 혜택 쿠폰 버튼 클릭 → 팝업 다이얼로그 없이 페이지 내 인라인 바우처 오픈 확인
+      final couponBtn = find.byKey(const Key('sheet_coupon_btn'));
+      await tester.scrollUntilVisible(couponBtn, 180, scrollable: sheetScrollable);
+      await tester.ensureVisible(couponBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(couponBtn);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('직스테이 로컬 방문 혜택 쿠폰'), findsOneWidget);
+      await tester.tap(find.text('닫기'));
+      await tester.pumpAndSettle();
+
+      // 길찾기 버튼 및 지자체 공식 가이드북 PDF 연결 확인
+      final dirBtn = find.byKey(const Key('sheet_directions_btn'));
+      await tester.scrollUntilVisible(dirBtn, 160, scrollable: sheetScrollable);
+      await tester.pumpAndSettle();
+      expect(dirBtn, findsOneWidget);
+      expect(find.byKey(const Key('sheet_kakao_route_btn')), findsOneWidget);
+      expect(find.byKey(const Key('sheet_google_transit_btn')), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.textContaining('장수군청 공식 관광안내도'),
+        180,
+        scrollable: sheetScrollable,
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('장수군청 공식 관광안내도'), findsWidgets);
+      expect(find.textContaining('관광안내지도 PDF 원본'), findsOneWidget);
+
+      // 스크롤 후 주변 연결 코스(반경 매칭) 확인
       await tester.scrollUntilVisible(
         find.textContaining('함께 방문하기 좋은 주변 연결 코스'),
         180,
