@@ -76,6 +76,71 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  void _openConnectedSpot(BuildContext context, AppLang lang, DiscoveryItem it) {
+    if (it.category == DiscoveryCategory.stay) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ListingDetailPage(
+          listingId: it.id,
+          homeBuilder: widget.homeBuilder,
+        ),
+      ));
+      return;
+    }
+    for (final st in widget.allStories) {
+      if (st.id == it.id) {
+        setState(() {
+          _story = st;
+          _heroIndex = 0;
+          _connectedFilter = DiscoveryCategory.all;
+        });
+        _onEnterStory(st);
+        if (_scrollCtrl.hasClients) {
+          _scrollCtrl.animateTo(
+            0,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+          );
+        }
+        return;
+      }
+    }
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => SpotDetailSheet(
+        item: it,
+        allItems: widget.allItems,
+        lang: lang,
+        offlineMode: widget.offlineMode,
+        homeBuilder: widget.homeBuilder,
+        onSelectConnectedItem: (_) {},
+        onOpenFullStayPage: (stayId) {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ListingDetailPage(
+              listingId: stayId,
+              homeBuilder: widget.homeBuilder,
+            ),
+          ));
+        },
+        onOpenStoryPage: (storyId) {
+          for (final s in widget.allStories) {
+            if (s.id == storyId) {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => StoryDetailPage(
+                  story: s,
+                  allStories: widget.allStories,
+                  allItems: widget.allItems,
+                  lang: lang,
+                  offlineMode: widget.offlineMode,
+                  homeBuilder: widget.homeBuilder,
+                ),
+              ));
+              return;
+            }
+          }
+        },
+      ),
+    ));
+  }
+
   Future<void> _copyShareLink() async {
     final shareUrl = 'https://jikstay-lkxu1.web.app/?story=${Uri.encodeComponent(_story.id)}';
     await Clipboard.setData(ClipboardData(text: shareUrl));
@@ -311,79 +376,186 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                     const SizedBox(height: 22),
                   ],
 
-                  // 5. 지자체 공식 원문 스토리 본문 (챕터형 웹 매거진 + 고가독성 본문)
-                  ...tParagraphs.map((p) {
-                    final trimmed = p.trim();
-                    final nlIdx = trimmed.indexOf('\n');
-                    final isChapter = nlIdx > 0 &&
-                        (trimmed.startsWith('【') ||
-                            trimmed.startsWith('▌') ||
-                            trimmed.startsWith('📌 ') ||
-                            trimmed.startsWith('## '));
-                    if (isChapter) {
-                      final heading = trimmed
-                          .substring(0, nlIdx)
-                          .replaceFirst(RegExp(r'^##\s*'), '')
-                          .trim();
-                      final body = trimmed.substring(nlIdx + 1).trim();
-                      return Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 18),
-                        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.only(left: 10),
-                              decoration: const BoxDecoration(
-                                border: Border(
-                                  left: BorderSide(color: Color(0xFF059669), width: 3.5),
+                  // 5. 지자체 공식 원문 스토리 본문 (챕터별 대표 이미지 + 웹 매거진 카드)
+                  ...(() {
+                    final usedUrls = <String>{if (activeHero.isNotEmpty) activeHero};
+                    final allPool = <DiscoveryItem>[
+                      ...bundle.attractions,
+                      ...bundle.foods,
+                      ...bundle.events,
+                      ...bundle.stays,
+                    ];
+
+                    (String, DiscoveryItem?) pickChapterMedia(String heading, String body) {
+                      final text = '$heading $body'.toLowerCase();
+                      final isFood = text.contains('미식') ||
+                          text.contains('맛집') ||
+                          text.contains('시장') ||
+                          text.contains('푸드') ||
+                          text.contains('골목') ||
+                          text.contains('food') ||
+                          text.contains('gourmet');
+                      final isEvent = text.contains('축제') ||
+                          text.contains('야경') ||
+                          text.contains('한강') ||
+                          text.contains('페스티벌') ||
+                          text.contains('festival');
+                      final isStay = text.contains('숙소') ||
+                          text.contains('체류') ||
+                          text.contains('한옥') ||
+                          text.contains('stay');
+
+                      final prioritized = <DiscoveryItem>[
+                        if (isFood) ...bundle.foods,
+                        if (isEvent) ...bundle.events,
+                        if (isStay) ...bundle.stays,
+                        ...bundle.attractions,
+                        ...allPool,
+                      ];
+
+                      // 1순위: 본문 텍스트에 실제 장소명이 언급되고 사진이 있는 항목
+                      for (final it in prioritized) {
+                        if (it.imageUrl.isEmpty || usedUrls.contains(it.imageUrl)) continue;
+                        final keyWord = it.title.split(' ').first.trim();
+                        if (keyWord.length >= 2 && text.contains(keyWord.toLowerCase())) {
+                          usedUrls.add(it.imageUrl);
+                          return (it.imageUrl, it);
+                        }
+                      }
+                      // 2순위: 챕터 성격에 맞는 미사용 대표 사진
+                      for (final it in prioritized) {
+                        if (it.imageUrl.isNotEmpty && !usedUrls.contains(it.imageUrl)) {
+                          usedUrls.add(it.imageUrl);
+                          return (it.imageUrl, it);
+                        }
+                      }
+                      // 3순위: 스토리 갤러리 내 미사용 사진
+                      for (final img in images) {
+                        if (img.isNotEmpty && !usedUrls.contains(img)) {
+                          usedUrls.add(img);
+                          return (img, null);
+                        }
+                      }
+                      return ('', null);
+                    }
+
+                    return tParagraphs.map((p) {
+                      final trimmed = p.trim();
+                      final nlIdx = trimmed.indexOf('\n');
+                      final isChapter = nlIdx > 0 &&
+                          (trimmed.startsWith('【') ||
+                              trimmed.startsWith('▌') ||
+                              trimmed.startsWith('📌 ') ||
+                              trimmed.startsWith('## '));
+                      if (isChapter) {
+                        final heading = trimmed
+                            .substring(0, nlIdx)
+                            .replaceFirst(RegExp(r'^##\s*'), '')
+                            .trim();
+                        final body = trimmed.substring(nlIdx + 1).trim();
+                        final (chapterImg, linkedSpot) = pickChapterMedia(heading, body);
+
+                        return Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 18),
+                          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.only(left: 10),
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    left: BorderSide(color: Color(0xFF059669), width: 3.5),
+                                  ),
+                                ),
+                                child: Text(
+                                  heading,
+                                  style: const TextStyle(
+                                    fontSize: 17.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF0F172A),
+                                    height: 1.4,
+                                  ),
                                 ),
                               ),
-                              child: Text(
-                                heading,
-                                style: const TextStyle(
-                                  fontSize: 17.5,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF0F172A),
-                                  height: 1.4,
+                              if (chapterImg.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(11),
+                                  onTap: linkedSpot == null
+                                      ? null
+                                      : () => _openConnectedSpot(context, lang, linkedSpot),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(11),
+                                    child: SizedBox(
+                                      width: double.infinity,
+                                      height: isWide ? 220 : 170,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          StorageImage(url: chapterImg, cacheWidth: 880),
+                                          if (linkedSpot != null)
+                                            Positioned(
+                                              left: 10,
+                                              bottom: 10,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withValues(alpha: 0.66),
+                                                  borderRadius: BorderRadius.circular(20),
+                                                ),
+                                                child: Text(
+                                                  '📍 ${linkedSpot.tTitle(lang)} →',
+                                                  style: const TextStyle(
+                                                    fontSize: 11.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            if (body.isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                body,
-                                style: const TextStyle(
-                                  fontSize: 15.5,
-                                  color: Color(0xFF334155),
-                                  height: 1.82,
-                                  letterSpacing: -0.1,
+                              ],
+                              if (body.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  body,
+                                  style: const TextStyle(
+                                    fontSize: 15.5,
+                                    color: Color(0xFF334155),
+                                    height: 1.82,
+                                    letterSpacing: -0.1,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
+                        );
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: Text(
+                          p,
+                          style: const TextStyle(
+                            fontSize: 16.5,
+                            color: Color(0xFF1E293B),
+                            height: 1.88,
+                            letterSpacing: -0.1,
+                          ),
                         ),
                       );
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 18),
-                      child: Text(
-                        p,
-                        style: const TextStyle(
-                          fontSize: 16.5,
-                          color: Color(0xFF1E293B),
-                          height: 1.88,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    );
-                  }),
+                    });
+                  })(),
                   const SizedBox(height: 8),
 
                   // 6. 방문 전 꼭 필요한 '핵심 탐방·편의 정보 박스' (《장수여행》 p.9 하단 초록 박스 모델)
@@ -621,70 +793,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                             item: it,
                             anchor: anchorItem,
                             lang: lang,
-                            onTap: () {
-                              if (it.category == DiscoveryCategory.stay) {
-                                Navigator.of(context).push(MaterialPageRoute(
-                                  builder: (_) => ListingDetailPage(
-                                    listingId: it.id,
-                                    homeBuilder: widget.homeBuilder,
-                                  ),
-                                ));
-                                return;
-                              }
-                              for (final st in widget.allStories) {
-                                if (st.id == it.id) {
-                                  setState(() {
-                                    _story = st;
-                                    _heroIndex = 0;
-                                    _connectedFilter = DiscoveryCategory.all;
-                                  });
-                                  _onEnterStory(st);
-                                  if (_scrollCtrl.hasClients) {
-                                    _scrollCtrl.animateTo(
-                                      0,
-                                      duration: const Duration(milliseconds: 260),
-                                      curve: Curves.easeOutCubic,
-                                    );
-                                  }
-                                  return;
-                                }
-                              }
-                              Navigator.of(context).push(MaterialPageRoute(
-                                builder: (_) => SpotDetailSheet(
-                                  item: it,
-                                  allItems: widget.allItems,
-                                  lang: lang,
-                                  offlineMode: widget.offlineMode,
-                                  homeBuilder: widget.homeBuilder,
-                                  onSelectConnectedItem: (_) {},
-                                  onOpenFullStayPage: (stayId) {
-                                    Navigator.of(context).push(MaterialPageRoute(
-                                      builder: (_) => ListingDetailPage(
-                                        listingId: stayId,
-                                        homeBuilder: widget.homeBuilder,
-                                      ),
-                                    ));
-                                  },
-                                  onOpenStoryPage: (storyId) {
-                                    for (final s in widget.allStories) {
-                                      if (s.id == storyId) {
-                                        Navigator.of(context).push(MaterialPageRoute(
-                                          builder: (_) => StoryDetailPage(
-                                            story: s,
-                                            allStories: widget.allStories,
-                                            allItems: widget.allItems,
-                                            lang: lang,
-                                            offlineMode: widget.offlineMode,
-                                            homeBuilder: widget.homeBuilder,
-                                          ),
-                                        ));
-                                        return;
-                                      }
-                                    }
-                                  },
-                                ),
-                              ));
-                            },
+                            onTap: () => _openConnectedSpot(context, lang, it),
                           ),
                         ),
                   ],
