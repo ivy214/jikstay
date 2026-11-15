@@ -1054,11 +1054,7 @@ def build_curated_listing_doc(
 
     return {
         "listing_id": listing_id,
-        "listing_tier": "public",  # 'public'(공공DB 자동선별) vs 'claimed'(호스트 직접 인증·CPC 연결)
         "is_sponsored": False,
-        "cpc_balance": 0,
-        "cpc_rate": 300,
-        "cpc_charged_clicks": 0,
         "curated_score": round(curated_score, 1),
         "region_group": region_group,
         "status": "active",
@@ -1082,7 +1078,6 @@ def build_curated_listing_doc(
             "pet_policy": "동반 가능 여부 사전 문의 필수",
             "extra_rules": [
                 "본 숙소 정보는 행정안전부 공공데이터 및 네이버 검색 공개 링크를 바탕으로 자동 구성되었습니다.",
-                "이 숙소의 호스트이시라면 하단 [내 숙소 주인 등록]을 통해 공식 사진·요금·직거래 예약 링크를 무료로 직접 연결하실 수 있습니다.",
             ],
         },
         "location_info": {
@@ -1327,8 +1322,6 @@ def build_lightweight_index_entry(doc: dict[str, Any]) -> dict[str, Any]:
         "license_type": doc["license_type"],
         "curated_score": doc.get("curated_score", 0),
     }
-    if doc.get("listing_tier") and doc.get("listing_tier") != "public":
-        entry["listing_tier"] = doc["listing_tier"]
     if doc.get("accommodation_type"):
         entry["accommodation_type"] = doc["accommodation_type"]
     if short_point:
@@ -1359,7 +1352,7 @@ def build_lightweight_index_entry(doc: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
-def upload_curated_to_firestore(docs: list[dict[str, Any]]) -> tuple[int, int]:
+def upload_curated_to_firestore(docs: list[dict[str, Any]]) -> int:
     """선별된 공공 숙소를 Firestore listings에 업서트한다. 누적 클릭·사용자 별점 집계는 기존 값을 보존한다."""
     from firebase_admin import firestore
 
@@ -1367,7 +1360,6 @@ def upload_curated_to_firestore(docs: list[dict[str, Any]]) -> tuple[int, int]:
 
     col = db().collection("listings")
     upserted = 0
-    skipped_claimed = 0
 
     # 배치 단위(최대 400개) 처리
     chunk_size = 200
@@ -1382,9 +1374,6 @@ def upload_curated_to_firestore(docs: list[dict[str, Any]]) -> tuple[int, int]:
         for d in chunk:
             lid = d["listing_id"]
             prev = existing_map.get(lid)
-            if prev and (prev.get("listing_tier") == "claimed" or prev.get("application_id")):
-                skipped_claimed += 1
-                continue
             payload = dict(d)
             if prev:
                 # 누적 클릭수·사용자 별점 합산·생성일시는 기존 값 유지
@@ -1404,7 +1393,7 @@ def upload_curated_to_firestore(docs: list[dict[str, Any]]) -> tuple[int, int]:
         if ops > 0:
             batch.commit()
 
-    return upserted, skipped_claimed
+    return upserted
 
 
 def run_curation(
@@ -1471,8 +1460,8 @@ def run_curation(
         print(f"웹 경량 색인 저장: {index_json} ({len(lightweight)}곳)")
 
     if upload and all_curated:
-        upserted, skipped = upload_curated_to_firestore(all_curated)
-        print(f"Firestore 반영 완료: 업서트 {upserted}곳 (호스트 클레임 보존 {skipped}곳)")
+        upserted = upload_curated_to_firestore(all_curated)
+        print(f"Firestore 반영 완료: 업서트 {upserted}곳")
 
     return all_curated
 

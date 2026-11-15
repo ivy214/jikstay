@@ -7,10 +7,7 @@ const String kDemoHaeundaeId = 'stay_demo_haeundae';
 final Map<String, Map<String, dynamic>> kDemoListingsMap = {
   kDemoHaeundaeId: {
     'listing_id': kDemoHaeundaeId,
-    'listing_tier': 'claimed',
     'is_sponsored': true,
-    'cpc_balance': 30000,
-    'cpc_rate': 300,
     'status': 'active',
     'title': '5층 파노라마 오션뷰 | 송정·해운대 해변 10초 자쿠지 레지던스',
     'i18n': {
@@ -412,10 +409,7 @@ final Map<String, Map<String, dynamic>> kDemoListingsMap = {
   },
   'stay_demo_pub_seoul': {
     'listing_id': 'stay_demo_pub_seoul',
-    'listing_tier': 'public',
     'is_sponsored': false,
-    'cpc_balance': 0,
-    'cpc_rate': 300,
     'status': 'active',
     'title': '연남 아틀리에 하우스 (공공API 선별 예시)',
     'region_depth1': '서울특별시',

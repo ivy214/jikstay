@@ -93,6 +93,7 @@ jobs:
           RECAPTCHA_SITE_KEY: ${{ secrets.RECAPTCHA_SITE_KEY }}
         working-directory: app
         run: |
+          python ../backend/split_hub.py
           flutter pub get
           if [ -n "$RECAPTCHA_SITE_KEY" ]; then
             flutter build web --release --no-wasm-dry-run --pwa-strategy=none --dart-define="RECAPTCHA_SITE_KEY=$RECAPTCHA_SITE_KEY"

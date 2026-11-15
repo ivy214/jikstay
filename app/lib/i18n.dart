@@ -227,12 +227,6 @@ String trUi(String key, AppLang lang) {
       AppLang.ja: '公的データ営業確認',
       AppLang.zh: '政府資料營業中',
     },
-    'claimed_verified_badge': {
-      AppLang.ko: '공식 직거래 인증',
-      AppLang.en: 'Verified Direct Host',
-      AppLang.ja: '公式直取引ホスト',
-      AppLang.zh: '官方直訂認證',
-    },
     'naver_reviews_title': {
       AppLang.ko: '네이버 블로그 실방문 후기 · 소개 링크',
       AppLang.en: 'Local Korean Blog Reviews & Photos (Naver)',

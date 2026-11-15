@@ -70,7 +70,7 @@ sample_enrich = {
     "host_blog_url": "https://blog.naver.com/host/999",
 }
 doc = build_curated_listing_doc(sample_row, "농어촌민박업", "제주", sample_enrich, 95.0)
-assert doc["listing_tier"] == "public"
+assert "listing_tier" not in doc and "cpc_balance" not in doc  # 주인 등록·CPC 과금 폐지
 assert doc["room_specs"]["bedrooms"] == 2
 assert "조식 제공 가능" in doc["options"]
 assert len(doc["images"]) == 1 and "path" not in doc["images"][0]
@@ -81,7 +81,9 @@ assert "濟州島" in doc["i18n"]["zh"]["title"]
 
 idx_entry = build_lightweight_index_entry(doc)
 assert idx_entry["listing_id"] == doc["listing_id"]
-assert idx_entry["naver_blog_total"] == 42
+assert idx_entry["title"] == doc["title"]
+# 경량 색인은 상세 전용 필드(후기 수 등)를 싣지 않는다 (초기 로딩 용량 절감)
+assert "naver_blog_total" not in idx_entry
 print("[OK] 외부 사진 링크·네이버 후기·다국어(영/일/중) 스키마 생성")
 
 # 4. 버킷 상위 N개 선별 검증

@@ -1,9 +1,8 @@
-const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { onRequest } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
-const { FieldValue, Timestamp, getFirestore } = require("firebase-admin/firestore");
+const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 
 initializeApp();
 
@@ -22,35 +21,6 @@ const PROVINCE_EN = {
 const SUPPORTED_LANGS = new Set(["ko", "en", "ja", "zh"]);
 const BOT_UA_RE =
   /bot|crawler|spider|slurp|yeti|daumoa|bingpreview|facebookexternalhit|kakaotalk-scrap|slackbot|discordbot|whatsapp|telegrambot|headless|curl|wget|python-requests/i;
-const CPC_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000; // 같은 방문자·숙소 재클릭은 24시간 동안 과금하지 않는다.
-const CPC_DEDUP_TTL_MS = 48 * 60 * 60 * 1000; // Firestore TTL(expire_at)로 dedup 문서를 자동 삭제한다.
-const CPC_DEFAULT_DAILY_CAP = 30; // 숙소당 하루 최대 과금 클릭 수 (cpc_daily_cap 필드로 개별 조정)
-
-/**
- * 과금 중복 판정용 클라이언트 IP.
- * X-Forwarded-For 의 "첫 번째" 값은 요청자가 임의로 넣을 수 있으므로 쓰지 않는다.
- * Firebase Hosting(CDN)이 직접 설정하는 fastly-client-ip 를 우선 쓰고,
- * 없으면 구글 프런트엔드가 마지막에 덧붙인 XFF 값(요청자가 조작할 수 없는 쪽)을 쓴다.
- */
-function resolveClientIp(headers) {
-  const get = (name) => {
-    const v = headers ? headers[name] : undefined;
-    return Array.isArray(v) ? String(v[0] || "") : String(v || "");
-  };
-  const fastly = get("fastly-client-ip").trim();
-  if (fastly) return fastly;
-  const parts = get("x-forwarded-for")
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : "unknown";
-}
-
-/** KST 기준 날짜(YYYY-MM-DD) — 일일 과금 상한 집계용 */
-function kstDay(nowMs) {
-  return new Date(nowMs + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
 const TEMPLATE_PATH = path.join(__dirname, "index.html");
 const CACHED_TEMPLATE = fs.existsSync(TEMPLATE_PATH) ? fs.readFileSync(TEMPLATE_PATH, "utf8") : "";
 
@@ -413,14 +383,9 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   if (LISTING_ID_RE.test(rawId)) {
     try {
       const db = getFirestore();
-      let snap = await db.collection("listings").doc(rawId).get();
-      let data = snap.exists ? snap.data() : null;
-      let effectiveId = rawId;
-      if (data && data.status === "replaced_by_claim" && LISTING_ID_RE.test(String(data.claimed_by_listing_id || ""))) {
-        effectiveId = String(data.claimed_by_listing_id);
-        snap = await db.collection("listings").doc(effectiveId).get();
-        data = snap.exists ? snap.data() : null;
-      }
+      const snap = await db.collection("listings").doc(rawId).get();
+      const data = snap.exists ? snap.data() : null;
+      const effectiveId = rawId;
       if (!data || data.status !== "active") {
         res.set("Cache-Control", "no-cache, no-store, must-revalidate");
         res.status(200).send(template);
@@ -502,11 +467,21 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
 });
 
 /**
- * 제안 A 수익모델: CPC(클릭당 과금) 리다이렉트 엔진 (/go?id=stay_xxx)
- * - 검색봇(Bot) 클릭 제외 + 동일 IP/브라우저 24시간 중복 클릭 1회만 인정
- * - 호스트 인증 숙소(claimed)이면서 cpc_balance >= cpc_rate 이면 단가 차감 후 직거래 예약창구로 이동
- * - 미인증 공공 숙소(public)이거나 CPC 크레딧 소진 시 과금 없이 네이버 지도/플레이스 검색으로 안전 연결
+ * 숙소 외부 연결 리다이렉트 (/go?id=stay_xxx)
+ * - 검색봇이 아니면 outbound_clicks +1 (방문 통계용, 과금 없음)
+ * - 운영자 직거래 링크(direct_booking_url, 네이버 지도 URL 제외)가 있으면 그쪽으로, 없으면 네이버 지도 검색으로 이동
  */
+function directBookingUrl(data) {
+  const url = typeof data.direct_booking_url === "string" ? data.direct_booking_url.trim() : "";
+  if (!/^https?:\/\//i.test(url)) return "";
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.includes("map.naver.") ? "" : url;
+  } catch (_) {
+    return "";
+  }
+}
+
 exports.goRedirect = onRequest({ region: "asia-northeast3" }, async (req, res) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate");
   const rawId = typeof req.query.id === "string" ? req.query.id.trim() : "";
@@ -515,101 +490,25 @@ exports.goRedirect = onRequest({ region: "asia-northeast3" }, async (req, res) =
     return;
   }
 
-  const db = getFirestore();
   try {
-    let targetId = rawId;
-    let ref = db.collection("listings").doc(targetId);
-    let snap = await ref.get();
-    let data = snap.exists ? snap.data() : null;
-
-    if (data && data.status === "replaced_by_claim" && LISTING_ID_RE.test(String(data.claimed_by_listing_id || ""))) {
-      targetId = String(data.claimed_by_listing_id);
-      ref = db.collection("listings").doc(targetId);
-      snap = await ref.get();
-      data = snap.exists ? snap.data() : null;
-    }
-
+    const ref = getFirestore().collection("listings").doc(rawId);
+    const snap = await ref.get();
+    const data = snap.exists ? snap.data() : null;
     if (!data || data.status !== "active") {
       res.redirect(302, "/");
       return;
     }
 
-    const ua = String(req.get("user-agent") || "");
-    const isBot = BOT_UA_RE.test(ua);
-    const clientIp = resolveClientIp(req.headers);
-    const nowMs = Date.now();
-    const today = kstDay(nowMs);
-    // 날짜를 키에 넣지 않고 문서 안의 시각으로 "최근 24시간" 여부를 판정한다(UTC 자정 리셋 우회 방지).
-    const dedupHash = crypto
-      .createHash("sha256")
-      .update(`jikstay_cpc_v2|${targetId}|${clientIp}|${ua.slice(0, 80)}`)
-      .digest("hex");
-
-    let destinationUrl = fallbackNaverMapUrl(data);
-
-    if (!isBot) {
-      const dedupRef = db.collection("cpc_click_dedup").doc(dedupHash);
-      await db.runTransaction(async (tx) => {
-        const [freshSnap, dedupSnap] = await Promise.all([tx.get(ref), tx.get(dedupRef)]);
-        if (!freshSnap.exists) return;
-        const cur = freshSnap.data() || {};
-        const isClaimed = cur.listing_tier === "claimed" || Boolean(cur.application_id);
-        const rate = Number(cur.cpc_rate) > 0 ? Number(cur.cpc_rate) : 300;
-        const hasLegacyUnlimited = isClaimed && cur.cpc_balance === undefined;
-        const balance = Number(cur.cpc_balance) || 0;
-        const canUseDirectUrl =
-          isClaimed &&
-          (hasLegacyUnlimited || balance >= rate) &&
-          typeof cur.direct_booking_url === "string" &&
-          /^https?:\/\//i.test(cur.direct_booking_url);
-
-        destinationUrl = canUseDirectUrl ? cur.direct_booking_url.trim() : fallbackNaverMapUrl(cur);
-
-        const lastMs = dedupSnap.exists ? Number(dedupSnap.get("last_click_ms")) || 0 : 0;
-        const isDuplicate = lastMs > 0 && nowMs - lastMs < CPC_DEDUP_WINDOW_MS;
-        if (isDuplicate) return;
-
-        const updates = { outbound_clicks: FieldValue.increment(1) };
-        let charged = 0;
-        const dailyCap = Number(cur.cpc_daily_cap) > 0 ? Number(cur.cpc_daily_cap) : CPC_DEFAULT_DAILY_CAP;
-        const chargedToday = cur.cpc_charged_day === today ? Number(cur.cpc_charged_today) || 0 : 0;
-        const underDailyCap = chargedToday < dailyCap;
-        if (canUseDirectUrl && !hasLegacyUnlimited && balance >= rate && underDailyCap) {
-          const nextBal = Math.max(0, balance - rate);
-          updates.cpc_balance = nextBal;
-          updates.cpc_charged_clicks = FieldValue.increment(1);
-          updates.cpc_charged_day = today;
-          updates.cpc_charged_today = chargedToday + 1;
-          updates.is_sponsored = nextBal >= rate;
-          charged = rate;
-        }
-        tx.update(ref, updates);
-        tx.set(dedupRef, {
-          listing_id: targetId,
-          last_click_ms: nowMs,
-          charged_krw: charged,
-          capped: canUseDirectUrl && !underDailyCap,
-          created_at: FieldValue.serverTimestamp(),
-          expire_at: Timestamp.fromMillis(nowMs + CPC_DEDUP_TTL_MS),
-        });
-      });
-    } else {
-      const isClaimed = data.listing_tier === "claimed" || Boolean(data.application_id);
-      const rate = Number(data.cpc_rate) > 0 ? Number(data.cpc_rate) : 300;
-      const balance = Number(data.cpc_balance) || 0;
-      if (
-        isClaimed &&
-        (data.cpc_balance === undefined || balance >= rate) &&
-        typeof data.direct_booking_url === "string" &&
-        /^https?:\/\//i.test(data.direct_booking_url)
-      ) {
-        destinationUrl = data.direct_booking_url.trim();
+    if (!BOT_UA_RE.test(String(req.get("user-agent") || ""))) {
+      try {
+        await ref.update({ outbound_clicks: FieldValue.increment(1) });
+      } catch (err) {
+        console.error("click count error:", err); // 통계 실패는 이동을 막지 않는다.
       }
     }
-
-    res.redirect(302, destinationUrl);
+    res.redirect(302, directBookingUrl(data) || fallbackNaverMapUrl(data));
   } catch (err) {
-    console.error("CPC redirect error:", err);
+    console.error("redirect error:", err);
     res.redirect(302, "/");
   }
 });
@@ -684,6 +583,5 @@ exports.buildOgHtml = buildOgHtml;
 exports.buildSpotOgHtml = buildSpotOgHtml;
 exports.buildRegionOgHtml = buildRegionOgHtml;
 exports.escapeHtml = escapeHtml;
-exports.resolveClientIp = resolveClientIp;
-exports.kstDay = kstDay;
+exports.directBookingUrl = directBookingUrl;
 exports.normalizeLang = normalizeLang;

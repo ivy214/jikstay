@@ -11,7 +11,6 @@ DATA = {
     "listings": {
         "stay_0000abcd": {
             "status": "active",
-            "listing_tier": "public",
             "title": "<b>바다집</b>",
             "region_depth1": "제주특별자치도",
             "region_depth2": "제주시 애월읍",
@@ -123,7 +122,7 @@ admin_app.db = lambda: FakeDB()
 client = admin_app.app.test_client()
 
 assert client.get("/").status_code == 302
-for url in ["/listings", "/listings?reviewed=1", "/listing/stay_0000abcd", "/spots", "/analytics", "/curate", "/review", "/jobs", "/notifications"]:
+for url in ["/listings", "/listings?reviewed=1", "/listing/stay_0000abcd", "/spots", "/analytics", "/curate", "/review", "/jobs"]:
     r = client.get(url)
     assert r.status_code == 200, (url, r.status_code, r.data[:500])
     print(f"[OK] GET {url}")
@@ -136,7 +135,10 @@ print("[OK] 사용자 입력(숙소명·후기 닉네임) HTML 이스케이프 �
 
 # 폐지된 구 호스트 신청서 경로 404 확인
 assert client.get("/application/app_1").status_code == 404
-print("[OK] 폐지된 호스트 신청서/승인 라우트 제거 확인")
+assert client.get("/notifications").status_code == 404
+assert client.post("/listing/stay_0000abcd/credit", data={"csrf": admin_app.CSRF}).status_code == 404
+assert "CPC" not in html and "cpc_balance" not in html
+print("[OK] 폐지된 호스트 신청서·알림 기록·CPC 크레딧 라우트 제거 확인")
 
 # CSRF 차단
 r = client.post("/listing/stay_0000abcd/review/rev_2/delete", data={"csrf": "wrong"})

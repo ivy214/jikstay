@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'detail_page.dart' show ListingDetailPage, StorageImage, validateUserReviewInput;
 import 'discovery_models.dart';
+import 'hub_details.dart';
 import 'i18n.dart';
 import 'naver_place_info.dart';
 import 'review_auth.dart';
@@ -102,6 +103,20 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
       'title': sp.title,
     });
     _loadReviews();
+    _hydrateDetails(sp);
+  }
+
+  /// 첫 화면에서 빠진 상세 필드(본문·방문기·탐방정보·갤러리)를 시·도별 상세 파일에서 채운다.
+  Future<void> _hydrateDetails(DiscoveryItem sp) async {
+    final full = await hydrateDiscoveryItem(sp);
+    if (!mounted || identical(full, sp) || _current.id != sp.id) return;
+    setState(() {
+      _current = full.copyWithStats(
+        reviewCount: _current.reviewCount,
+        scoreSum: _current.scoreSum,
+        outboundClicks: _current.outboundClicks,
+      );
+    });
   }
 
   void _switchSpot(DiscoveryItem next, {bool scrollToTop = true}) {

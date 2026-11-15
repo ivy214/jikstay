@@ -943,7 +943,7 @@ def fetch_17_provinces_spots(
                         seen_cids.add(cid)
                     rg = classify_region_group(d1) or "전체"
                     spot_idx = len(picked_for_type)
-                    # 시·도별 대표 먹거리·볼거리 상단 2곳에 방문 혜택 쿠폰 / 스폰서 추천(CPC 모델) 메타데이터 부여
+                    # 시·도별 대표 먹거리·볼거리 상단 2곳에 방문 혜택 쿠폰 / 스폰서 추천 메타데이터 부여
                     is_sponsored = spot_idx < 2
                     coupon_title = ""
                     if is_sponsored:
@@ -970,7 +970,6 @@ def fetch_17_provinces_spots(
                     if is_sponsored:
                         spot_doc["is_sponsored"] = True
                         spot_doc["coupon_title"] = coupon_title
-                        spot_doc["cpc_rate"] = 500
                     picked_for_type.append(spot_doc)
                     sub_added += 1
                     if sub_added >= sub_quota:
@@ -1319,9 +1318,6 @@ def enrich_top_stays_with_tour_details(
         batch = db().batch()
         ops = 0
         for d in enriched_docs:
-            snap = col.document(d["listing_id"]).get()
-            if snap.exists and snap.to_dict().get("listing_tier") == "claimed":
-                continue
             batch.set(
                 col.document(d["listing_id"]),
                 {
@@ -1737,7 +1733,6 @@ def upload_spots_to_firestore(spots_and_events: list[dict[str, Any]]) -> int:
                 if "admin_override_sponsor" in prev:
                     payload["is_sponsored"] = bool(prev.get("is_sponsored", False))
                     payload["coupon_title"] = prev.get("coupon_title", "")
-                    payload["cpc_rate"] = prev.get("cpc_rate", 500)
                     payload["admin_override_sponsor"] = True
             batch.set(col.document(sid), payload)
             ops += 1

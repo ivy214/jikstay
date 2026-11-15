@@ -12,18 +12,21 @@
 - **Programmatic SEO**: Firebase Cloud Functions(`serveApp`, `serveSitemap`)를 통해 스토리(`?story=`), 명소·축제(`?spot=`), 17개 시·도(`?region=`), 합법숙소(`?id=`) 2,000여 개 URL에 `Schema.org` JSON-LD 및 다국어 `hreflang` 메타데이터를 동적 주입합니다.
 
 ## 디렉토리 구조
-- `app/` — Flutter Web 프론트엔드 (`lib/main.dart`, `lib/story_detail_page.dart`, `lib/spot_detail_sheet.dart`, `lib/travel_hub.dart`)
-- `backend/` — 공공 API 수집·큐레이션 파이프라인 및 로컬 관리자 콘솔 (`build_travel_hub.py`, `curate_public_stays.py`, `admin_app.py`)
-- `firebase/` — Firestore/Storage 보안 규칙, 복합 인덱스, Cloud Functions(Node.js 22, `asia-northeast3`)
-- `deploy.ps1` — Flutter Web 프로덕션 빌드 · 경량화 동기화 · Firebase 전체 배포 자동화 스크립트
+- `app/` — Flutter Web 프론트엔드. 화면별 코드는 `lib/home/`(홈 카드), `lib/detail/`(숙소 상세), `lib/discovery/`(파싱·시드 데이터), 그 외 `lib/spot_detail_sheet.dart`·`lib/story_detail_page.dart`·`lib/trip_planner.dart`
+- `backend/` — 공공 API 수집·큐레이션·번역·네이버 보강 파이프라인과 로컬 관리자 콘솔 (`curate_public_stays.py`, `build_travel_hub.py`, `translate_hub.py`, `enrich_naver_local.py`, `admin_app.py`)
+- `firebase/` — Firestore/Storage 보안 규칙, 복합 인덱스, Cloud Functions(Node.js 22, `asia-northeast3`), 규칙·함수 테스트
+- `deploy.ps1` — 허브 데이터 분할 → Flutter Web 빌드 → Firebase 배포 자동화
+- 현재 구조·데이터 흐름·남은 일: [NOTES.md](NOTES.md) · 지난 이력: [docs/CHANGELOG.md](docs/CHANGELOG.md)
+
+## 테스트
+push·PR 마다 GitHub Actions `CI`가 아래를 모두 실행합니다.
+```powershell
+cd app; flutter analyze; flutter test
+cd firebase; npm run test:functions; npm run test:rules   # 규칙 테스트는 Firebase 에뮬레이터(Java) 필요
+backend\.venv\Scripts\python backend\tests\smoke_test.py   # admin_test / curate_test / naver_filters_test / split_hub_test
+```
 
 ## 빌드 및 배포
 ```powershell
-# 테스트 실행
-Push-Location app
-flutter test
-Pop-Location
-
-# 프로덕션 빌드 및 Firebase 배포
 powershell -ExecutionPolicy Bypass -File .\deploy.ps1 -Deploy
 ```

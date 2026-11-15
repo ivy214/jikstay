@@ -19,6 +19,8 @@ __pycache__/
 *.log
 *TEMP_MPY*
 app/build/
+# backend/split_hub.py 가 빌드 직전에 생성 (원본: app/web/data/public_travel_hub.json)
+app/web/data/hub/
 app/.dart_tool/
 app/ephemeral/
 firebase/public/

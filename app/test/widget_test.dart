@@ -5,6 +5,7 @@ import 'package:jikstay/amenities.dart';
 import 'package:jikstay/demo_data.dart';
 import 'package:jikstay/detail_page.dart';
 import 'package:jikstay/discovery_models.dart';
+import 'package:jikstay/hub_details.dart';
 import 'package:jikstay/i18n.dart';
 import 'package:jikstay/main.dart';
 import 'package:jikstay/naver_place_info.dart';
@@ -239,6 +240,8 @@ void main() {
                 'review_count': 3,
                 'score_sum': 14,
                 'images': [],
+                // 운영자 직거래 링크가 있어야 '수수료 0원 직거래' CTA가 나온다 (네이버 지도 URL은 제외)
+                'direct_booking_url': 'https://yeonnam-terrace.example.com/booking',
               },
             ),
           ),
@@ -290,7 +293,7 @@ void main() {
       expect(find.text('세탁기 없음'), findsWidgets);
     });
 
-    test('해외 게스트용 다국어(영·일·중) 문의 문구 자동 병기 생성 및 CPC 우선노출·업종 필터', () {
+    test('해외 게스트용 다국어(영·일·중) 문의 문구 자동 병기 생성 및 스폰서 우선노출·업종 필터', () {
       final range = DateTimeRange(start: DateTime(2026, 12, 10), end: DateTime(2026, 12, 13));
       final enMsg = buildBookingInquiryTemplate(
         {'title': '애월 돌집'},
@@ -313,7 +316,7 @@ void main() {
             'en': {'title': 'Jeju Countryside Stay'},
           },
         }),
-        MapEntry('cpc1', {
+        MapEntry('sponsored1', {
           'title': '공식 한옥',
           'region_depth1': '제주특별자치도',
           'license_type': '한옥체험업',
@@ -321,10 +324,10 @@ void main() {
           'created_at': 1000,
         }),
       ];
-      // CPC 스폰서 숙소는 최신순에서 일반 공공 숙소보다 상단에 배치된다
-      expect(filterAndSortListings(items, region: '제주').map((e) => e.key).toList(), ['cpc1', 'pub1']);
+      // 스폰서 숙소는 최신순에서 일반 공공 숙소보다 상단에 배치된다
+      expect(filterAndSortListings(items, region: '제주').map((e) => e.key).toList(), ['sponsored1', 'pub1']);
       // 업종 필터 및 영문 키워드 검색
-      expect(filterAndSortListings(items, region: '전체', licenseType: '한옥체험업').map((e) => e.key).toList(), ['cpc1']);
+      expect(filterAndSortListings(items, region: '전체', licenseType: '한옥체험업').map((e) => e.key).toList(), ['sponsored1']);
       expect(filterAndSortListings(items, region: '전체', query: 'countryside').map((e) => e.key).toList(), ['pub1']);
     });
 
@@ -763,6 +766,60 @@ void main() {
         home: Scaffold(body: NaverPlaceInfo(data: {'naver_link': 'javascript:alert(1)'}, lang: AppLang.ko)),
       ));
       expect(find.byKey(const Key('naver_place_info')), findsNothing);
+    });
+  });
+
+  group('허브 상세 지연 로드', () {
+    setUp(HubDetailStore.clearForTest);
+    tearDown(HubDetailStore.clearForTest);
+
+    test('core 항목에 시·도 상세(본문·방문기·전체 개요)를 합치고 실시간 통계는 유지', () async {
+      HubDetailStore.seed('daegu', {
+        'spot_a': {
+          'overview': '수성못 전체 개요입니다. 밤이면 야경이 아름답다.',
+          'paragraphs': ['첫 문단', '둘째 문단'],
+          'naver_reviews': [
+            {'title': '수성못 산책 후기', 'summary': '좋아요', 'link': 'https://blog.naver.com/x/1'}
+          ],
+        },
+      });
+      final core = parseSpotJson({
+        'id': 'spot_a',
+        'kind': 'attraction',
+        'title': '수성못',
+        'province': '대구',
+        'overview': '수성못 전체…',
+        'lat': 35.8,
+        'lng': 128.6,
+        'has_details': true,
+      }, fallbackCategory: DiscoveryCategory.attraction)!
+          .copyWithStats(reviewCount: 3, scoreSum: 14);
+      expect(core.paragraphs, isEmpty);
+
+      final full = await hydrateDiscoveryItem(core);
+      expect(full.paragraphs, ['첫 문단', '둘째 문단']);
+      expect(full.naverReviews.length, 1);
+      expect(full.subtitle, contains('야경'));
+      expect(full.reviewCount, 3);
+      expect(full.scoreSum, 14);
+      expect(full.raw.containsKey('has_details'), isFalse);
+    });
+
+    test('상세 표시가 없는 항목은 그대로 반환', () async {
+      final item = parseSpotJson({'id': 'spot_b', 'title': '짧은집', 'province': '세종', 'lat': 36.5, 'lng': 127.2},
+          fallbackCategory: DiscoveryCategory.food)!;
+      expect(identical(await hydrateDiscoveryItem(item), item), isTrue);
+    });
+  });
+
+  group('직거래 링크 판정', () {
+    test('운영자 링크만 직거래로 보고 네이버 지도 URL·빈 값은 제외', () {
+      expect(hasDirectBookingUrl({'direct_booking_url': 'https://pension.example.com/book'}), isTrue);
+      expect(hasDirectBookingUrl({'direct_booking_url': 'https://map.naver.com/p/search/abc'}), isFalse);
+      expect(hasDirectBookingUrl({'direct_booking_url': 'javascript:alert(1)'}), isFalse);
+      expect(hasDirectBookingUrl({}), isFalse);
+      expect(bookingCtaLabel('https://map.naver.com/p/search/abc', data: {'direct_booking_url': 'https://map.naver.com/p/search/abc'}),
+          '네이버 지도·예약처 보기');
     });
   });
 }

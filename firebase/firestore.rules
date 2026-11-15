@@ -94,7 +94,7 @@ service cloud.firestore {
     }
 
     // 3. 전국 17개 시·도 로컬 스팟 (축제·행사, 볼거리·명소, 로컬 먹거리·카페):
-    //    방문 혜택 쿠폰·길찾기·전화 클릭수(CPC 과금 지표) +1 및 방문자 별점·후기 원자적 집계만 허용.
+    //    방문 혜택 쿠폰·길찾기·전화 클릭수(방문 통계) +1 및 방문자 별점·후기 원자적 집계만 허용.
     match /spots/{spotId} {
       allow read: if resource.data.status == "active";
 

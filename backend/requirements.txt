@@ -3,6 +3,4 @@ openai
 flask
 requests
 beautifulsoup4
-pillow
-pydantic
 firebase-admin

@@ -1,7 +1,7 @@
 """관리자 화면 (로컬 전용 웹 · 공공API 큐레이션 및 사용자 후기 관리).
 
 호스트 입점 신청·승인 절차가 폐지되고 공공데이터 자동 선별로 전환됨에 따라,
-공공숙소 100선 수집·여행허브 갱신·인허가 정기 재확인·CPC 크레딧 설정 및
+공공숙소 100선 수집·여행허브 갱신·인허가 정기 재확인·방문 혜택 쿠폰 설정 및
 악성/스팸 사용자 후기 삭제(Admin SDK) 기능만 가볍게 제공한다.
 
 실행:  cd backend && .venv\\Scripts\\python admin_app.py   →  http://127.0.0.1:8765
@@ -37,7 +37,7 @@ button.primary{background:#e61e4d;color:#fff;border-color:#e61e4d}button.danger{
 input[type=text]{padding:6px;width:320px}
 .imgs img{height:120px;margin:4px;border-radius:4px}pre{white-space:pre-wrap;background:#f1f3f5;padding:8px;font-size:12px}
 </style>
-<header><a href="/listings">공개 숙소·후기</a><a href="/spots">로컬 스팟·방문쿠폰</a><a href="/analytics">방문·전환 통계</a><a href="/curate">공공수집·17개시도 허브</a><a href="/review">폐업·재확인</a><a href="/jobs">작업</a><a href="/notifications">알림 기록</a></header>
+<header><a href="/listings">공개 숙소·후기</a><a href="/spots">로컬 스팟·방문쿠폰</a><a href="/analytics">방문·전환 통계</a><a href="/curate">공공수집·17개시도 허브</a><a href="/review">폐업·재확인</a><a href="/jobs">작업</a></header>
 <main>{{ body|safe }}</main></html>"""
 
 
@@ -117,11 +117,11 @@ def listings():
 <a href="/listings?status={{s}}">{{ badge(s)|safe }}</a> {% endfor %}
 | 필터: <a href="/listings?status={{status}}">전체</a> ·
 <a href="/listings?status={{status}}&reviewed=1">사용자 후기 보유 숙소만</a></p>
-<table><tr><th>숙소</th><th>업종 / 신고번호</th><th>방문자 별점·후기</th><th>클릭 / CPC</th><th>직거래 창구</th></tr>
+<table><tr><th>숙소</th><th>업종 / 신고번호</th><th>방문자 별점·후기</th><th>외부 연결 클릭</th><th>직거래 창구</th></tr>
 {% for id, d in rows %}<tr><td><a href="/listing/{{id}}">{{d.title}}</a><br>{{d.region_depth1}} {{d.region_depth2}}</td>
 <td>{{d.license_type}}<br>{{d.license_number}}</td>
 <td>{% if (d.review_count or 0) > 0 %}<b>★ {{ '%.1f'|format((d.score_sum or 0) / d.review_count) }}</b> ({{d.review_count}}건){% else %}-{% endif %}</td>
-<td>총 {{d.outbound_clicks or 0}}회<br>잔액 <b>{{d.cpc_balance or 0}}원</b></td>
+<td>총 {{d.outbound_clicks or 0}}회</td>
 <td>{% if d.direct_booking_url %}<a href="{{d.direct_booking_url}}" target=_blank rel=noopener>열기</a>{% else %}-{% endif %}</td></tr>
 {% else %}<tr><td colspan=5>없음</td></tr>{% endfor %}</table>""", rows=rows, status=status)
 
@@ -142,7 +142,7 @@ def listing_detail(listing_id):
 <tr><th>지역 / 유형</th><td>{{d.region_depth1}} {{d.region_depth2}} · {{d.accommodation_type or '-'}}</td></tr>
 <tr><th>업종 / 신고번호</th><td>{{d.license_type}} / <b>{{d.license_number}}</b></td></tr>
 <tr><th>방문자 평점</th><td><b>★ {{avg_str}}</b> (후기 {{rc}}건 · 총점 {{ss}})</td></tr>
-<tr><th>CPC 과금 현황</th><td>잔액 <b>{{d.cpc_balance or 0}}원</b> · 단가 {{d.cpc_rate or 300}}원 · 누적 클릭 {{d.outbound_clicks or 0}}회 · 상단우선노출 {{d.is_sponsored or False}}</td></tr>
+<tr><th>외부 연결 클릭</th><td>누적 {{d.outbound_clicks or 0}}회</td></tr>
 <tr><th>하이라이트</th><td>{{d.highlights or d.summary_points}}</td></tr>
 <tr><th>편의시설</th><td>{{d.amenities_by_category or d.options}}</td></tr>
 <tr><th>네이버 후기 링크</th><td>검색 {{d.naver_blog_total or 0}}건 · 연결 링크 {{(d.naver_reviews or [])|length}}개</td></tr>
@@ -162,12 +162,6 @@ def listing_detail(listing_id):
 <button class=danger>삭제</button></form></td></tr>
 {% else %}<tr><td colspan=5>등록된 사용자 후기가 없습니다.</td></tr>{% endfor %}
 </table></div>
-
-<div class=card><h3>CPC 크레딧 충전 · 클릭 단가 설정</h3>
-<form method=post action="/listing/{{id}}/credit"><input type=hidden name=csrf value="{{csrf}}">
-충전/차감 금액(원): <input type=text name=add_krw value="30000" style="width:120px">
-클릭당 단가(원): <input type=text name=cpc_rate value="{{d.cpc_rate or 300}}" style="width:90px">
-<button class=primary>크레딧 반영</button></form></div>
 
 <div class=card><h3>노출 상태 변경 (폐업·정보오류 조치)</h3>
 <form method=post action="/listing/{{id}}/status"><input type=hidden name=csrf value="{{csrf}}">
@@ -218,19 +212,6 @@ def listing_status(listing_id):
     return redirect(url_for("listing_detail", listing_id=listing_id))
 
 
-@app.post("/listing/<listing_id>/credit")
-def listing_credit(listing_id):
-    from upload_to_firestore import topup_cpc_credit
-
-    try:
-        add_krw = int(request.form.get("add_krw", "0").strip())
-        cpc_rate = int(request.form.get("cpc_rate", "300").strip())
-    except ValueError:
-        abort(400)
-    topup_cpc_credit(listing_id, add_krw, cpc_rate=cpc_rate)
-    return redirect(url_for("listing_detail", listing_id=listing_id))
-
-
 # ---------- 전국 17개 시·도 로컬 스팟(축제·볼거리·먹거리) & 방문 혜택 쿠폰 관리 ----------
 @app.get("/spots")
 def spots_list():
@@ -241,7 +222,7 @@ def spots_list():
     rows.sort(key=lambda kv: (kv[1].get("outbound_clicks") or 0, kv[1].get("review_count") or 0), reverse=True)
     return page("""<h2>전국 로컬 스팟 · 방문혜택 쿠폰 관리 ({{rows|length}}건)</h2>
 <p>필터: <a href="/spots">전체</a> · <a href="/spots?sponsored=1">방문혜택 쿠폰/스폰서 업장만</a></p>
-<table><tr><th>구분 / 시도</th><th>장소명</th><th>방문혜택 쿠폰 설정 (CPC / 월정액)</th><th>방문유도 클릭 / 평점</th></tr>
+<table><tr><th>구분 / 시도</th><th>장소명</th><th>방문 혜택 쿠폰 설정</th><th>방문유도 클릭 / 평점</th></tr>
 {% for id, d in rows %}<tr>
 <td><b>{{d.province}}</b> · {{d.kind}}</td>
 <td><b>{{d.title}}</b><br><small>{{d.addr}}</small></td>
@@ -270,7 +251,7 @@ def spot_coupon_update(spot_id):
 
 @app.get("/analytics")
 def analytics_page():
-    """지자체 B2G 홍보 리포트 및 스폰서 상점 CPC 성과 측정용 방문·전환 요약 대시보드."""
+    """지자체 B2G 홍보 리포트 및 스폰서 상점 쿠폰 성과 측정용 방문·전환 요약 대시보드."""
     stays = [(s.id, s.to_dict() or {}) for s in db().collection("listings").where("status", "==", "active").limit(2000).stream()]
     spots = [(s.id, s.to_dict() or {}) for s in db().collection("spots").where("status", "==", "active").limit(1000).stream()]
 
@@ -346,7 +327,7 @@ def curate_page():
 <p>한국관광공사 <code>KorService2</code>에서 전국 17개 시·도 볼거리(12)·먹거리(39)·진행중 축제(searchFestival2)를 균등 수집하고,
 지자체 공식 관광지도 PDF/E-book 아카이브 및 지도용 숙소 위경도 색인을 한 번에 생성합니다.</p>
 <form method=post action="/curate/hub"><input type=hidden name=csrf value="{{csrf}}">
-<label><input type=checkbox name=upload_spots checked> 전국 축제·볼거리·먹거리 Firestore <code>spots</code> 동기화(CPC 클릭·별점 활성화)</label><br>
+<label><input type=checkbox name=upload_spots checked> 전국 축제·볼거리·먹거리 Firestore <code>spots</code> 동기화(방문 클릭·별점 활성화)</label><br>
 <label><input type=checkbox name=upload> 상위 숙소 상세보강 Firestore 반영</label><br><br>
 <button class=primary>17개 시도 로컬 허브 & 지도 색인 갱신</button></form>
 </div>
@@ -427,15 +408,6 @@ def jobs():
 {% for id, j in items %}<div class=card {% if id == hl %}style="border-color:#e61e4d"{% endif %}>
 <b>{{j.name}}</b> {{ badge({'done':'active','failed':'error','running':'uncertain'}[j.status])|safe }} {{j.status}} · {{j.started.strftime('%H:%M:%S')}}
 <pre>{{j.log or '(실행 중…)'}}</pre></div>{% else %}<p>없음</p>{% endfor %}""", items=items, hl=request.args.get("highlight"))
-
-
-@app.get("/notifications")
-def notifications():
-    rows = [s.to_dict() for s in db().collection("notifications")
-            .order_by("created_at", direction="DESCENDING").limit(100).stream()]
-    return page("""<h2>알림 기록 (최근 100건)</h2><table><tr><th>시각</th><th>종류</th><th>결과</th><th>내용</th></tr>
-{% for n in rows %}<tr><td>{{n.created_at}}</td><td>{{n.kind}}</td><td>{{n.result}} {{n.detail}}</td><td><pre>{{n.text}}</pre></td></tr>
-{% else %}<tr><td colspan=4>없음</td></tr>{% endfor %}</table>""", rows=rows)
 
 
 if __name__ == "__main__":

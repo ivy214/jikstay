@@ -31,6 +31,14 @@ if (-not (Test-Path $FlutterBin)) {
   $FlutterBin = "flutter"
 }
 
+Write-Host "[0/4] 허브 데이터 분할 (첫 화면용 core + 시·도별 상세)..." -ForegroundColor Cyan
+$VenvPython = Join-Path $Root "backend\.venv\Scripts\python.exe"
+$PythonBin = if (Test-Path $VenvPython) { $VenvPython } else { "python" }
+& $PythonBin (Join-Path $Root "backend\split_hub.py")
+if ($LASTEXITCODE -ne 0) {
+  throw "split_hub.py 실패 (종료 코드: $LASTEXITCODE)"
+}
+
 Write-Host "[1/4] Flutter Web 빌드 시작..." -ForegroundColor Cyan
 Push-Location $AppDir
 try {

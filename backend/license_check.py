@@ -15,14 +15,14 @@
 API 대신 공공데이터포털에서 받은 CSV로 대조할 수도 있다: --csv 파일경로
 
 [한계] 공공 데이터에는 '영업신고번호'가 없을 수 있어 사업장명·주소·영업상태로 대조한다.
-신고증 사본의 번호 확인은 여전히 관리자가 눈으로 한다. 응답 필드명은 문서에 명시되지 않아
+숙소 문서에 수집 당시의 인허가 관리번호(public_mng_no)가 있으면 그 번호로 정확히 대조한다. 응답 필드명은 문서에 명시되지 않아
 여러 이름 후보로 읽으므로, 첫 사용 때 `python license_check.py probe 농어촌민박업 <상호>` 로
 실제 응답을 확인할 것.
 
 사용
   python license_check.py probe 농어촌민박업 "바다집"
-  python license_check.py check --application-id app_123 [--csv data.csv]
-  python license_check.py recheck [--csv data.csv]         # 공개 중인 전체 숙소 재확인
+  python license_check.py check stay_pub_xxxxxxxx [--csv data.csv]   # 숙소 1곳 대조(저장 안 함)
+  python license_check.py recheck [--csv data.csv]                    # 공개 중인 전체 숙소 재확인
 """
 import argparse
 import csv
@@ -196,52 +196,82 @@ def evaluate(business_name: str, business_address: str, rows: list[dict]) -> dic
     }
 
 
-def check_application(app_id: str, csv_path: str | None = None) -> dict:
-    from firebase_client import db
+def _status_result(status: str) -> str:
+    if any(w in status for w in BAD_WORDS):
+        return "closed"
+    if any(w in status for w in OK_WORDS):
+        return "match"
+    return "uncertain"
 
-    ref = db().collection("host_applications").document(app_id)
-    app = ref.get().to_dict() or {}
-    name, addr = app.get("business_name", ""), app.get("business_address", "")
-    if not name:
-        return {"result": "error", "error": "신청서에 상호(사업장명)가 없습니다."}
+
+def check_listing(doc: dict, csv_path: str | None = None) -> dict:
+    """공개 숙소 문서(상호·주소·업종·관리번호)를 공공 인허가 데이터와 대조한다."""
+    name = str(doc.get("title") or "")
+    loc = doc.get("location_info") or {}
+    addr = str(loc.get("display_address") or loc.get("lot_address") or "")
+    if not name or not doc.get("license_type"):
+        return {"result": "error", "error": "숙소 문서에 상호 또는 업종이 없습니다."}
     try:
-        rows = query_csv(csv_path, name) if csv_path else query_api(app.get("license_type", ""), name)
-        out = evaluate(name, addr, rows)
+        rows = query_csv(csv_path, name) if csv_path else query_api(str(doc["license_type"]), name)
     except Exception as e:  # noqa: BLE001
-        out = {"result": "error", "error": str(e)[:300]}
+        return {"result": "error", "error": str(e)[:300], "source": "csv" if csv_path else "api"}
+
+    mng_no = str(doc.get("public_mng_no") or "")
+    if mng_no.startswith("KTO-"):  # 한국관광공사 콘텐츠 ID — 행안부 인허가 관리번호가 아님
+        mng_no = ""
+    exact = [r for r in rows if mng_no and str(r.get("MNG_NO") or "") == mng_no]
+    if exact:
+        # 수집 당시와 같은 인허가 관리번호 → 동명이인 걱정 없이 영업상태만 본다.
+        status = _first(exact[0], STATUS_KEYS)
+        out = {
+            "result": _status_result(status),
+            "score": 9.0,
+            "candidates": len(rows),
+            "matched_name": _first(exact[0], NAME_KEYS),
+            "matched_address": _first(exact[0], ADDR_KEYS),
+            "matched_status": status,
+            "matched_closed_date": str(exact[0].get("CLSBIZ_YMD") or ""),
+            "matched_mng_no": mng_no,
+            "matched_by": "mng_no",
+        }
+    else:
+        out = evaluate(name, addr, rows)
+        out["matched_by"] = "name_address"
     out["source"] = "csv" if csv_path else "api"
-    out["checked_at"] = firestore.SERVER_TIMESTAMP
-    ref.update({"license_check": out})
     return out
 
 
 def recheck_all(csv_path: str | None = None):
-    """공개 중인 숙소를 다시 대조. 폐업·휴업이 확실하면 노출 중지(suspended) 후 호스트에 알림.
+    """공개 중인 숙소를 다시 대조. 폐업·휴업이 확실하면 노출 중지(suspended).
     판단 불가(not_found/uncertain/error)는 자동 조치하지 않고 관리자 확인 대상으로 표시만 한다."""
     from firebase_client import db
-    from notify import notify_listing
 
+    counts = {"closed": 0, "match": 0, "review": 0}
     for snap in db().collection("listings").where("status", "==", "active").stream():
         doc = snap.to_dict()
-        res = check_application(doc["application_id"], csv_path)
+        res = check_listing(doc, csv_path)
         if res["result"] == "closed":
             snap.reference.update({
                 "status": "suspended",
                 "suspended_reason": f"공공 인허가 데이터 영업상태: {res.get('matched_status')}",
                 "suspended_at": firestore.SERVER_TIMESTAMP,
+                "last_license_check": res,
             })
-            notify_listing(snap.id, "suspended", status=res.get("matched_status", ""))
-            print(f"노출 중지: {snap.id} {doc['title']} ({res.get('matched_status')})")
+            counts["closed"] += 1
+            print(f"노출 중지: {snap.id} {doc.get('title')} ({res.get('matched_status')})")
         elif res["result"] != "match":
             snap.reference.update({"needs_review": True, "needs_review_reason": res.get("error") or res["result"]})
-            print(f"확인 필요: {snap.id} {doc['title']} ({res['result']})")
+            counts["review"] += 1
+            print(f"확인 필요: {snap.id} {doc.get('title')} ({res['result']})")
         else:
             snap.reference.update({
                 "needs_review": False,
                 "needs_review_reason": firestore.DELETE_FIELD,
                 "last_license_check_at": firestore.SERVER_TIMESTAMP,
             })
-            print(f"정상: {snap.id} {doc['title']}")
+            counts["match"] += 1
+    print(f"재확인 완료: 정상 {counts['match']} · 노출 중지 {counts['closed']} · 확인 필요 {counts['review']}")
+    return counts
 
 
 if __name__ == "__main__":
@@ -250,8 +280,8 @@ if __name__ == "__main__":
     p = sub.add_parser("probe", help="API 원본 응답 확인(필드명 점검용)")
     p.add_argument("license_type")
     p.add_argument("business_name")
-    p = sub.add_parser("check")
-    p.add_argument("--application-id", required=True)
+    p = sub.add_parser("check", help="숙소 1곳 대조 결과 출력(저장하지 않음)")
+    p.add_argument("listing_id")
     p.add_argument("--csv")
     p = sub.add_parser("recheck")
     p.add_argument("--csv")
@@ -262,6 +292,11 @@ if __name__ == "__main__":
         print(json.dumps(rows[:3], ensure_ascii=False, indent=2))
         print(f"... 총 {len(rows)}건")
     elif a.cmd == "check":
-        print(json.dumps(check_application(a.application_id, a.csv), ensure_ascii=False, indent=2, default=str))
+        from firebase_client import db
+
+        snap = db().collection("listings").document(a.listing_id).get()
+        if not snap.exists:
+            raise SystemExit(f"숙소 없음: {a.listing_id}")
+        print(json.dumps(check_listing(snap.to_dict(), a.csv), ensure_ascii=False, indent=2, default=str))
     else:
         recheck_all(a.csv)

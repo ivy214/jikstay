@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'detail_page.dart' show ListingDetailPage, StorageImage;
 import 'discovery_models.dart';
+import 'hub_details.dart';
 import 'i18n.dart';
 import 'spot_detail_sheet.dart';
 import 'translation_store.dart';
@@ -60,6 +61,22 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
       'province': st.province,
       'title': st.title,
     });
+    _hydrateSpotStory(st);
+  }
+
+  /// 명소·축제에서 만든 스토리는 첫 화면 데이터에 본문이 없으므로 시·도별 상세 파일로 다시 만든다.
+  Future<void> _hydrateSpotStory(DailyStoryItem st) async {
+    DiscoveryItem? spot;
+    for (final it in widget.allItems) {
+      if (it.id == st.id) {
+        spot = it;
+        break;
+      }
+    }
+    if (spot == null || spot.raw['has_details'] != true) return;
+    final full = await hydrateDiscoveryItem(spot);
+    if (!mounted || identical(full, spot) || _story.id != st.id) return;
+    setState(() => _story = rebuildStoryFromSpot(st, full, widget.allItems));
   }
 
   Future<void> _openUrl(String rawUrl, {String eventTag = 'story_external_open', bool countVisit = false}) async {

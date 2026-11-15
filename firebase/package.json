@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test:rules": "firebase emulators:exec --only firestore,storage \"node --test tests/rules.test.mjs\"",
-    "test:e2e": "firebase emulators:exec --only firestore,storage \"..\\backend\\.venv\\Scripts\\python.exe ..\\backend\\tests\\e2e_emulator_test.py\""
+    "test:functions": "node --test tests/functions.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",
