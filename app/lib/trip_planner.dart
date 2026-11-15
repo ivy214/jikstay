@@ -22,6 +22,7 @@ class TripStop {
 
 class TripPlan {
   final String province;
+  final String subRegion;
   final int days;
   final TripTheme theme;
   final bool foreignerOnly;
@@ -29,6 +30,7 @@ class TripPlan {
 
   const TripPlan({
     required this.province,
+    this.subRegion = '전체',
     required this.days,
     required this.theme,
     required this.foreignerOnly,
@@ -36,15 +38,45 @@ class TripPlan {
   });
 }
 
+/// 아이템의 `regionLabel` 또는 `address`에서 시·군·구 단위 세부 지역명을 추출한다.
+String extractSubRegion(DiscoveryItem it) {
+  final sources = [it.regionLabel, it.address];
+  final re = RegExp(r'([가-힣]{1,6}(?:시|군|구))');
+  for (final src in sources) {
+    for (final m in re.allMatches(src)) {
+      final token = m.group(1) ?? '';
+      if (token.isEmpty) continue;
+      if (token.endsWith('특별시') || token.endsWith('광역시') || token.endsWith('자치시')) {
+        continue;
+      }
+      return token;
+    }
+  }
+  return '';
+}
+
+/// 선택한 시·도 내에서 선택 가능한 세부 지역(시·군·구) 목록을 빈도순/가나다순으로 반환한다.
+List<String> listSubRegions(List<DiscoveryItem> allItems, String province) {
+  final prov = province.trim().isEmpty ? '전체' : province.trim();
+  final counts = <String, int>{};
+  for (final it in allItems) {
+    if (prov != '전체' && it.province != prov) continue;
+    final sub = extractSubRegion(it);
+    if (sub.isNotEmpty) {
+      counts[sub] = (counts[sub] ?? 0) + 1;
+    }
+  }
+  final sorted = counts.keys.toList()
+    ..sort((a, b) {
+      final cmp = (counts[b] ?? 0).compareTo(counts[a] ?? 0);
+      return cmp != 0 ? cmp : a.compareTo(b);
+    });
+  return ['전체', ...sorted.take(30)];
+}
+
 bool _isForeignerEligibleStay(DiscoveryItem s) {
   if (s.category != DiscoveryCategory.stay) return false;
-  final lic = s.licenseType;
-  final title = s.title;
-  if (title.contains('내국인 전용')) return false;
-  // 외국인관광도시민박업, 한옥체험업, 관광숙박업(호텔/호스텔) 우선, 미분류 공공숙소도 허용
-  if (lic.contains('외국인') || lic.contains('한옥') || lic.contains('호텔') || lic.contains('호스텔')) {
-    return true;
-  }
+  if (s.title.contains('내국인 전용')) return false;
   return true;
 }
 
@@ -69,118 +101,144 @@ int _daysUntilStart(DiscoveryItem it) {
   return diff < 0 ? 0 : diff;
 }
 
-/// 선택한 지역·일수·테마에 맞춰 반경 45km 내 명소·맛집·축제·합법 숙소를 자동 조합한다.
+/// 선택한 지역(시/도 · 시/군/구)·일수·테마에 맞춰 근거리 동선으로 명소·맛집·축제·합법 숙소를 자동 조합한다.
 TripPlan generateTripPlan({
   required List<DiscoveryItem> allItems,
   String province = '전체',
+  String subRegion = '전체',
   int days = 2,
   TripTheme theme = TripTheme.all,
   bool foreignerOnly = false,
   int seedOffset = 0,
 }) {
   final prov = province.trim().isEmpty ? '전체' : province.trim();
-  final scoped = prov == '전체'
+  final sub = subRegion.trim().isEmpty ? '전체' : subRegion.trim();
+  final provPool = prov == '전체'
       ? allItems
       : allItems.where((it) => it.province == prov).toList();
-  final pool = scoped.isNotEmpty ? scoped : allItems;
+  final subPool = sub == '전체'
+      ? provPool
+      : provPool.where((it) => extractSubRegion(it) == sub || it.regionLabel.contains(sub) || it.address.contains(sub)).toList();
+  final anchorPool = subPool.isNotEmpty ? subPool : (provPool.isNotEmpty ? provPool : allItems);
 
-  // 1. 앵커 선정: 임박/진행중 축제 > 스토리/볼거리 > 일반 아이템
-  final anchors = <DiscoveryItem>[];
-  for (final it in pool) {
-    if (it.category == DiscoveryCategory.event) {
-      anchors.add(it);
-    }
-  }
-  anchors.sort((a, b) {
-    final da = _daysUntilStart(a);
-    final db = _daysUntilStart(b);
-    if (da != db) return da.compareTo(db);
-    return b.priorityScore.compareTo(a.priorityScore);
-  });
+  // 1. 앵커 후보군 선정: 임박/진행중 축제 > 명소·스토리
+  final eventAnchors = anchorPool.where((it) => it.category == DiscoveryCategory.event).toList()
+    ..sort((a, b) {
+      final da = _daysUntilStart(a);
+      final db = _daysUntilStart(b);
+      if (da != db) return da.compareTo(db);
+      return b.priorityScore.compareTo(a.priorityScore);
+    });
+  final spotAnchors = anchorPool
+      .where((it) => it.category == DiscoveryCategory.attraction || it.category == DiscoveryCategory.ebook)
+      .toList()
+    ..sort((a, b) => b.priorityScore.compareTo(a.priorityScore));
 
-  if (anchors.isEmpty || theme == TripTheme.food || theme == TripTheme.hanok) {
-    final fallbackAnchors = pool
-        .where((it) => it.category == DiscoveryCategory.attraction || it.category == DiscoveryCategory.ebook)
-        .toList()
-      ..sort((a, b) => b.priorityScore.compareTo(a.priorityScore));
-    anchors.addAll(fallbackAnchors);
-  }
-  if (anchors.isEmpty && pool.isNotEmpty) {
-    anchors.add(pool.first);
-  }
-
-  final anchor = anchors.isEmpty ? null : anchors[seedOffset % anchors.length];
-  final bundle = anchor != null
-      ? buildConnectedBundle(anchor, allItems, maxRadiusKm: 55.0, limitPerType: 20)
-      : const ConnectedBundle();
-
-  final attractions = <DiscoveryItem>[
-    if (anchor != null && (anchor.category == DiscoveryCategory.attraction || anchor.category == DiscoveryCategory.ebook))
-      anchor,
-    ...bundle.attractions,
-    ...pool.where((it) => it.category == DiscoveryCategory.attraction || it.category == DiscoveryCategory.ebook),
+  final anchors = <DiscoveryItem>[
+    if (theme == TripTheme.food || theme == TripTheme.hanok) ...spotAnchors else ...eventAnchors,
+    if (theme == TripTheme.food || theme == TripTheme.hanok) ...eventAnchors else ...spotAnchors,
   ];
-  final events = <DiscoveryItem>[
-    if (anchor != null && anchor.category == DiscoveryCategory.event) anchor,
-    ...bundle.events,
-    ...pool.where((it) => it.category == DiscoveryCategory.event),
-  ];
-  final foods = <DiscoveryItem>[
-    ...bundle.foods,
-    ...pool.where((it) => it.category == DiscoveryCategory.food),
-  ];
-  final stays = <DiscoveryItem>[
-    ...bundle.stays,
-    ...pool.where((it) => it.category == DiscoveryCategory.stay),
-  ].where((s) => !foreignerOnly || _isForeignerEligibleStay(s)).toList();
-
-  if (foreignerOnly) {
-    stays.sort((a, b) => _stayForeignerScore(b).compareTo(_stayForeignerScore(a)));
+  if (anchors.isEmpty && anchorPool.isNotEmpty) {
+    anchors.add(anchorPool.first);
   }
 
   final usedIds = <String>{};
-  DiscoveryItem? pickNext(List<DiscoveryItem> list, {bool preferHanok = false}) {
-    if (preferHanok) {
-      for (final it in list) {
-        if (!usedIds.contains(it.id) && (it.title.contains('한옥') || it.licenseType.contains('한옥'))) {
-          usedIds.add(it.id);
-          return it;
+  final nearbyPool = provPool.isNotEmpty ? provPool : allItems;
+
+  DiscoveryItem? pickNearest(
+    DiscoveryItem? dayAnchor,
+    List<DiscoveryCategory> categories, {
+    bool preferHanok = false,
+    bool stayFilter = false,
+  }) {
+    final candidates = nearbyPool.where((it) {
+      if (usedIds.contains(it.id)) return false;
+      if (!categories.contains(it.category)) return false;
+      if (stayFilter && foreignerOnly && !_isForeignerEligibleStay(it)) return false;
+      return true;
+    }).toList();
+    if (candidates.isEmpty) return null;
+
+    candidates.sort((a, b) {
+      if (preferHanok) {
+        final ah = (a.title.contains('한옥') || a.licenseType.contains('한옥')) ? 1 : 0;
+        final bh = (b.title.contains('한옥') || b.licenseType.contains('한옥')) ? 1 : 0;
+        if (ah != bh) return bh.compareTo(ah);
+      }
+      if (sub != '전체') {
+        final aSub = (extractSubRegion(a) == sub || a.address.contains(sub)) ? 1 : 0;
+        final bSub = (extractSubRegion(b) == sub || b.address.contains(sub)) ? 1 : 0;
+        if (aSub != bSub) return bSub.compareTo(aSub);
+      }
+      if (dayAnchor != null && dayAnchor.lat != 0 && a.lat != 0 && b.lat != 0) {
+        final da = haversineKm(dayAnchor.lat, dayAnchor.lng, a.lat, a.lng);
+        final db = haversineKm(dayAnchor.lat, dayAnchor.lng, b.lat, b.lng);
+        // 같은 생활권(8km 이내)이면 우선순위·외국인 적합도 반영, 그 외에는 거리 최우선
+        if (da <= 8.0 && db <= 8.0) {
+          if (stayFilter && foreignerOnly) {
+            final fs = _stayForeignerScore(b).compareTo(_stayForeignerScore(a));
+            if (fs != 0) return fs;
+          }
+          return b.priorityScore.compareTo(a.priorityScore);
         }
+        return da.compareTo(db);
       }
-    }
-    for (final it in list) {
-      if (!usedIds.contains(it.id)) {
-        usedIds.add(it.id);
-        return it;
-      }
-    }
-    return null;
+      return b.priorityScore.compareTo(a.priorityScore);
+    });
+
+    final chosen = candidates.first;
+    usedIds.add(chosen.id);
+    return chosen;
   }
 
   final stops = <TripStop>[];
   final clampedDays = days.clamp(1, 5);
+  DiscoveryItem? prevStay;
+
   for (int d = 1; d <= clampedDays; d++) {
-    final morning = theme == TripTheme.festival && d == 1
-        ? (pickNext(events) ?? pickNext(attractions))
-        : (pickNext(attractions) ?? pickNext(events));
+    // 첫날 앵커는 seedOffset 적용, 둘째 날부터는 전날 숙소/전날 앵커 기준 근거리 또는 다음 앵커 사용
+    DiscoveryItem? dayAnchor = prevStay;
+    if (dayAnchor == null && anchors.isNotEmpty) {
+      dayAnchor = anchors[(seedOffset + d - 1) % anchors.length];
+    }
+
+    final morning = d == 1 && dayAnchor != null && !usedIds.contains(dayAnchor.id)
+        ? (() {
+            usedIds.add(dayAnchor!.id);
+            return dayAnchor;
+          })()
+        : (theme == TripTheme.festival
+            ? pickNearest(dayAnchor, [DiscoveryCategory.event, DiscoveryCategory.attraction])
+            : pickNearest(dayAnchor, [DiscoveryCategory.attraction, DiscoveryCategory.ebook, DiscoveryCategory.event]));
+
+    final anchorForDay = morning ?? dayAnchor;
     if (morning != null) stops.add(TripStop(day: d, slotKey: 'morning', item: morning));
 
-    final lunch = pickNext(foods);
+    final lunch = pickNearest(anchorForDay, [DiscoveryCategory.food]);
     if (lunch != null) stops.add(TripStop(day: d, slotKey: 'lunch', item: lunch));
 
     final afternoon = theme == TripTheme.food
-        ? (pickNext(foods) ?? pickNext(events) ?? pickNext(attractions))
-        : (pickNext(events) ?? pickNext(attractions));
+        ? pickNearest(anchorForDay, [DiscoveryCategory.food, DiscoveryCategory.event, DiscoveryCategory.attraction])
+        : pickNearest(anchorForDay, [DiscoveryCategory.event, DiscoveryCategory.attraction]);
     if (afternoon != null) stops.add(TripStop(day: d, slotKey: 'afternoon', item: afternoon));
 
     if (d < clampedDays) {
-      final stay = pickNext(stays, preferHanok: theme == TripTheme.hanok);
-      if (stay != null) stops.add(TripStop(day: d, slotKey: 'stay', item: stay));
+      final stay = pickNearest(
+        anchorForDay,
+        [DiscoveryCategory.stay],
+        preferHanok: theme == TripTheme.hanok,
+        stayFilter: true,
+      );
+      if (stay != null) {
+        stops.add(TripStop(day: d, slotKey: 'stay', item: stay));
+        prevStay = stay;
+      }
     }
   }
 
   return TripPlan(
     province: prov,
+    subRegion: sub,
     days: clampedDays,
     theme: theme,
     foreignerOnly: foreignerOnly,
@@ -191,7 +249,7 @@ TripPlan generateTripPlan({
 String encodeTripPlanParam(TripPlan plan) {
   final fFlag = plan.foreignerOnly ? '1' : '0';
   final encodedStops = plan.stops.map((s) => '${s.day}.${s.slotKey[0]}.${s.item.id}').join(',');
-  return 'd${plan.days}:${plan.province}:${plan.theme.name}:$fFlag:$encodedStops';
+  return 'd${plan.days}:${plan.province}:${plan.subRegion}:${plan.theme.name}:$fFlag:$encodedStops';
 }
 
 TripPlan? decodeTripPlanParam(String raw, List<DiscoveryItem> allItems) {
@@ -201,14 +259,21 @@ TripPlan? decodeTripPlanParam(String raw, List<DiscoveryItem> allItems) {
   if (parts.length < 5) return null;
   final days = int.tryParse(parts[0].replaceFirst('d', '')) ?? 2;
   final province = parts[1].isEmpty ? '전체' : parts[1];
+  // 6파트(신규 subRegion 포함)와 5파트(하위 호환) 모두 지원
+  final hasSub = parts.length >= 6;
+  final subRegion = hasSub && parts[2].isNotEmpty ? parts[2] : '전체';
+  final themeIdx = hasSub ? 3 : 2;
+  final flagIdx = hasSub ? 4 : 3;
+  final stopsIdx = hasSub ? 5 : 4;
+
   final theme = TripTheme.values.firstWhere(
-    (t) => t.name == parts[2],
+    (t) => t.name == parts[themeIdx],
     orElse: () => TripTheme.all,
   );
-  final foreignerOnly = parts[3] == '1';
+  final foreignerOnly = parts[flagIdx] == '1';
   final byId = {for (final it in allItems) it.id: it};
   final stops = <TripStop>[];
-  for (final token in parts.sublist(4).join(':').split(',')) {
+  for (final token in parts.sublist(stopsIdx).join(':').split(',')) {
     final segs = token.split('.');
     if (segs.length < 3) continue;
     final day = int.tryParse(segs[0]) ?? 1;
@@ -229,6 +294,7 @@ TripPlan? decodeTripPlanParam(String raw, List<DiscoveryItem> allItems) {
   if (stops.isEmpty) return null;
   return TripPlan(
     province: province,
+    subRegion: subRegion,
     days: days.clamp(1, 5),
     theme: theme,
     foreignerOnly: foreignerOnly,
@@ -256,6 +322,7 @@ class TripPlannerDialog extends StatefulWidget {
 
 class _TripPlannerDialogState extends State<TripPlannerDialog> {
   late String _province;
+  late String _subRegion;
   late int _days;
   late TripTheme _theme;
   late bool _foreignerOnly;
@@ -268,6 +335,7 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
     final init = widget.initialPlan;
     if (init != null) {
       _province = init.province;
+      _subRegion = init.subRegion;
       _days = init.days;
       _theme = init.theme;
       _foreignerOnly = init.foreignerOnly;
@@ -275,6 +343,7 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
     } else {
       final lang = appLangNotifier.value;
       _province = widget.initialProvince;
+      _subRegion = '전체';
       _days = lang == AppLang.ko ? 2 : 3;
       _theme = TripTheme.all;
       _foreignerOnly = lang != AppLang.ko;
@@ -286,6 +355,7 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
     _plan = generateTripPlan(
       allItems: widget.allItems,
       province: _province,
+      subRegion: _subRegion,
       days: _days,
       theme: _theme,
       foreignerOnly: _foreignerOnly,
@@ -328,10 +398,41 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
     }
   }
 
+  Widget _buildStyledDropdown({
+    required Key key,
+    required String value,
+    required List<String> items,
+    required String Function(String) labelBuilder,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+      ),
+      child: DropdownButton<String>(
+        key: key,
+        value: items.contains(value) ? value : items.first,
+        isDense: true,
+        underline: const SizedBox.shrink(),
+        items: items
+            .map((v) => DropdownMenuItem(
+                  value: v,
+                  child: Text(labelBuilder(v), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                ))
+            .toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = appLangNotifier.value;
     final provinces = <String>['전체', ...kProvinceJumpList.where((p) => p.key != '전체').map((p) => p.key)];
+    final subRegions = listSubRegions(widget.allItems, _province);
     final grouped = <int, List<TripStop>>{};
     for (final s in _plan.stops) {
       grouped.putIfAbsent(s.day, () => []).add(s);
@@ -368,10 +469,10 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
                         Text(
                           pickLangText(
                             lang,
-                            ko: '임박 축제·로컬 맛집·수수료 0원 합법 숙소를 반경 55km 내로 자동 연결합니다.',
-                            en: 'Auto-combines festivals, local food & 0% fee verified stays within 55km.',
-                            ja: '開催間近の祭り・地元グルメ・手数料0円公認宿を半径55km以内で自動組合せ。',
-                            zh: '自动串联方圆55公里内的庆典、地道美食与0手续费合法住宿。',
+                            ko: '원하는 지역(시·군·구)을 선택하면 근거리 동선(생활권 중심)으로 자동 연결합니다.',
+                            en: 'Select a region & district to auto-build a compact, nearby route.',
+                            ja: '地域・エリアを選ぶと近距離の効率的なルートを自動作成します。',
+                            zh: '选择地区与区县后，自动串联近距离高效率路线。',
                           ),
                           style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                         ),
@@ -426,44 +527,52 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      DropdownButton<String>(
-                        value: provinces.contains(_province) ? _province : '전체',
-                        underline: const SizedBox.shrink(),
-                        items: provinces
-                            .map((p) => DropdownMenuItem(value: p, child: Text(trRegion(p, lang), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700))))
-                            .toList(),
+                      _buildStyledDropdown(
+                        key: const Key('plan_province_dropdown'),
+                        value: _province,
+                        items: provinces,
+                        labelBuilder: (p) => p == '전체'
+                            ? pickLangText(lang, ko: '시/도: 전체', en: 'Region: All', ja: '地域: すべて', zh: '地区: 全部')
+                            : trRegion(p, lang),
                         onChanged: (v) {
                           if (v == null) return;
                           setState(() {
                             _province = v;
+                            _subRegion = '전체';
                             _seedOffset = 0;
                             _rebuildPlan();
                           });
                         },
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: TripTheme.values
-                                .map((t) => Padding(
-                                      padding: const EdgeInsets.only(right: 6),
-                                      child: ChoiceChip(
-                                        label: Text(_themeLabel(t, lang), style: const TextStyle(fontSize: 12)),
-                                        selected: _theme == t,
-                                        onSelected: (_) => setState(() {
-                                          _theme = t;
-                                          _rebuildPlan();
-                                        }),
-                                      ),
-                                    ))
-                                .toList(),
-                          ),
-                        ),
+                      _buildStyledDropdown(
+                        key: const Key('plan_subregion_dropdown'),
+                        value: _subRegion,
+                        items: subRegions,
+                        labelBuilder: (s) => s == '전체'
+                            ? pickLangText(lang, ko: '시/군/구: 전체', en: 'District: All', ja: '詳細エリア: すべて', zh: '区县: 全部')
+                            : s,
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() {
+                            _subRegion = v;
+                            _seedOffset = 0;
+                            _rebuildPlan();
+                          });
+                        },
                       ),
+                      ...TripTheme.values.map((t) => ChoiceChip(
+                            label: Text(_themeLabel(t, lang), style: const TextStyle(fontSize: 12)),
+                            selected: _theme == t,
+                            onSelected: (_) => setState(() {
+                              _theme = t;
+                              _rebuildPlan();
+                            }),
+                          )),
                     ],
                   ),
                 ],
@@ -504,6 +613,10 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
                               const SizedBox(height: 8),
                               ...entry.value.map((stop) {
                                 final it = stop.item;
+                                final iconColor = stop.slotKey == 'stay' ? const Color(0xFFE61E4D) : it.category.color;
+                                final iconBg = stop.slotKey == 'stay'
+                                    ? const Color(0xFFFFEEF2)
+                                    : it.category.color.withValues(alpha: 0.14);
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 8),
                                   elevation: 0,
@@ -517,14 +630,14 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
                                       widget.onOpenItem(it);
                                     },
                                     leading: CircleAvatar(
-                                      backgroundColor: it.category.color.withValues(alpha: 0.14),
+                                      backgroundColor: iconBg,
                                       child: Icon(
                                         stop.slotKey == 'stay'
                                             ? Icons.bed_rounded
                                             : stop.slotKey == 'lunch'
                                                 ? Icons.restaurant_rounded
                                                 : Icons.place_rounded,
-                                        color: it.category.color,
+                                        color: iconColor,
                                         size: 20,
                                       ),
                                     ),
@@ -547,10 +660,13 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
                                         setState(() {
                                           _plan = TripPlan(
                                             province: _plan.province,
+                                            subRegion: _plan.subRegion,
                                             days: _plan.days,
                                             theme: _plan.theme,
                                             foreignerOnly: _plan.foreignerOnly,
-                                            stops: _plan.stops.where((s) => !(s.day == stop.day && s.item.id == stop.item.id)).toList(),
+                                            stops: _plan.stops
+                                                .where((s) => !(s.day == stop.day && s.item.id == stop.item.id))
+                                                .toList(),
                                           );
                                         });
                                       },
