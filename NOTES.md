@@ -1,7 +1,7 @@
 # 직스테이 로컬 — 현재 구조 노트
 
 > 기준일 2026-11-15. 코드 기준으로 정리한 **현재** 구조다. 폐지된 기능을 포함한 지난 이력은 [docs/CHANGELOG.md](docs/CHANGELOG.md).
-> 서비스: https://jikstay-lkxu1.web.app · Firebase 프로젝트 `jikstay-lkxu1` (서울 `asia-northeast3`)
+> 서비스: <https://jikstay-lkxu1.web.app> · Firebase 프로젝트 `jikstay-lkxu1` (서울 `asia-northeast3`)
 
 ## 1. 한 줄 요약
 
@@ -14,7 +14,7 @@
 
 ## 2. 디렉토리
 
-```
+```text
 app/                    Flutter Web (Dart 3.14 / Flutter 3.50)
   lib/main.dart           앱 진입·HomePage(상태·데이터 로딩) — 홈 카드 위젯은 lib/home/*
   lib/home/               피드 패널 · 오늘의 스토리 히어로 카드 · 피드 카드 (main.dart 의 part)
@@ -36,7 +36,7 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 
 ## 3. 데이터 흐름
 
-```
+```text
 공공 API ─┬─ 행안부 인허가 4종(숙소) ─┐
           ├─ TourAPI KorService2 ─────┼─ backend 스크립트 ─▶ app/web/data/*.json (git 커밋)
           └─ 네이버 검색 API Hub ─────┘        │                     │
@@ -53,7 +53,7 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 ## 4. Firestore · Storage
 
 | 경로 | 내용 | 클라이언트 권한 |
-|---|---|---|
+| --- | --- | --- |
 | `listings/{stay_…}` | 공공 선별 숙소 (status, 업종, 위치, 이미지 URL, 평점 집계, `outbound_clicks`) | `active`만 읽기 · 클릭 정확히 +1 · 평점 집계는 후기 생성과 같은 배치일 때만 |
 | `listings/{id}/reviews/{uid}` | 방문자 후기 | 공개 읽기 · **익명 로그인 + 문서 ID = 본인 uid**일 때만 생성(장소당 1인 1후기) · 수정·삭제 불가 |
 | `spots/{id}` · `spots/{id}/reviews/{uid}` | 축제·볼거리·먹거리, 방문 혜택 쿠폰(`is_sponsored`, `coupon_title`) | 위와 동일 |
@@ -65,7 +65,7 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 ## 5. Cloud Functions (`firebase/functions/index.js`)
 
 | 함수 | 경로 | 역할 |
-|---|---|---|
+| --- | --- | --- |
 | `serveApp` | `**` | Flutter `index.html` 템플릿에 `?id=` `?spot=` `?story=` `?region=` 별 OG·hreflang·JSON-LD·noscript 본문 주입 |
 | `goRedirect` | `/go?id=` | 숙소 외부 연결: 봇이 아니면 `outbound_clicks` +1(통계) 후 운영자 직거래 링크 → 없으면 네이버 지도 검색으로 이동. 과금 없음 |
 | `serveSitemap` / `serveRobots` | `/sitemap.xml` `/robots.txt` | 동적 사이트맵(숙소 2,500·스팟 1,000 상한) |
@@ -75,7 +75,7 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 ## 6. 백엔드 스크립트
 
 | 스크립트 | 용도 |
-|---|---|
+| --- | --- |
 | `curate_public_stays.py` | 행안부 인허가 + TourAPI + 네이버 블로그로 권역×업종별 숙소 선별 → `public_stays_index.json` (+ `--upload`) |
 | `build_travel_hub.py` | 17개 시·도 E-book·볼거리·먹거리·축제·코스 허브 생성 → `public_travel_hub.json` (+ `--upload-spots`) |
 | `weekly_hub_refresh.py` | 주간: 진행 중 축제 갱신·상세 보강 (CI 에서는 `--no-translate` 후 번역을 별도 단계로) |
@@ -104,7 +104,7 @@ backend\.venv\Scripts\python backend\admin_app.py
 ### 환경변수 (`.env`, GitHub Actions 시크릿은 같은 이름)
 
 | 변수 | 용도 |
-|---|---|
+| --- | --- |
 | `TOUR_API_KEY`, `DATA_GO_KR_SERVICE_KEY` (+선택 `LICENSE_API_LODGING/HANOK/FOREIGN`) | TourAPI · 행안부 인허가 |
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 네이버 API Hub(블로그·지역·이미지 검색). 구 `openapi.naver.com` 경로는 401 |
 | `GEMINI_API_KEY` (+선택 `OPENAI_API_KEY`) | 번역·E-book 보강 |

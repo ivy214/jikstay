@@ -8,8 +8,7 @@
 
 ---
 
-# 직스테이 (jikstay) 구현 현황 노트
-
+아래는 2026-11-14에 작성한 「직스테이 (jikstay) 구현 현황 노트」 보관본이다.
 
 > 작성 2026-11-14 · 코드 전체를 다시 읽고 정리. 이전 NOTES.md(2026-11-12) 내용은 아래 "변경 이력"에 합쳤다.
 > 원본 기획: `단기 숙소 예약 site 를 만들고 싶은데.txt`
@@ -17,7 +16,6 @@
 ---
 
 ## 0. 한 줄 요약
-
 
 **영업신고를 확인한 합법 숙소만** 올려, 게스트가 **중개수수료 없이 호스트 예약 창구로 바로 가게** 하는 광고·정보 사이트.
 호스트가 블로그 글 URL을 내면 AI가 상세페이지와 쇼츠 대본을 만들고, 관리자가 신고증·공공 인허가 데이터를 대조해 승인하면 공개된다. 공개 후 유튜브 쇼츠·인스타 릴스로 홍보한다.
@@ -29,8 +27,7 @@
 
 ## 1. 전체 구조
 
-
-```
+```text
 36rd/
 ├─ app/                 Flutter Web (에어비앤비 벤치마킹 게스트 탐색·상세 + 호스트 입점 신청)
 │  └─ lib/ main.dart · detail_page.dart · amenities.dart · demo_data.dart · legal.dart · firebase_options.dart
@@ -67,8 +64,7 @@
 
 ## 2. 상태 흐름
 
-
-```
+```text
 host_applications: pending_verification → listed → verified
                                          ↘ rejected   ↘ withdrawn
 listings:          pending_verification → active ⇄ suspended → withdrawn
@@ -76,7 +72,7 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 ```
 
 | 단계 | 실행 | 결과 |
-|---|---|---|
+| --- | --- | --- |
 | 1. 입점 신청 | 웹앱 신청 폼 | 신고증 → `licenses/<appId>/license.<ext>`, 신청서 `pending_verification` |
 | 2. 인허가 대조 | `license_check.py check` / 관리자 화면 "대조 실행" | 신청서에 `license_check` {result: match/closed/uncertain/not_found/error, …} |
 | 3. 분석 + 쇼츠 | `blog_to_listing.py` → `video_maker.py` / 관리자 "1. 블로그 분석 + 쇼츠 생성" | `output/<appId>/listing_result.json`, `final_shorts.mp4` |
@@ -92,11 +88,10 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 
 ## 3. 데이터 모델
 
-
 ### Firestore
 
 | 컬렉션 | 주요 필드 | 클라이언트 권한 |
-|---|---|---|
+| --- | --- | --- |
 | `listings/{stay_xxxxxxxx}` | title, region_depth1/2, accommodation_type, capacity_standard/max, summary_points, options, pricing{nightly_min, weekly_price, monthly_price, price_note}, images[{url, path, space_tag, caption}], direct_booking_url, source_blog_url, license_type/number, outbound_clicks, status, created_at, application_id, verified_by/verification_method/verification_license_check/verified_at, youtube_video_id/url, shorts_mp4_url, instagram_media_id/url, ig_keyword, needs_review(_reason), suspended_reason, last_report, last_license_check_at | `active`만 읽기. `outbound_clicks` 정확히 +1만 수정 |
 | `host_applications/{autoId}` | blog_url, direct_booking_url, host_phone, host_email, business_name, business_address, license_type, license_number, license_image_path, consent_copyright/marketing/direct_liability/privacy(필수), consent_privacy_optional, consent_version, status, submitted_at (+관리자 기록: license_check, listing_id, rejection_reason, personal_data_purged_at …) | 생성만 (필드 화이트리스트·검증) |
 | `notifications` | application_id, kind, channels, text, result(sent/partial/dry_run/no_contact/failed), detail, created_at — **연락처는 남기지 않음** | 차단 |
@@ -105,7 +100,7 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 ### Storage
 
 | 경로 | 규칙 |
-|---|---|
+| --- | --- |
 | `licenses/{appId}/{file}` | 5MB 미만 이미지 **생성만**. 읽기·수정·삭제 불가 → 관리자가 Admin SDK로만 열람. 다운로드 URL 미발급 |
 | `listings/{listingId}/{file}` | 공개 읽기, 클라이언트 쓰기 불가 (사진·쇼츠 원본) |
 
@@ -116,7 +111,6 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 ---
 
 ## 4. 구성 요소별 상세
-
 
 ### 4-1. Flutter 웹앱 (`app/`)
 
@@ -187,9 +181,8 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 
 ## 5. 보안·법적 장치 요약
 
-
 | 위험 | 장치 |
-|---|---|
+| --- | --- |
 | 미확인 숙소 노출(과태료) | 등록은 항상 `pending_verification`, 승인 시 확인 질문/체크리스트 + 검증자·방법·대조 결과 기록, 규칙상 `active`만 공개, 정기 재확인으로 폐업 시 `suspended` |
 | 신고증 사본 유출 | Storage 생성만 허용, 다운로드 URL 없음, 관리자 로컬 화면에서만 열람, 반려·철회 시 즉시 파기 |
 | 클릭 수 조작 | 규칙: `outbound_clicks` 단일 필드, 정확히 +1 |
@@ -204,9 +197,8 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 
 ## 6. 테스트·검증 현황
 
-
 | 테스트 | 내용 | 실행 |
-|---|---|---|
+| --- | --- | --- |
 | `app/test/widget_test.dart` | 지역 매칭, 이메일 형식, 가격 표기, 검색·정렬, ListingCard 렌더링(외국인 배지), 신청 폼 필수값 안내 | `cd app && flutter test` |
 | `firebase/tests/rules.test.mjs` | Firestore: active만 읽기, 클릭 +1만, 신청서 화이트리스트·동의·형식, 기타 경로 차단 / Storage: licenses 생성만·5MB·이미지, listings 공개 읽기 | `cd firebase && npm run test:rules` |
 | `backend/tests/e2e_emulator_test.py` | 에뮬레이터에서 신청 → 동의 확인 → CSV 대조 → 등록 → 관리자 승인 → 주간 리포트 → 철회·파기 7단계 (실제 발송 키 제거) | `cd firebase && npm run test:e2e` |
@@ -224,7 +216,6 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 
 ## 7. 실행 방법
 
-
 ### 환경
 
 - Python 3.12 64비트 가상환경 `backend/.venv` (시스템 Python 3.14는 32비트라 `cryptography` 등 설치 불가)
@@ -232,11 +223,14 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 - `.vscode/settings.json`: 터미널에서 `.env` 자동 사용
 
 ### 관리자 작업
-```
+
+```text
 backend\.venv\Scripts\python backend\admin_app.py      → http://127.0.0.1:8765
 ```
+
 CLI로 할 때:
-```
+
+```text
 python backend/license_check.py check --application-id <ID> [--csv <파일>]
 python backend/blog_to_listing.py --application-id <ID>
 python backend/video_maker.py output/<ID>/listing_result.json --bgm <상업용 BGM>
@@ -252,17 +246,19 @@ python backend/instagram_reels.py <mp4> --listing-id <listing_id> [--keyword 제
 ```
 
 ### 웹 배포
-```
+
+```text
 cd app && flutter build web --dart-define=RECAPTCHA_SITE_KEY=<키>
 # build/web → firebase/public 복사 (index.html 제외), index.html → firebase/functions/index.html
 cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 ```
+
 ※ 복사 단계는 스크립트가 없어 수동이다. `firebase/public`에 index.html이 들어가면 OG 함수가 동작하지 않는다.
 
 ### 환경변수 (`.env`, 값은 비밀)
 
 | 변수 | 용도 | 현재 .env |
-|---|---|---|
+| --- | --- | --- |
 | `FIREBASE_CREDENTIALS`, `FIREBASE_BUCKET` | Admin SDK | 있음 |
 | `LLM_PROVIDER`, `OPENAI_API_KEY`, `GEMINI_API_KEY` (+선택 `OPENAI_MODEL`, `GEMINI_MODEL`, `LLM_TIMEOUT_S`, `LLM_ATTEMPTS`) | 블로그 분석 | 있음 |
 | `DATA_GO_KR_SERVICE_KEY`, `LICENSE_API_LODGING/HANOK/FOREIGN` (`RURAL`은 기본값) | 인허가 대조 | 있음 |
@@ -280,7 +276,6 @@ cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 
 ## 8. 분석 중 발견한 불일치·주의점
 
-
 1. **Azure TTS 키가 .env에 없음** → 관리자 화면 "분석 + 쇼츠 생성"(기본 `TTS_PROVIDER=azure`)이 나레이션 단계에서 실패한다. 공개용 영상을 만들려면 Azure Speech 키가 필요.
 2. **LLM 기본값 표기 불일치**: 코드 기본값은 `gemini`(`analyze_listing`), 이전 노트·.env 주석은 OpenAI 권장. 실제 동작은 .env의 `LLM_PROVIDER` 값을 따른다. `LLM_PROVIDER`를 지우면 Gemini로 돌아간다는 점 주의.
 3. **"3대 동의" 주석**: `blog_to_listing.py` 머리말·`firestore.rules` 주석은 "3대 동의"라고 쓰지만 실제 필수 동의는 4개(개인정보 포함).
@@ -296,7 +291,6 @@ cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 
 ## 9. 남은 일
 
-
 - [ ] `legal.dart` 자리표시 `[상호]`, `[대표자명]`, `[사업자등록번호]`, `[통신판매업 신고번호]`, `[사업장 주소]`, `[문의·삭제요청 이메일]`, `[기간]`, `[성명]`, `[기타 수탁사]` 실제 정보로 교체 + 법률 검토 (문구 바꾸면 `kConsentVersion` 올리기)
 - [ ] reCAPTCHA Enterprise 키 발급 → `--dart-define` 빌드 → 콘솔에서 Firestore·Storage App Check **시행(Enforce)**
 - [ ] Azure Speech 키 발급(.env), 상업 이용 허용 BGM 준비
@@ -311,11 +305,10 @@ cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 
 ## 10. 변경 이력
 
-
 ### 2026-11-12 이전 — 원본 기획 대비 사실 확인
 
 | 주장 | 결과 |
-|---|---|
+| --- | --- |
 | 개정 공중위생관리법 2026-11-12 시행, 미확인 숙박상품 중개 시 과태료 500만 원 | 사실. 법률 2025-11-11 공포. 법률상 상한 1,000만 원, 시행령(2026-10-20 공포) 부과기준 500만 원. 기존 등록 상품도 재확인 필요 |
 | YouTube `status.containsSyntheticMedia` | 사실. `videos.insert` 공식 필드 |
 | "제주 레퍼런스 10선" 숙소명 | 검증 불가 → 사용 중단 |
@@ -329,7 +322,7 @@ cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 ### 코드 수정
 
 | 문제 | 수정 |
-|---|---|
+| --- | --- |
 | 등록 즉시 `active` | `publish` → `pending_verification`, `approve` 후에만 `active` |
 | 누구나 클릭 수 임의 수정 | 규칙: 정확히 +1 |
 | 신청서 필드 무제한 | 화이트리스트·형식·상태·시간 강제 |
@@ -452,6 +445,3 @@ cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 - **초기화면 지도 제거 — 순수 매거진형 Story-First 홈 레이아웃 (`app/lib/main.dart`)**:
   - 초기화면에서 지도(`ZillowMapView`)를 완전히 제거하여 Zillow/네이버지도형 정보 포털 느낌을 없애고 초기 타일 네트워크 요청 0건 달성.
   - 중앙 정렬(`maxWidth: 1040`) 와이드 2단 에디토리얼 스토리 히어로 카드 + 함께 읽어볼 지자체 가이드북 스토리 스트립 + 반응형 2열 로컬 큐레이션 피드 구조로 개편(길찾기는 상세 페이지/시트 내 네이버·카카오·구글맵 원클릭 딥링크로 연결).
-
-
-
