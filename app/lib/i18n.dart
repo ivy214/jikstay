@@ -115,15 +115,15 @@ String trUi(String key, AppLang lang) {
   const table = <String, Map<AppLang, String>>{
     'brand_name': {
       AppLang.ko: '직스테이 로컬',
-      AppLang.en: 'JikStay Local',
-      AppLang.ja: 'JikStay ローカル',
-      AppLang.zh: 'JikStay 在地旅遊',
+      AppLang.en: 'Jikstay Korea',
+      AppLang.ja: 'Jikstay Korea',
+      AppLang.zh: 'Jikstay 韓國',
     },
     'zero_fee_badge': {
       AppLang.ko: '전국 17개 시도 공식 가이드 · 볼거리 · 먹거리 · 안심숙소',
-      AppLang.en: '17-Province Official Guides · Sights · Food · Stays',
-      AppLang.ja: '17市道公式ガイド・観光・グルメ・公認宿',
-      AppLang.zh: '17市道官方指南・景點・美食・合法住宿',
+      AppLang.en: 'Verified Legal Stays · 0% Fee · 17-Province Guides',
+      AppLang.ja: '韓国公認宿・仲介手数料0円・17市道公式ガイド',
+      AppLang.zh: '韓國合法住宿・0%手續費・17市道官方指南',
     },
     'search_hint': {
       AppLang.ko: '지역·축제·볼거리·맛집·숙소 검색 (예: 무주, 강릉, 한우, 한옥)',

@@ -1047,7 +1047,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                                 const Text('🎁 ', style: TextStyle(fontSize: 20)),
                                 Expanded(
                                   child: Text(
-                                    lang == AppLang.ko ? '직스테이 로컬 방문 혜택 쿠폰' : 'JikStay Local Visit Coupon',
+                                    lang == AppLang.ko ? '직스테이 로컬 방문 혜택 쿠폰' : 'Jikstay Korea Visit Coupon',
                                     style: const TextStyle(
                                       fontSize: 15.5,
                                       fontWeight: FontWeight.w900,

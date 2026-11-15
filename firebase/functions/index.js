@@ -189,15 +189,15 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko") {
     ? `${spot.summary} (${addr})`
     : `${addr} · 주변 맛집·지자체 공식 관광지도 PDF·합법 안심숙소 동선 안내`;
   if (lang === "en") {
-    titleText = `${title} (${provEn}) | JikStay Local Korea`;
+    titleText = `${title} (${provEn}) | Jikstay Korea`;
     descText = spot.en_summary
       ? String(spot.en_summary)
       : `${addr} — Explore official municipal PDF maps, public transit routes, nearby local food & verified stays in ${provEn}.`;
   } else if (lang === "ja") {
-    titleText = `${title}（${prov}）| JikStay ローカル韓国`;
+    titleText = `${title}（${prov}）| Jikstay Korea`;
     descText = `${addr} — 自治体公式観光地図PDF・乗換ルート・周辺グルメ・公認宿ガイド。`;
   } else if (lang === "zh") {
-    titleText = `${title}（${prov}）| JikStay 韓國在地旅遊`;
+    titleText = `${title}（${prov}）| Jikstay 韓國`;
     descText = `${addr} — 官方旅遊地圖PDF、大眾運輸路線、周邊在地美食與合法民宿指南。`;
   }
 
@@ -279,13 +279,13 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko") {
   let titleText = `${province} 여행 공식 관광지도 PDF·축제·로컬맛집·합법숙소 총정리 | 직스테이 로컬`;
   let descText = `${province} 지자체 공식 가이드북(PDF/E-book), 실시간 축제·오일장, 로컬 맛집 쿠폰과 합법 인허가 안심숙소를 한눈에 확인하세요.`;
   if (lang === "en") {
-    titleText = `${provEn} Official Tourist Maps PDF, Festivals, Food & Legal Stays | JikStay Local`;
+    titleText = `${provEn} Official Tourist Maps PDF, Festivals, Food & Legal Stays | Jikstay Korea`;
     descText = `Explore ${provEn}, Korea with free official municipal PDF guidebooks, public transit routes, local festivals, restaurants, and verified stays.`;
   } else if (lang === "ja") {
-    titleText = `${province} 公式観光地図PDF・祭り・グルメ・公認宿まとめ | JikStay ローカル`;
+    titleText = `${province} 公式観光地図PDF・祭り・グルメ・公認宿まとめ | Jikstay Korea`;
     descText = `${province}の自治体公式ガイドブックPDF、開催中の祭り、地元グルメ、営業申告確認済の公認宿をマップで一括検索。`;
   } else if (lang === "zh") {
-    titleText = `${province} 官方旅遊地圖PDF・慶典・美食・合法民宿總整理 | JikStay 在地旅遊`;
+    titleText = `${province} 官方旅遊地圖PDF・慶典・美食・合法民宿總整理 | Jikstay 韓國`;
     descText = `一鍵開啟${province}地方政府官方旅遊指南PDF、大眾運輸路線、慶典活動、在地美食與合法認證住宿。`;
   }
 
@@ -384,6 +384,34 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   if (PROVINCES_17.includes(rawRegion)) {
     const html = buildRegionOgHtml(template, rawRegion, origin, rawLang);
     res.set("Cache-Control", "public, max-age=600, s-maxage=1200");
+    res.status(200).send(html);
+    return;
+  }
+
+  const lang = normalizeLang(rawLang);
+  if (lang !== "ko") {
+    const htmlLang = lang === "zh" ? "zh-Hant" : lang;
+    const homeTitles = {
+      en: "Jikstay Korea — Verified Local Stays, 0% Fee & 17-Province Travel Guides",
+      ja: "Jikstay Korea — 韓国公認宿・仲介手数料0円・17市道公式ローカルガイド",
+      zh: "Jikstay 韓國 — 韓國合法認證住宿・0%手續費・17市道官方旅遊指南",
+    };
+    const homeDescs = {
+      en: "Book government-verified legal stays in Korea with 0% guest platform fee. Explore festivals, local food & official municipal travel guides across 17 provinces.",
+      ja: "韓国政府・自治体の営業届出確認済み宿泊施設を仲介手数料0円で直接予約。全国17市道の祭り・グルメ・公式ガイドを一覧。",
+      zh: "免平台手續費直接預訂韓國政府核驗合法民宿與韓屋，一次瀏覽全國17市道慶典、在地美食與官方旅遊指南。",
+    };
+    const t = escapeHtml(homeTitles[lang] || homeTitles.en);
+    const d = escapeHtml(homeDescs[lang] || homeDescs.en);
+    const canon = `${origin}/?lang=${encodeURIComponent(lang)}`;
+    const html = template
+      .replace(/<html\b[^>]*>/i, `<html lang="${htmlLang}">`)
+      .replace(/<title>[^<]*<\/title>/i, `<title>${t}</title>`)
+      .replace(/<meta name="description" content="[^"]*"\s*\/?>/i, `<meta name="description" content="${d}" />`)
+      .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${t}" />`)
+      .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/i, `<meta property="og:description" content="${d}" />`)
+      .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/i, `<meta property="og:url" content="${escapeHtml(canon)}" />`);
+    res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=3600");
     res.status(200).send(html);
     return;
   }
