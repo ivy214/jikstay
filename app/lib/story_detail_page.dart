@@ -37,6 +37,7 @@ class StoryDetailPage extends StatefulWidget {
 class _StoryDetailPageState extends State<StoryDetailPage> {
   late DailyStoryItem _story;
   int _heroIndex = 0;
+  DiscoveryCategory _connectedFilter = DiscoveryCategory.all;
   final ScrollController _scrollCtrl = ScrollController();
 
   @override
@@ -111,10 +112,10 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
 
   Widget _buildContent(BuildContext context, AppLang lang) {
     final anchorItem = _story.toDiscoveryItem();
-    final bundle = buildConnectedBundle(anchorItem, widget.allItems, limitPerType: 2);
+    final bundle = buildConnectedBundle(anchorItem, widget.allItems, limitPerType: 8);
     final images = _story.images;
     final activeHero = (images.isNotEmpty && _heroIndex < images.length) ? images[_heroIndex] : '';
-    final otherStories = widget.allStories.where((s) => s.id != _story.id).take(4).toList();
+    final otherStories = widget.allStories.where((s) => s.id != _story.id).take(8).toList();
     final screenW = MediaQuery.sizeOf(context).width;
     final isWide = screenW >= 720;
     final tTitle = _story.tTitle(lang);
@@ -526,8 +527,11 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                     ],
                   ),
 
-                  // 8. 자연스러운 다음 발걸음 (선택 과부하 없이 핵심 동선 2곳씩만 엄선)
-                  if (bundle.foods.isNotEmpty || bundle.events.isNotEmpty || bundle.stays.isNotEmpty) ...[
+                  // 8. 자연스러운 다음 발걸음 (카테고리 칩으로 볼거리·먹거리·축제·숙소까지 깊게 이어 탐색)
+                  if (bundle.foods.isNotEmpty ||
+                      bundle.attractions.isNotEmpty ||
+                      bundle.events.isNotEmpty ||
+                      bundle.stays.isNotEmpty) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 26),
                       child: Divider(height: 1),
@@ -546,17 +550,73 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                     Text(
                       pickLangText(
                         lang,
-                        ko: '복잡한 검색 없이 가까운 로컬 식당과 볼거리, 합법 인증 숙소만 추렸습니다.',
-                        en: 'Handpicked nearby dining, sights, and government-licensed stays.',
-                        ja: '検索いらずで近くのローカル食堂・名所・公認宿泊施設を厳選しました。',
-                        zh: '無須繁瑣搜尋，為您精選鄰近的在地美食、景點與合法認證住宿。',
+                        ko: '볼거리·먹거리·축제·합법 인증 숙소까지 연관 장소를 눌러 계속 이어서 탐색하세요.',
+                        en: 'Tap any connected sight, eatery, festival, or licensed stay to keep exploring.',
+                        ja: '見どころ・グルメ・祭り・公認宿まで関連スポットをタップして続けて探索できます。',
+                        zh: '點擊相連景點、美食、慶典或合法認證住宿，持續深入探索行程。',
                       ),
                       style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                     ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final entry in <(DiscoveryCategory, String, int)>[
+                          (
+                            DiscoveryCategory.all,
+                            pickLangText(lang, ko: '전체', en: 'All', ja: 'すべて', zh: '全部'),
+                            bundle.foods.length + bundle.attractions.length + bundle.events.length + bundle.stays.length,
+                          ),
+                          if (bundle.attractions.isNotEmpty)
+                            (
+                              DiscoveryCategory.attraction,
+                              pickLangText(lang, ko: '🏞️ 볼거리', en: '🏞️ Sights', ja: '🏞️ 名所', zh: '🏞️ 景點'),
+                              bundle.attractions.length,
+                            ),
+                          if (bundle.foods.isNotEmpty)
+                            (
+                              DiscoveryCategory.food,
+                              pickLangText(lang, ko: '🍲 먹거리', en: '🍲 Food', ja: '🍲 グルメ', zh: '🍲 美食'),
+                              bundle.foods.length,
+                            ),
+                          if (bundle.events.isNotEmpty)
+                            (
+                              DiscoveryCategory.event,
+                              pickLangText(lang, ko: '🎉 축제', en: '🎉 Events', ja: '🎉 祭り', zh: '🎉 慶典'),
+                              bundle.events.length,
+                            ),
+                          if (bundle.stays.isNotEmpty)
+                            (
+                              DiscoveryCategory.stay,
+                              pickLangText(lang, ko: '🏡 안심숙소', en: '🏡 Stays', ja: '🏡 公認宿', zh: '🏡 住宿'),
+                              bundle.stays.length,
+                            ),
+                        ])
+                          ChoiceChip(
+                            label: Text('${entry.$2} (${entry.$3})'),
+                            selected: _connectedFilter == entry.$1,
+                            onSelected: (_) => setState(() => _connectedFilter = entry.$1),
+                            selectedColor: const Color(0xFF065F46),
+                            labelStyle: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: _connectedFilter == entry.$1 ? Colors.white : const Color(0xFF334155),
+                            ),
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: 14),
-                    ...[...bundle.foods, ...bundle.events, ...bundle.attractions, ...bundle.stays]
-                        .take(5)
-                        .map(
+                    ...(() {
+                      final combined = switch (_connectedFilter) {
+                        DiscoveryCategory.attraction => bundle.attractions,
+                        DiscoveryCategory.food => bundle.foods,
+                        DiscoveryCategory.event => bundle.events,
+                        DiscoveryCategory.stay => bundle.stays,
+                        _ => [...bundle.attractions, ...bundle.foods, ...bundle.events, ...bundle.stays],
+                      };
+                      return combined.take(12);
+                    })().map(
                           (it) => _StoryNearbyStopTile(
                             item: it,
                             anchor: anchorItem,
@@ -576,6 +636,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                                   setState(() {
                                     _story = st;
                                     _heroIndex = 0;
+                                    _connectedFilter = DiscoveryCategory.all;
                                   });
                                   _onEnterStory(st);
                                   if (_scrollCtrl.hasClients) {
@@ -654,6 +715,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                             setState(() {
                               _story = st;
                               _heroIndex = 0;
+                              _connectedFilter = DiscoveryCategory.all;
                             });
                             _onEnterStory(st);
                             if (_scrollCtrl.hasClients) {

@@ -478,7 +478,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
   }
 
   Widget _buildContent(BuildContext context, AppLang lang) {
-    final bundle = buildConnectedBundle(_current, widget.allItems);
+    final bundle = buildConnectedBundle(_current, widget.allItems, limitPerType: 8);
     final dateRange = _fmtDateRange(_current.startDate, _current.endDate);
     final gallery = _current.effectiveGallery;
     final activeHero = (gallery.isNotEmpty && _heroIndex < gallery.length) ? gallery[_heroIndex] : '';
