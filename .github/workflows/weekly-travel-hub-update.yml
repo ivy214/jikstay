@@ -9,9 +9,20 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: weekly-travel-hub
+  cancel-in-progress: false
+
 jobs:
   refresh-hub:
     runs-on: ubuntu-latest
+    env:
+      # 코드는 DATA_GO_KR_SERVICE_KEY / TOUR_API_KEY 를 읽는다 (시크릿 이름은 기존 그대로 사용).
+      DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+      TOUR_API_KEY: ${{ secrets.TOUR_API_KEY }}
+      NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+      NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,26 +31,35 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install Python dependencies
+        # build_travel_hub → curate_public_stays → license_check 가 firebase_admin 등을 import 하므로 전체 설치
         run: |
           python -m pip install --upgrade pip
-          pip install requests google-genai
+          pip install -r backend/requirements.txt
 
-      - name: Refresh weekly festivals & incremental translations
-        env:
-          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
-          TOUR_API_KEY: ${{ secrets.TOUR_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          python backend/weekly_hub_refresh.py
-          python backend/generate_weekly_digest.py
+      - name: Refresh weekly festivals
+        run: python backend/weekly_hub_refresh.py --no-translate
+
+      - name: Incremental translations (EN/JA/ZH)
+        id: translate
+        if: env.GEMINI_API_KEY != ''
+        continue-on-error: true
+        run: python backend/translate_hub.py --gemini
+
+      - name: Generate weekly digest
+        run: python backend/generate_weekly_digest.py
 
       - name: Commit updated travel hub JSON
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/web/data/public_travel_hub.json app/web/data/translations_en.json app/web/data/translations_ja.json app/web/data/translations_zh.json docs/weekly_digest.md docs/weekly_digest_sns.txt
+          git add app/web/data/public_travel_hub.json \
+                  app/web/data/translations_en.json app/web/data/translations_ja.json app/web/data/translations_zh.json \
+                  backend/translation_cache.json \
+                  docs/weekly_digest.md docs/weekly_digest_sns.txt
           if git diff --cached --quiet; then
             echo "No data changes to commit."
           else
@@ -62,18 +82,69 @@ jobs:
         if: steps.fb.outputs.enabled == 'true'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.0"
+          # pubspec.yaml 의 sdk: ^3.14.0 (Dart 3.14) 를 만족하는 로컬과 같은 버전
+          flutter-version: "3.50.0"
           channel: "stable"
+          cache: true
 
-      - name: Build & deploy to Firebase Hosting
+      - name: Build Flutter web
         if: steps.fb.outputs.enabled == 'true'
         env:
-          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY }}
+          RECAPTCHA_SITE_KEY: ${{ secrets.RECAPTCHA_SITE_KEY }}
+        working-directory: app
         run: |
-          pushd app
           flutter pub get
-          flutter build web --release --pwa-strategy=none
-          popd
+          if [ -n "$RECAPTCHA_SITE_KEY" ]; then
+            flutter build web --release --no-wasm-dry-run --pwa-strategy=none --dart-define="RECAPTCHA_SITE_KEY=$RECAPTCHA_SITE_KEY"
+          else
+            echo "::warning::RECAPTCHA_SITE_KEY 시크릿이 없어 App Check 없이 빌드합니다."
+            flutter build web --release --no-wasm-dry-run --pwa-strategy=none
+          fi
+
+      - name: Stage files (same rules as deploy.ps1)
+        id: stage
+        if: steps.fb.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          rm -rf firebase/public
           mkdir -p firebase/public
-          cp -r app/build/web/* firebase/public/
-          npx --yes firebase-tools deploy --only hosting --project jikstay-lkxu1
+          # index.html 은 public 에 두면 serveApp(OG·JSON-LD 주입) rewrite 가 무시되므로 제외한다.
+          rsync -a \
+            --exclude 'index.html' --exclude '*.map' --exclude '*.symbols' \
+            --exclude 'skwasm*' --exclude 'wimp*' \
+            app/build/web/ firebase/public/
+          if [ -e firebase/public/index.html ]; then
+            echo "::error::firebase/public/index.html 이 존재하면 OG 태그 함수가 동작하지 않습니다."
+            exit 1
+          fi
+          # 템플릿이 바뀐 경우에만 functions 도 함께 배포한다.
+          if cmp -s app/build/web/index.html firebase/functions/index.html; then
+            echo "targets=hosting" >> "$GITHUB_OUTPUT"
+          else
+            cp app/build/web/index.html firebase/functions/index.html
+            echo "targets=hosting,functions" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Functions dependencies
+        if: steps.fb.outputs.enabled == 'true' && contains(steps.stage.outputs.targets, 'functions')
+        working-directory: firebase/functions
+        run: npm ci
+
+      - name: Deploy to Firebase
+        if: steps.fb.outputs.enabled == 'true'
+        env:
+          FB_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY }}
+        working-directory: firebase
+        run: |
+          set -euo pipefail
+          # firebase-tools 는 키 "파일 경로"를 GOOGLE_APPLICATION_CREDENTIALS 로 읽는다.
+          printf '%s' "$FB_SA" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          npx --yes firebase-tools deploy --only "${{ steps.stage.outputs.targets }}" --project jikstay-lkxu1 --non-interactive
+          rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Fail if translation failed
+        if: steps.translate.outcome == 'failure'
+        run: |
+          echo "::error::다국어 번역 단계가 실패했습니다. 축제 데이터는 커밋·배포됐지만 번역은 이전 버전입니다."
+          exit 1

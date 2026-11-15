@@ -31,6 +31,7 @@ from build_travel_hub import (  # noqa: E402
     _parse_wgs84,
     _tour_get,
     classify_region_group,
+    enrich_spots_and_festivals_details,
     normalize_place_name,
     normalize_province_short,
     parse_korean_address,
@@ -304,19 +305,37 @@ def main() -> None:
             if not ev.get("end_date") or str(ev.get("end_date")) >= today_ymd
         ]
         active_list.sort(key=lambda x: str(x.get("start_date") or "99999999"))
+        need_enrich = [
+            ev for ev in active_list
+            if not ev.get("naver_reviews") or (str(ev.get("content_id") or "").isdigit() and not ev.get("paragraphs"))
+        ]
+        if need_enrich:
+            print(f"[weekly] 축제 상세·네이버 후기 보강 대상: {len(need_enrich)}건")
+            enrich_spots_and_festivals_details(
+                need_enrich,
+                cache_path=str(ROOT / "output" / "curated_stays_cache" / "spot_editorial_detail_cache.json"),
+            )
         hub["festivals"] = active_list
         jb_cnt = sum(1 for x in active_list if x.get("province") == "전북")
-        print(f"[weekly] 축제 최종 반영: 총 {len(active_list)}건 (신규 {added}건, 전북={jb_cnt}건)")
+        rev_cnt = sum(1 for x in active_list if x.get("naver_reviews"))
+        print(f"[weekly] 축제 최종 반영: 총 {len(active_list)}건 (신규 {added}건, 전북={jb_cnt}건, 네이버후기={rev_cnt}건)")
 
     hub["updated_at"] = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
     HUB_PATH.write_text(json.dumps(hub, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
+    # CI는 번역을 별도 단계로 실행해 실패를 드러낸다(--no-translate).
+    if "--no-translate" in sys.argv:
+        return
     if os.getenv("GEMINI_API_KEY", "").strip():
         print("[weekly] 다국어 증분 번역 실행 중...")
-        subprocess.run(
+        rc = subprocess.run(
             [sys.executable, str(ROOT / "backend" / "translate_hub.py"), "--gemini"],
             check=False,
-        )
+        ).returncode
+        if rc != 0:
+            # 허브 JSON은 이미 저장됐으므로 축제 갱신은 유지하고, 번역 실패만 종료 코드로 알린다.
+            print(f"[weekly] 오류: 다국어 번역 실패 (종료 코드 {rc})", file=sys.stderr)
+            sys.exit(rc)
 
 
 if __name__ == "__main__":

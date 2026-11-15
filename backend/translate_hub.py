@@ -18,11 +18,13 @@ import pathlib
 import sys
 import threading
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from google import genai
 from google.genai import types
-from openai import OpenAI
+
+if TYPE_CHECKING:  # openai는 Gemini 키가 없을 때만 필요하므로 실행 시에는 지연 import한다.
+    from openai import OpenAI
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ENV_PATH = ROOT / ".env"
@@ -257,7 +259,11 @@ def main() -> None:
         raise RuntimeError("GEMINI_API_KEY or OPENAI_API_KEY is required in .env")
 
     gemini_client = genai.Client(api_key=gemini_key) if (use_gemini and gemini_key) else None
-    openai_client = OpenAI(api_key=openai_key) if (gemini_client is None and openai_key) else None
+    openai_client = None
+    if gemini_client is None and openai_key:
+        from openai import OpenAI
+
+        openai_client = OpenAI(api_key=openai_key)
     print(f"Using provider: {'Gemini ' + MODEL_NAME if gemini_client else 'OpenAI gpt-4o-mini'}", flush=True)
     cache = load_cache()
 
