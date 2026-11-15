@@ -1,4 +1,5 @@
-// 한국관광공사(TourAPI KorService2) + 정부·지자체 공식 웹진 + 2026 반값여행·외국인 혜택 통합 허브 화면.
+// 2026 반값여행(지역사랑 휴가지원) 이벤트 상세 화면 — 홈 상단 이벤트 배너에서 연다.
+// 공식 혜택 안내 · 25개 대상 지역별 숙소 연결 · 신청 가이드 · 지역 축제/추천 코스(한국관광공사 TourAPI).
 // - 앱 번들 크기를 늘리지 않기 위해 정적 빌드된 허브 핵심 데이터(/data/hub/core.json)를 탭 진입 시 지연 로드한다.
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -31,7 +32,7 @@ const List<Map<String, dynamic>> _kFallbackHalfPriceRegions = [
 const List<Map<String, dynamic>> _kFallbackBenefits = [
   {
     'badge': 'FOREIGNER & LOCAL · 최대 50% 즉시할인',
-    'official_url': 'https://korean.visitkorea.or.kr/digtCard/digt_card_intro.do',
+    'official_url': 'https://korean.visitkorea.or.kr/dgtourcard/tourcard.do',
     'ko': {
       'title': '디지털 관광주민증 (한국관광공사 공식)',
       'desc': '인구감소지역 35개+ 시·군 방문 시 숙박·관람·케이블카·체험 최대 10~50% 현장 즉시 할인! 내·외국인 모두 모바일 무료 발급.',
@@ -51,7 +52,7 @@ const List<Map<String, dynamic>> _kFallbackBenefits = [
   },
   {
     'badge': '2026 정부·지자체 지원 · 50% 환급',
-    'official_url': 'https://korean.visitkorea.or.kr',
+    'official_url': 'https://www.mcst.go.kr/site/s_policy/govPolicy/performView.jsp?pSeq=1111',
     'ko': {
       'title': '2026 대한민국 반값여행 (25개 지자체 50% 환급)',
       'desc': '여행 전 사전신청 후 지자체가 인정한 숙소·식당 영수증을 제출하면 지출액의 50%(2인 최대 20만원)를 지역화폐로 환급받습니다. (미신고 불법숙소 영수증 제외)',
@@ -68,33 +69,6 @@ const List<Map<String, dynamic>> _kFallbackBenefits = [
       'title': '2026 韓國半價旅遊補助＆外國自由行地方住宿優惠',
       'desc': '25個地方政府推出旅費50%回饋，並針對外國自由行旅客提供地方住宿優惠券（※須入住合法認證民宿以取得收據）。',
     },
-  },
-];
-
-const List<Map<String, String>> _kFallbackMagazines = [
-  {
-    'publisher': '문화체육관광부',
-    'title': '대한민국 정책주간지 《K-공감》 e-Book·웹진',
-    'region_group': '전체',
-    'desc': '정부가 매주 발행하는 공식 시사·생활정책·로컬 여행 교양잡지 무료 열람',
-    'url': 'https://gonggam.korea.kr',
-    'lang_badge': 'KO',
-  },
-  {
-    'publisher': '한국관광공사',
-    'title': '대한민국 구석구석 《여행기사 & 월간 테마매거진》',
-    'region_group': '전체',
-    'desc': '전국 숨은 로컬 명소, 계절별 축제, 반값여행·디지털 관광주민증 공식 특집호',
-    'url': 'https://korean.visitkorea.or.kr/list/travelinfo.do?service=ms',
-    'lang_badge': 'KO',
-  },
-  {
-    'publisher': 'Korea Tourism Organization',
-    'title': 'VisitKorea Global Travel Magazine & News',
-    'region_group': '전체',
-    'desc': 'Official multilingual travel magazines, K-food & Hanok stay stories for global visitors',
-    'url': 'https://english.visitkorea.or.kr',
-    'lang_badge': 'EN · JA · ZH',
   },
 ];
 
@@ -159,8 +133,6 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
     final halfRegions = (_hub?['half_price_regions'] as List?)?.whereType<Map>().toList() ?? _kFallbackHalfPriceRegions;
     final allFestivals = (_hub?['festivals'] as List?)?.whereType<Map>().toList() ?? const [];
     final allCourses = (_hub?['courses'] as List?)?.whereType<Map>().toList() ?? const [];
-    final allMagazines = (_hub?['public_magazines'] as List?)?.whereType<Map>().toList() ?? _kFallbackMagazines;
-    final municipalEbooks = (_hub?['municipal_ebooks'] as List?)?.whereType<Map>().toList() ?? const [];
     final subsidyGuides = (_hub?['subsidy_guides'] as List?)?.whereType<Map>().toList() ?? const [];
 
     final festivals = _regionFilter == '전체'
@@ -169,9 +141,6 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
     final courses = _regionFilter == '전체'
         ? allCourses
         : allCourses.where((c) => c['region_group'] == _regionFilter || c['region_group'] == '전체').toList();
-    final magazines = _regionFilter == '전체'
-        ? allMagazines
-        : allMagazines.where((m) => m['region_group'] == _regionFilter || m['region_group'] == '전체').toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -212,12 +181,12 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                     const SizedBox(height: 10),
                     Text(
                       lang == AppLang.ko
-                          ? '2026 반값여행 지원금 · 전국 축제 · 정부/지자체 매거진'
+                          ? '2026 대한민국 반값여행 · 여행경비 50% 환급'
                           : lang == AppLang.ja
-                              ? '2026 韓国旅行50%割引パス・地域祭り・自治体公式マガジン'
+                              ? '2026 韓国半額旅行・旅費50%還付'
                               : lang == AppLang.zh
-                                  ? '2026 韓國旅遊半價補助・地方慶典・政府官方旅遊雜誌'
-                                  : '2026 Korea 50% Travel Pass · Festivals · Official Magazines',
+                                  ? '2026 韓國半價旅遊・旅費50%退還'
+                                  : '2026 Korea Half-Price Travel · 50% Cashback',
                       style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 6),
@@ -619,174 +588,6 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                 const SizedBox(height: 28),
               ],
 
-              // 6. 전국 17개 시·도 및 시·군 지자체 관광안내도 PDF / E-book 아카이브
-              if (municipalEbooks.isNotEmpty) ...[
-                Text(
-                  lang == AppLang.ko
-                      ? '🗺️ 전국 17개 시·도 지자체 공식 관광안내도 · E-book 즉시 열람'
-                      : '🗺️ All 17 Provinces Official Tourist Maps & PDF Guidebooks',
-                  style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: Color(0xFF222222)),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  lang == AppLang.ko
-                      ? '회원가입 없이 각 시·도 및 군청 문화관광 누리집의 고화질 관광지도 PDF와 E-book 뷰어를 바로 엽니다.'
-                      : 'No sign-up needed — open official high-resolution PDF maps and e-guidebooks directly.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: municipalEbooks.map((eb) {
-                    final pdfLinks = (eb['pdf_links'] as List? ?? const []).whereType<Map>().toList();
-                    return ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 250, maxWidth: 355),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => _openUrl((eb['url'] ?? '').toString()),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFBFDBFE)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${eb['province'] ?? ''} · ${eb['city'] ?? ''}',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                (eb['title'] ?? '').toString(),
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                (eb['materials'] ?? '').toString(),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
-                              ),
-                              if (pdfLinks.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: pdfLinks.map((pl) {
-                                    final lbl = lang == AppLang.ko
-                                        ? (pl['label'] ?? 'PDF 열람').toString()
-                                        : ((pl['label_en'] ?? pl['label'] ?? 'Open PDF').toString());
-                                    return ActionChip(
-                                      visualDensity: VisualDensity.compact,
-                                      backgroundColor: Colors.white,
-                                      side: const BorderSide(color: Color(0xFF93C5FD)),
-                                      label: Text(
-                                        lbl,
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
-                                      ),
-                                      onPressed: () => _openUrl((pl['url'] ?? '').toString()),
-                                    );
-                                  }).toList(),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 32),
-              ],
-
-              // 7. 정부·지자체 공식 발행 잡지·웹진·e-Book 열람관
-              Text(
-                lang == AppLang.ko ? '📖 정부 · 지자체 발행 공식 잡지 & 관광 e-북 무료 열람관' : '📖 Free Government & Municipal Official Travel Magazines (e-Books)',
-                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: Color(0xFF222222)),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                lang == AppLang.ko
-                    ? '문화체육관광부 주간지 《K-공감》과 각 광역지자체가 공공누리로 무료 개방한 공식 웹진·가이드북을 광고 없이 열람하세요.'
-                    : 'Browse official government magazines and multilingual regional e-guidebooks published by MCST, KTO, and local tourism boards.',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: magazines.map((m) {
-                  return ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 260, maxWidth: 360),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: () => _openUrl((m['url'] ?? '').toString()),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFD1D5DB)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    (m['publisher'] ?? '').toString(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F766E)),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF3F4F6),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    (m['lang_badge'] ?? 'KO').toString(),
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF374151)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              (m['title'] ?? '').toString(),
-                              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
-                            ),
-                            const SizedBox(height: 5),
-                            Text(
-                              (m['desc'] ?? '').toString(),
-                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF4B5563), height: 1.4),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Text(
-                                  lang == AppLang.ko ? '무료 웹진·e-Book 열람하기' : 'Open Official Webzine',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF2563EB)),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.open_in_new_rounded, size: 13, color: Color(0xFF2563EB)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
               const SizedBox(height: 36),
             ],
           ),

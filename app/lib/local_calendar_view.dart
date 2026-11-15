@@ -6,6 +6,7 @@ import 'detail_page.dart' show StorageImage;
 import 'discovery_models.dart';
 import 'i18n.dart';
 import 'legal.dart';
+import 'search_query.dart';
 
 class LocalCalendarView extends StatefulWidget {
   final List<DiscoveryItem> allItems;
@@ -64,15 +65,14 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
   }
 
   List<_ParsedEventEntry> _filteredEvents() {
-    final q = widget.query.trim().toLowerCase();
+    // 홈 검색과 같은 해석(낱말별·시도·여행/숙소 같은 말 제거). 캘린더는 축제만 보여 주므로 분류 낱말은 무시한다.
+    final parsed = parseSearchQuery(widget.query);
+    final q = ParsedSearchQuery(terms: parsed.terms, province: parsed.province, provinceWord: parsed.provinceWord);
     final out = <_ParsedEventEntry>[];
     for (final it in widget.allItems) {
       if (it.category != DiscoveryCategory.event) continue;
       if (widget.selectedProvince != '전체' && it.province != widget.selectedProvince) continue;
-      if (q.isNotEmpty) {
-        final hay = '${it.title} ${it.province} ${it.regionLabel} ${it.address} ${it.subtitle}'.toLowerCase();
-        if (!hay.contains(q)) continue;
-      }
+      if (!q.isEmpty && searchRelevance(it, q) == null) continue;
       final sd = parseYmdDate(it.startDate) ?? parseYmdDate(it.endDate);
       final ed = parseYmdDate(it.endDate) ?? sd;
       if (sd == null || ed == null) continue;

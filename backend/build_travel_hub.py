@@ -81,7 +81,7 @@ GLOBAL_BENEFIT_CARDS: list[dict[str, Any]] = [
     {
         "id": "k_digital_pass",
         "badge": "FOREIGNER & LOCAL · 최대 50% 즉시할인",
-        "official_url": "https://korean.visitkorea.or.kr/digtCard/digt_card_intro.do",
+        "official_url": "https://korean.visitkorea.or.kr/dgtourcard/tourcard.do",
         "ko": {
             "title": "디지털 관광주민증 (한국관광공사 공식)",
             "desc": "인구감소지역 35개+ 시·군 방문 시 숙박·관람·케이블카·체험 최대 10~50% 현장 즉시 할인! 내·외국인 모두 모바일로 무료 발급 가능합니다.",
@@ -102,7 +102,7 @@ GLOBAL_BENEFIT_CARDS: list[dict[str, Any]] = [
     {
         "id": "half_price_korea",
         "badge": "2026 정부·지자체 지원 · 50% 환급",
-        "official_url": "https://korean.visitkorea.or.kr",
+        "official_url": "https://www.mcst.go.kr/site/s_policy/govPolicy/performView.jsp?pSeq=1111",
         "ko": {
             "title": "2026 대한민국 반값여행 (지역사랑 휴가지원 25개 지역)",
             "desc": "여행 출발 전 사전신청 후 합법 등록 숙소·식당 영수증을 제출하면 지출액의 50%(2인 최대 20만원)를 모바일 지역화폐로 돌려받습니다. (※ 미신고 불법숙소 영수증은 환급 불가!)",

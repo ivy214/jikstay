@@ -25,6 +25,7 @@ app/                    Flutter Web (Dart 3.14 / Flutter 3.50)
   lib/hub_details.dart    허브 데이터 지연 로드 (core.json + 시·도별 상세)
   lib/naver_place_info.dart  네이버 업종·공식 링크 표시 / lib/review_auth.dart 익명 로그인 후기 작성
   lib/trip_planner.dart · travel_hub.dart · local_calendar_view.dart · naver_map_view.dart
+  lib/event_banner.dart   홈 상단 이벤트 배너(kPromoEvents: 기간 안에 든 것 중 홈 진입 시 무작위 1개) — 이미지는 web/assets/events/
   lib/i18n.dart · translation_store.dart  KO/EN/JA/ZH(번체) UI·데이터 번역
   web/data/               정적 데이터(원본) — public_travel_hub.json, public_stays_index.json, translations_*.json
   web/data/hub/           (생성물, git 제외) split_hub.py 가 빌드 직전에 만든 core.json + details_{시도}.json

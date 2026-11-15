@@ -4,6 +4,8 @@ class _LiveLocalFeedPanel extends StatelessWidget {
   final AppLang lang;
   final String selectedProvince;
   final DailyStoryItem todayStory;
+  final PromoEvent? promoEvent;
+  final ValueChanged<PromoEvent> onOpenPromoEvent;
   final List<DailyStoryItem> moreStories;
   final VoidCallback onOpenTodayStory;
   final ValueChanged<DailyStoryItem> onOpenStory;
@@ -19,6 +21,8 @@ class _LiveLocalFeedPanel extends StatelessWidget {
     required this.lang,
     required this.selectedProvince,
     required this.todayStory,
+    this.promoEvent,
+    required this.onOpenPromoEvent,
     required this.moreStories,
     required this.onOpenTodayStory,
     required this.onOpenStory,
@@ -52,6 +56,21 @@ class _LiveLocalFeedPanel extends StatelessWidget {
     return CustomScrollView(
       key: const Key('live_feed_scroll'),
       slivers: [
+        // 0. 진행 중 이벤트 배너 (여럿이면 홈 진입 시 무작위 1개)
+        if (promoEvent != null)
+          SliverToBoxAdapter(
+            child: _centered(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: PromoEventBanner(
+                  event: promoEvent!,
+                  lang: lang,
+                  onTap: () => onOpenPromoEvent(promoEvent!),
+                ),
+              ),
+            ),
+          ),
+
         // 1. 하루 단 한 편 — 지자체 공식 가이드북·행사 기반 '오늘의 로컬 스토리' 히어로 배너
         SliverToBoxAdapter(
           child: _centered(

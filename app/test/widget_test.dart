@@ -1,14 +1,18 @@
 // Firebase 없이 검증 가능한 순수 로직 및 위젯 테스트.
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jikstay/amenities.dart';
 import 'package:jikstay/demo_data.dart';
 import 'package:jikstay/detail_page.dart';
 import 'package:jikstay/discovery_models.dart';
+import 'package:jikstay/event_banner.dart';
 import 'package:jikstay/hub_details.dart';
 import 'package:jikstay/i18n.dart';
 import 'package:jikstay/main.dart';
 import 'package:jikstay/naver_place_info.dart';
+import 'package:jikstay/search_query.dart';
 import 'package:jikstay/spot_detail_sheet.dart';
 import 'package:jikstay/translation_store.dart';
 import 'package:jikstay/ux_widgets.dart';
@@ -112,6 +116,38 @@ void main() {
   });
 
   group('검색 및 정렬', () {
+    DiscoveryItem place(String id, DiscoveryCategory cat, String title, String prov, String region, String addr) =>
+        DiscoveryItem(id: id, category: cat, title: title, province: prov, regionLabel: region, address: addr, lat: 35, lng: 127);
+    final namwonItems = [
+      place('jeju_food', DiscoveryCategory.food, '모노클제주', '제주', '제주 서귀포시 남원읍', '제주특별자치도 서귀포시 남원읍 태위로 30'),
+      place('nw_stay', DiscoveryCategory.stay, '명지각 본관', '전북', '전북 남원시', '전북특별자치도 남원시 고샘길 57'),
+      place('nw_park', DiscoveryCategory.attraction, '지리산국립공원 뱀사골1피크닉존', '전북', '전북 남원시 산내면', '전북특별자치도 남원시 산내면 와운길 29'),
+      place('jj_stay', DiscoveryCategory.stay, '전주 한옥', '전북', '전북 전주시', '전북특별자치도 전주시 완산구'),
+    ];
+    List<String> search(String q) {
+      final parsed = parseSearchQuery(q);
+      final hits = namwonItems.where((it) => searchRelevance(it, parsed) != null).toList()
+        ..sort((a, b) => searchRelevance(b, parsed)!.compareTo(searchRelevance(a, parsed)!));
+      return hits.map((e) => e.id).toList();
+    }
+
+    test('홈 검색: 띄어쓰기·시도 이름·여행/숙소 같은 말을 해석하고 시·군 이름이 맞는 곳을 앞에', () {
+      // 띄어 쓴 "전북 남원" — 시도+시군 낱말 각각 매칭 (제주 남원읍 제외)
+      expect(search('전북 남원'), unorderedEquals(['nw_stay', 'nw_park']));
+      expect(search('전라북도 남원시'), unorderedEquals(['nw_stay', 'nw_park']));
+      // "남원여행" → 남원
+      expect(search('남원여행').toSet(), {'nw_stay', 'nw_park', 'jeju_food'});
+      // 남원시 결과가 제주 남원읍보다 앞
+      expect(search('남원').last, 'jeju_food');
+      // 분류 낱말: 숙소·맛집
+      expect(search('남원 숙소'), ['nw_stay']);
+      expect(search('남원숙소'), ['nw_stay']);
+      expect(search('남원맛집'), ['jeju_food']);
+      expect(search('전북 숙소'), unorderedEquals(['nw_stay', 'jj_stay']));
+      expect(parseSearchQuery('여행').isEmpty, isTrue);
+      expect(dominantProvince(namwonItems.skip(1)), '전북');
+    });
+
     final sampleItems = <MapEntry<String, Map<String, dynamic>>>[
       MapEntry('a', {
         'title': '애월 돌담 독채',
@@ -375,7 +411,7 @@ void main() {
       expect(find.text('4.0 / 5.0'), findsOneWidget);
     });
 
-    testWidgets('반값여행 · 축제 · 정부/지자체 매거진 허브 렌더링 및 지역 원클릭 숙소 연동', (tester) async {
+    testWidgets('반값여행 이벤트 상세 렌더링 및 지역 원클릭 숙소 연동', (tester) async {
       tester.view.physicalSize = const Size(1280, 1000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -403,7 +439,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('2026 반값여행'), findsWidgets);
-      expect(find.textContaining('K-공감'), findsWidgets);
+      expect(find.textContaining('K-공감'), findsNothing); // E-book·매거진관은 이벤트 상세에서 제외
 
       final namhaeChip = find.text('남해 숙소');
       await tester.scrollUntilVisible(namhaeChip, 250, scrollable: find.byType(Scrollable).first);
@@ -411,6 +447,34 @@ void main() {
       await tester.pump();
       expect(pickedRegion, '부산/경상');
       expect(pickedCity, '남해');
+    });
+
+    test('이벤트 배너: 오늘 진행 중인 이벤트만 후보 · 여럿이면 무작위 1개', () {
+      PromoEvent ev(String id, DateTime start, DateTime end) => PromoEvent(
+            id: id,
+            imageUrl: 'assets/events/$id.png',
+            start: start,
+            end: end,
+            action: PromoEventAction.externalUrl,
+            externalUrl: 'https://example.com/$id',
+            title: {AppLang.ko: id},
+            subtitle: const {},
+          );
+      final events = [
+        ev('a', DateTime(2026, 11, 16), DateTime(2026, 11, 30)), // 오늘 시작
+        ev('b', DateTime(2026, 11, 1), DateTime(2026, 11, 16)), // 오늘 종료
+        ev('c', DateTime(2026, 11, 17), DateTime(2026, 12, 31)), // 내일 시작
+        ev('d', DateTime(2026, 10, 1), DateTime(2026, 11, 15)), // 어제 종료
+      ];
+      final now = DateTime(2026, 11, 16, 23, 59);
+      expect(activePromoEvents(now, events: events).map((e) => e.id), ['a', 'b']);
+      final picked = <String>{
+        for (var seed = 0; seed < 40; seed++) pickPromoEvent(now, events: events, random: math.Random(seed))!.id,
+      };
+      expect(picked, {'a', 'b'});
+      expect(pickPromoEvent(DateTime(2027, 6, 1), events: events), isNull);
+      // 실제 등록된 반값여행 배너는 2026-11-16 기준 진행 중
+      expect(activePromoEvents(DateTime(2026, 11, 16)).map((e) => e.id), contains('half_price_travel_2026'));
     });
 
     test('전국 17개 시도 정규화 및 주변 먹거리·볼거리·축제·E-book 반경 연결(buildConnectedBundle)', () {
