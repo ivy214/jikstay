@@ -310,9 +310,67 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                     const SizedBox(height: 22),
                   ],
 
-                  // 5. 지자체 공식 원문 스토리 본문 (가독성 최우선: 16.5px · 줄간격 1.88)
-                  ...tParagraphs.map(
-                    (p) => Padding(
+                  // 5. 지자체 공식 원문 스토리 본문 (챕터형 웹 매거진 + 고가독성 본문)
+                  ...tParagraphs.map((p) {
+                    final trimmed = p.trim();
+                    final nlIdx = trimmed.indexOf('\n');
+                    final isChapter = nlIdx > 0 &&
+                        (trimmed.startsWith('【') ||
+                            trimmed.startsWith('▌') ||
+                            trimmed.startsWith('📌 ') ||
+                            trimmed.startsWith('## '));
+                    if (isChapter) {
+                      final heading = trimmed
+                          .substring(0, nlIdx)
+                          .replaceFirst(RegExp(r'^##\s*'), '')
+                          .trim();
+                      final body = trimmed.substring(nlIdx + 1).trim();
+                      return Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 18),
+                        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.only(left: 10),
+                              decoration: const BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(color: Color(0xFF059669), width: 3.5),
+                                ),
+                              ),
+                              child: Text(
+                                heading,
+                                style: const TextStyle(
+                                  fontSize: 17.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF0F172A),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                            if (body.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                body,
+                                style: const TextStyle(
+                                  fontSize: 15.5,
+                                  color: Color(0xFF334155),
+                                  height: 1.82,
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }
+                    return Padding(
                       padding: const EdgeInsets.only(bottom: 18),
                       child: Text(
                         p,
@@ -323,8 +381,8 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                           letterSpacing: -0.1,
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
                   const SizedBox(height: 8),
 
                   // 6. 방문 전 꼭 필요한 '핵심 탐방·편의 정보 박스' (《장수여행》 p.9 하단 초록 박스 모델)
