@@ -14,6 +14,7 @@ import 'amenities.dart';
 import 'demo_data.dart';
 import 'i18n.dart';
 import 'legal.dart';
+import 'translation_store.dart';
 import 'web_utils.dart';
 
 bool isPublicUnclaimed(Map<String, dynamic> data) {
@@ -64,35 +65,70 @@ String formatWon(num v) =>
     '${v.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',')}원';
 
 /// 카드·상세 대표 요금 텍스트. period 를 주면 해당 기간 요금을 우선 표시한다.
-String shortPrice(Map<String, dynamic>? p, {StayPeriod period = StayPeriod.all}) {
-  if (p == null) return '요금 직접 문의';
-  String man(num v) => '${(v / 10000).round()}만 원';
+String shortPrice(Map<String, dynamic>? p, {StayPeriod period = StayPeriod.all, AppLang lang = AppLang.ko}) {
+  final inquiry = pickLangText(
+    lang,
+    ko: '요금 직접 문의',
+    en: 'Inquire for Rates',
+    ja: '料金を直接お問い合わせ',
+    zh: '直接咨询房价',
+  );
+  if (p == null) return inquiry;
+  String man(num v) => lang == AppLang.ko
+      ? '${(v / 10000).round()}만 원'
+      : formatWon(v);
   switch (period) {
     case StayPeriod.nightly:
-      return p['nightly_min'] is num ? '1박 ${man(p['nightly_min'])}~' : '요금 직접 문의';
+      return p['nightly_min'] is num
+          ? pickLangText(lang,
+              ko: '1박 ${man(p['nightly_min'])}~',
+              en: 'From ${man(p['nightly_min'])} / night',
+              ja: '1泊 ${man(p['nightly_min'])}〜',
+              zh: '每晚 ${man(p['nightly_min'])}起')
+          : inquiry;
     case StayPeriod.weekly:
-      return p['weekly_price'] is num ? '일주일 ${man(p['weekly_price'])}' : '요금 직접 문의';
+      return p['weekly_price'] is num
+          ? pickLangText(lang,
+              ko: '일주일 ${man(p['weekly_price'])}',
+              en: '${man(p['weekly_price'])} / week',
+              ja: '1週間 ${man(p['weekly_price'])}',
+              zh: '每周 ${man(p['weekly_price'])}')
+          : inquiry;
     case StayPeriod.monthly:
-      return p['monthly_price'] is num ? '한달 ${man(p['monthly_price'])}' : '요금 직접 문의';
+      return p['monthly_price'] is num
+          ? pickLangText(lang,
+              ko: '한달 ${man(p['monthly_price'])}',
+              en: '${man(p['monthly_price'])} / month',
+              ja: '1ヶ月 ${man(p['monthly_price'])}',
+              zh: '每月 ${man(p['monthly_price'])}')
+          : inquiry;
     case StayPeriod.all:
-      if (p['monthly_price'] is num) return '한달 ${man(p['monthly_price'])}';
-      if (p['weekly_price'] is num) return '일주일 ${man(p['weekly_price'])}';
-      if (p['nightly_min'] is num) return '1박 ${man(p['nightly_min'])}~';
-      return '요금 직접 문의';
+      if (p['monthly_price'] is num) return shortPrice(p, period: StayPeriod.monthly, lang: lang);
+      if (p['weekly_price'] is num) return shortPrice(p, period: StayPeriod.weekly, lang: lang);
+      if (p['nightly_min'] is num) return shortPrice(p, period: StayPeriod.nightly, lang: lang);
+      return inquiry;
   }
 }
 
 /// 직거래 링크 도메인으로 예약 창구 유형을 판별한다.
-String bookingChannelName(String rawUrl) {
+String bookingChannelName(String rawUrl, {AppLang lang = AppLang.ko}) {
   final host = (Uri.tryParse(rawUrl.trim())?.host ?? '').toLowerCase();
-  if (host.contains('map.naver.')) return '네이버 지도·플레이스';
-  if (host.contains('booking.naver.') || host == 'naver.me') {
-    return '네이버 예약';
+  if (host.contains('map.naver.')) {
+    return pickLangText(lang, ko: '네이버 지도·플레이스', en: 'Naver Map / Place', ja: 'Naverマップ・プレイス', zh: 'Naver地图·Place');
   }
-  if (host.contains('blog.naver.')) return '네이버 블로그';
-  if (host.contains('kakao.')) return '카카오톡 채널';
-  if (host.contains('instagram.')) return '인스타그램';
-  return '호스트 직거래';
+  if (host.contains('booking.naver.') || host == 'naver.me') {
+    return pickLangText(lang, ko: '네이버 예약', en: 'Naver Booking', ja: 'Naver予約', zh: 'Naver预订');
+  }
+  if (host.contains('blog.naver.')) {
+    return pickLangText(lang, ko: '네이버 블로그', en: 'Naver Blog', ja: 'Naverブログ', zh: 'Naver博客');
+  }
+  if (host.contains('kakao.')) {
+    return pickLangText(lang, ko: '카카오톡 채널', en: 'KakaoTalk Channel', ja: 'KakaoTalkチャンネル', zh: 'KakaoTalk频道');
+  }
+  if (host.contains('instagram.')) {
+    return pickLangText(lang, ko: '인스타그램', en: 'Instagram', ja: 'Instagram', zh: 'Instagram');
+  }
+  return pickLangText(lang, ko: '호스트 직거래', en: 'Host Direct', ja: 'ホスト直接予約', zh: '房东直订');
 }
 
 String bookingCtaLabel(String rawUrl, {Map<String, dynamic>? data, AppLang lang = AppLang.ko}) {
@@ -108,6 +144,151 @@ String bookingCtaLabel(String rawUrl, {Map<String, dynamic>? data, AppLang lang 
   if (ch == '카카오톡 채널') return '수수료 0원 카카오톡 예약 문의';
   if (ch == '인스타그램') return '수수료 0원 인스타그램 DM 문의';
   return '수수료 0원 직거래 예약 신청';
+}
+
+String _tStayTitle(String listingId, Map<String, dynamic> data, AppLang lang) {
+  if (lang != AppLang.ko && listingId.isNotEmpty) {
+    final fromStore = TranslationStore.field(lang, 'stays', listingId, 'title', '');
+    if (fromStore.isNotEmpty) return fromStore;
+  }
+  return localizedListingTitle(data, lang);
+}
+
+String _tStayRegion(String listingId, Map<String, dynamic> data, AppLang lang) {
+  final koRegion = '${data['region_depth1'] ?? ''} ${data['region_depth2'] ?? ''}'.trim();
+  if (lang == AppLang.ko) return koRegion;
+  if (listingId.isNotEmpty) {
+    final fromStore = TranslationStore.field(lang, 'stays', listingId, 'region', '');
+    if (fromStore.isNotEmpty) return fromStore;
+  }
+  final d1 = (data['region_depth1'] ?? '').toString();
+  final prov = trRegion(d1, lang);
+  final d2 = (data['region_depth2'] ?? '').toString().trim();
+  return d2.isNotEmpty && prov != d1 ? '$prov ($d2)' : koRegion;
+}
+
+String _tLicenseType(String raw, AppLang lang) {
+  if (lang == AppLang.ko || raw.isEmpty) return raw;
+  const map = <String, Map<AppLang, String>>{
+    '외국인관광도시민박업': {
+      AppLang.en: 'Foreign-Friendly Urban Homestay',
+      AppLang.ja: '外国人観光都市民泊業',
+      AppLang.zh: '外国人观光城市民宿业',
+    },
+    '한옥체험업': {
+      AppLang.en: 'Hanok Experience Stay',
+      AppLang.ja: '韓屋体験業',
+      AppLang.zh: '韩屋体验住宿',
+    },
+    '숙박업': {
+      AppLang.en: 'Licensed Lodging Business',
+      AppLang.ja: '宿泊業',
+      AppLang.zh: '持牌住宿业',
+    },
+    '농어촌민박업': {
+      AppLang.en: 'Rural Homestay Business',
+      AppLang.ja: '農漁村ペンション・民泊',
+      AppLang.zh: '农渔村合法民宿',
+    },
+    '호스텔업': {
+      AppLang.en: 'Licensed Hostel',
+      AppLang.ja: 'ホステル業',
+      AppLang.zh: '持牌旅舍',
+    },
+  };
+  return map[raw]?[lang] ?? raw;
+}
+
+String _tAccommodationType(String raw, AppLang lang) {
+  if (lang == AppLang.ko || raw.isEmpty) return raw;
+  if (raw.contains('외국인 전용 도시민박') || raw.contains('외국인관광도시민박')) {
+    return pickLangText(lang, ko: raw, en: 'Foreign-Only Urban Homestay', ja: '外国人専用都市民泊', zh: '外国人专用城市民宿');
+  }
+  if (raw.contains('한옥')) {
+    return pickLangText(lang, ko: raw, en: 'Hanok Stay', ja: '韓屋ステイ', zh: '韩屋住宿');
+  }
+  if (raw.contains('펜션')) {
+    return pickLangText(lang, ko: raw, en: 'Pension / Villa', ja: 'ペンション', zh: '度假别墅');
+  }
+  if (raw.contains('게스트하우스')) {
+    return pickLangText(lang, ko: raw, en: 'Guesthouse', ja: 'ゲストハウス', zh: '青年旅舍');
+  }
+  if (raw.contains('호텔')) {
+    return pickLangText(lang, ko: raw, en: 'Hotel', ja: 'ホテル', zh: '酒店');
+  }
+  return pickLangText(lang, ko: raw, en: 'Licensed Local Stay', ja: '公認ローカルステイ', zh: '官方认证当地住宿');
+}
+
+({String title, String subtitle}) _tHighlight(
+  Map<String, String> h,
+  Map<String, dynamic> data,
+  String listingId,
+  AppLang lang,
+) {
+  final rawTitle = h['title'] ?? '';
+  final rawSub = h['subtitle'] ?? '';
+  if (lang == AppLang.ko) return (title: rawTitle, subtitle: rawSub);
+
+  String title = rawTitle;
+  if (rawTitle.contains('공공 인허가 확인')) {
+    title = pickLangText(
+      lang,
+      ko: rawTitle,
+      en: 'Verified Public Lodging License',
+      ja: '公的許認可・営業登録の確認済み',
+      zh: '已核验官方营业许可',
+    );
+  } else if (rawTitle.contains('로컬 스테이')) {
+    final region = _tStayRegion(listingId, data, lang);
+    title = region.isNotEmpty
+        ? pickLangText(lang, ko: rawTitle, en: '$region Local Stay', ja: '$region ローカルステイ', zh: '$region 当地住宿')
+        : pickLangText(lang, ko: rawTitle, en: 'Local Stay', ja: 'ローカルステイ', zh: '当地住宿');
+  } else if (rawTitle.contains('네이버 블로그 방문 후기')) {
+    title = pickLangText(
+      lang,
+      ko: rawTitle,
+      en: 'Naver Blog Visitor Reviews & Guides',
+      ja: 'Naverブログの訪問レビュー・案内',
+      zh: 'Naver 博客访客评价与指南',
+    );
+  }
+
+  String sub = rawSub;
+  final ktoMatch = RegExp(r'콘텐츠\s*#?(\d+)').firstMatch(rawSub);
+  if (ktoMatch != null) {
+    final cid = ktoMatch.group(1) ?? '';
+    sub = pickLangText(
+      lang,
+      ko: rawSub,
+      en: 'Verified legal stay registered with Korea Tourism Organization (Content #$cid).',
+      ja: '韓国観光公社（コンテンツ #$cid）に登録・検証された合法宿泊施設です。',
+      zh: '已在韩国观光公社（内容编号 #$cid）备案认证的合法住宿。',
+    );
+  } else if (rawSub.contains('실제 여행객 후기 및 안내글')) {
+    final cntMatch = RegExp(r'(\d+)건').firstMatch(rawSub);
+    final cnt = cntMatch?.group(1) ?? '1';
+    sub = pickLangText(
+      lang,
+      ko: rawSub,
+      en: 'Open $cnt real traveler review(s) and guide post(s) directly from this page.',
+      ja: '実際の旅行者レビュー・案内記事（$cnt件）をこのページからすぐにご覧いただけます。',
+      zh: '可在本页面直接查看 $cnt 篇真实旅客评价与攻略文章。',
+    );
+  } else if (rawSub == '호스트 소개 자료에서 확인된 숙소 주요 매력입니다.') {
+    sub = pickLangText(
+      lang,
+      ko: rawSub,
+      en: 'Key stay highlight verified from host information.',
+      ja: 'ホスト紹介資料で確認された宿泊施設の主な魅力です。',
+      zh: '由房东介绍资料确认的住宿核心亮点。',
+    );
+  } else if (listingId.isNotEmpty) {
+    final storeSummary = TranslationStore.field(lang, 'stays', listingId, 'summary', '');
+    if (storeSummary.isNotEmpty && rawSub == (data['location_info'] is Map ? (data['location_info']['display_address'] ?? '') : '')) {
+      sub = storeSummary.replaceAll(RegExp(r"^\['|'\]$"), '');
+    }
+  }
+  return (title: title, subtitle: sub);
 }
 
 String _fmtDate(DateTime d) =>
@@ -466,8 +647,17 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
     final shareUrl = '${currentSiteOrigin()}/?id=${Uri.encodeComponent(widget.listingId)}';
     await Clipboard.setData(ClipboardData(text: shareUrl));
     if (context.mounted) {
+      final lang = appLangNotifier.value;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('숙소 링크가 복사되었습니다. 카카오톡 등에 붙여넣어 공유하세요!')),
+        SnackBar(
+          content: Text(pickLangText(
+            lang,
+            ko: '숙소 링크가 복사되었습니다. 카카오톡 등에 붙여넣어 공유하세요!',
+            en: 'Stay link copied to clipboard.',
+            ja: '宿泊施設のリンクをコピーしました。',
+            zh: '已复制住宿链接。',
+          )),
+        ),
       );
     }
   }
@@ -475,13 +665,20 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
   Future<void> _pickDates(BuildContext context) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final lang = appLangNotifier.value;
     final picked = await showDateRangePicker(
       context: context,
       firstDate: today,
       lastDate: today.add(const Duration(days: 365)),
       initialDateRange: _dateRange,
-      helpText: '체크인 · 체크아웃 날짜 선택',
-      saveText: '일정 적용',
+      helpText: pickLangText(
+        lang,
+        ko: '체크인 · 체크아웃 날짜 선택',
+        en: 'Select Check-in & Check-out Dates',
+        ja: 'チェックイン・チェックアウト日を選択',
+        zh: '选择入住与退房日期',
+      ),
+      saveText: pickLangText(lang, ko: '일정 적용', en: 'Apply', ja: '適用', zh: '应用'),
     );
     if (picked != null && mounted) {
       setState(() => _dateRange = picked);
@@ -493,63 +690,86 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
     final isDesktop = MediaQuery.sizeOf(context).width >= 940;
     return ValueListenableBuilder<AppLang>(
       valueListenable: appLangNotifier,
-      builder: (context, lang, _) => FutureBuilder<Map<String, dynamic>?>(
-        future: _future,
-        builder: (context, snap) {
-          final data = snap.data;
-          final hasData = snap.connectionState == ConnectionState.done && !snap.hasError && data != null;
-          return Scaffold(
-            backgroundColor: Colors.white,
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.white,
-              elevation: 0,
-              shape: const Border(bottom: BorderSide(color: Color(0xFFEBEBEB))),
-              leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => _back(context)),
-              title: Text(
-                hasData ? localizedListingTitle(data, lang) : '숙소 상세',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              actions: [
-                const LangSelectorButton(),
-                const SizedBox(width: 6),
-                TextButton.icon(
-                  onPressed: () => _copyShareLink(context),
-                  icon: const Icon(Icons.ios_share_rounded, size: 18),
-                  label: const Text('공유하기'),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ),
-            body: Builder(builder: (context) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snap.hasError || data == null) {
-                return Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Text('공개 중인 숙소를 찾을 수 없습니다.'),
-                    const SizedBox(height: 12),
-                    OutlinedButton(onPressed: () => _back(context), child: const Text('전체 숙소 보기')),
-                  ]),
-                );
-              }
-              return ListView(
-                children: [
-                  if (widget.listingId.startsWith('stay_demo_'))
-                    Container(
-                      width: double.infinity,
-                      color: const Color(0xFFFFF8E6),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: const Center(
-                        child: Text(
-                          '미리보기 데모 화면입니다 · 실제 운영 시 영업신고 대조를 마친 숙소 및 공공 API 선별 정보가 표시됩니다.',
-                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF856404)),
-                        ),
-                      ),
+      builder: (context, lang, _) {
+        if (lang != AppLang.ko && !TranslationStore.isLoaded(lang)) {
+          TranslationStore.ensureLoaded(lang);
+        }
+        return ValueListenableBuilder<int>(
+          valueListenable: translationRevisionNotifier,
+          builder: (context, _, _) => FutureBuilder<Map<String, dynamic>?>(
+            future: _future,
+            builder: (context, snap) {
+              final data = snap.data;
+              final hasData = snap.connectionState == ConnectionState.done && !snap.hasError && data != null;
+              return Scaffold(
+                backgroundColor: Colors.white,
+                appBar: AppBar(
+                  backgroundColor: Colors.white,
+                  surfaceTintColor: Colors.white,
+                  elevation: 0,
+                  shape: const Border(bottom: BorderSide(color: Color(0xFFEBEBEB))),
+                  leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => _back(context)),
+                  title: Text(
+                    hasData
+                        ? _tStayTitle(widget.listingId, data, lang)
+                        : pickLangText(lang, ko: '숙소 상세', en: 'Stay Details', ja: '宿泊詳細', zh: '住宿详情'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  actions: [
+                    const LangSelectorButton(),
+                    const SizedBox(width: 6),
+                    TextButton.icon(
+                      onPressed: () => _copyShareLink(context),
+                      icon: const Icon(Icons.ios_share_rounded, size: 18),
+                      label: Text(pickLangText(lang, ko: '공유하기', en: 'Share', ja: '共有', zh: '分享')),
                     ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+                body: Builder(builder: (context) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snap.hasError || data == null) {
+                    return Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(pickLangText(
+                          lang,
+                          ko: '공개 중인 숙소를 찾을 수 없습니다.',
+                          en: 'Listing not found.',
+                          ja: '公開中の宿泊施設が見つかりません。',
+                          zh: '未找到公开中的住宿。',
+                        )),
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                          onPressed: () => _back(context),
+                          child: Text(pickLangText(lang, ko: '전체 숙소 보기', en: 'Browse All Stays', ja: '宿泊一覧へ', zh: '查看全部住宿')),
+                        ),
+                      ]),
+                    );
+                  }
+                  return ListView(
+                    children: [
+                      if (widget.listingId.startsWith('stay_demo_'))
+                        Container(
+                          width: double.infinity,
+                          color: const Color(0xFFFFF8E6),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Center(
+                            child: Text(
+                              pickLangText(
+                                lang,
+                                ko: '미리보기 데모 화면입니다 · 실제 운영 시 영업신고 대조를 마친 숙소 및 공공 API 선별 정보가 표시됩니다.',
+                                en: 'Preview demo listing · Live listings display verified municipal registrations and public API data.',
+                                ja: 'デモプレビュー画面です · 本番時は営業届出照合済みの宿泊施設と公的API情報が表示されます。',
+                                zh: '此为演示预览页面 · 正式页面展示经官方营业核验与公共API筛选的住宿信息。',
+                              ),
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF856404)),
+                            ),
+                          ),
+                        ),
                   Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 1120),
@@ -596,9 +816,11 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                     includePromo: _includePromo,
                     onPickDates: () => _pickDates(context),
                   ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
@@ -638,16 +860,23 @@ class ListingDetailBody extends StatelessWidget {
     }
   }
 
-  String _buildSpecsLine() {
+  String _buildSpecsLine(AppLang lang) {
     final specs = data['room_specs'] is Map ? Map<String, dynamic>.from(data['room_specs'] as Map) : const {};
     final capStd = data['capacity_standard'];
     final capMax = data['capacity_max'];
     final parts = <String>[
-      if (capMax != null) '최대 $capMax명' else if (capStd != null) '기준 $capStd명',
-      if (capStd != null && capMax != null && capStd != capMax) '(기준 $capStd명)',
-      if (specs['bedrooms'] != null) '침실 ${specs['bedrooms']}개',
-      if (specs['beds'] != null) '침대 ${specs['beds']}개',
-      if (specs['bathrooms'] != null) '욕실 ${specs['bathrooms']}개',
+      if (capMax != null)
+        pickLangText(lang, ko: '최대 $capMax명', en: 'Max $capMax guests', ja: '最大$capMax名', zh: '最多$capMax人')
+      else if (capStd != null)
+        pickLangText(lang, ko: '기준 $capStd명', en: 'Standard $capStd guests', ja: '基準$capStd名', zh: '标准$capStd人'),
+      if (capStd != null && capMax != null && capStd != capMax)
+        pickLangText(lang, ko: '(기준 $capStd명)', en: '(Std $capStd)', ja: '（基準$capStd名）', zh: '（标准$capStd人）'),
+      if (specs['bedrooms'] != null)
+        pickLangText(lang, ko: '침실 ${specs['bedrooms']}개', en: '${specs['bedrooms']} bedroom(s)', ja: '寝室${specs['bedrooms']}', zh: '${specs['bedrooms']}间卧室'),
+      if (specs['beds'] != null)
+        pickLangText(lang, ko: '침대 ${specs['beds']}개', en: '${specs['beds']} bed(s)', ja: 'ベッド${specs['beds']}', zh: '${specs['beds']}张床'),
+      if (specs['bathrooms'] != null)
+        pickLangText(lang, ko: '욕실 ${specs['bathrooms']}개', en: '${specs['bathrooms']} bath(s)', ja: 'バスルーム${specs['bathrooms']}', zh: '${specs['bathrooms']}间卫浴'),
     ];
     return parts.join(' · ');
   }
@@ -704,7 +933,9 @@ class ListingDetailBody extends StatelessWidget {
         data['location_info'] is Map ? Map<String, dynamic>.from(data['location_info'] as Map) : <String, dynamic>{};
     final isForeignOnly = data['license_type'] == kForeignOnly;
     final blogUrl = (data['source_blog_url'] ?? '').toString().trim();
-    final specsLine = _buildSpecsLine();
+    final specsLine = _buildSpecsLine(lang);
+    final regionLabel = _tStayRegion(listingId, data, lang);
+    final accommType = _tAccommodationType((data['accommodation_type'] ?? '').toString(), lang);
 
     final bookingCard = _DirectBookingConversionCard(
       listingId: listingId,
@@ -724,8 +955,8 @@ class ListingDetailBody extends StatelessWidget {
         // 1. 서브타이틀 & 객실 물리 스펙
         Text(
           [
-            '${data['region_depth1'] ?? ''} ${data['region_depth2'] ?? ''}'.trim(),
-            if ((data['accommodation_type'] ?? '').toString().isNotEmpty) data['accommodation_type'].toString(),
+            regionLabel,
+            if (accommType.isNotEmpty) accommType,
           ].where((s) => s.isNotEmpty).join(' · '),
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF222222)),
         ),
@@ -768,7 +999,13 @@ class ListingDetailBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '호스트 직거래 신청 이벤트 · $promoTitle',
+                        pickLangText(
+                          lang,
+                          ko: '호스트 직거래 신청 이벤트 · $promoTitle',
+                          en: 'Host Direct Booking Promo · $promoTitle',
+                          ja: 'ホスト直接予約特典 · $promoTitle',
+                          zh: '房东直订专享优惠 · $promoTitle',
+                        ),
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF222222)),
                       ),
                       if (promoDetail.isNotEmpty) ...[
@@ -788,39 +1025,45 @@ class ListingDetailBody extends StatelessWidget {
         if (highlights.isNotEmpty) ...[
           const Divider(height: 1, color: Color(0xFFEBEBEB)),
           const SizedBox(height: 22),
-          ...highlights.map((h) => Padding(
-                padding: const EdgeInsets.only(bottom: 18),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Icon(highlightIconFor(h['icon_key'] ?? ''), size: 26, color: const Color(0xFF222222)),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(h['title'] ?? '',
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5, color: Color(0xFF222222))),
-                          if ((h['subtitle'] ?? '').isNotEmpty) ...[
-                            const SizedBox(height: 3),
-                            Text(h['subtitle']!, style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600, height: 1.4)),
-                          ],
-                        ],
+          ...highlights.map((h) {
+                final th = _tHighlight(h, data, listingId, lang);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(highlightIconFor(h['icon_key'] ?? ''), size: 26, color: const Color(0xFF222222)),
                       ),
-                    ),
-                  ],
-                ),
-              )),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(th.title,
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5, color: Color(0xFF222222))),
+                            if (th.subtitle.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(th.subtitle, style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600, height: 1.4)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
         ],
 
         // 5. 공간 이야기 & 매력 요약
         if (editorialStory.isNotEmpty || points.isNotEmpty) ...[
           const Divider(height: 1, color: Color(0xFFEBEBEB)),
           const SizedBox(height: 24),
-          const Text('숙소 소개', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          Text(
+            pickLangText(lang, ko: '숙소 소개', en: 'About this stay', ja: '宿泊施設のご案内', zh: '住宿介绍'),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 12),
           if (editorialStory.isNotEmpty)
             Text(
@@ -858,7 +1101,13 @@ class ListingDetailBody extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: () => _openExternal(blogUrl),
               icon: const Icon(Icons.article_outlined, size: 18),
-              label: const Text('호스트 원문 소개글 보기'),
+              label: Text(pickLangText(
+                lang,
+                ko: '호스트 원문 소개글 보기',
+                en: 'Read Original Host Post',
+                ja: 'ホストの元記事を見る',
+                zh: '查看房东原文介绍',
+              )),
             ),
           ],
           const SizedBox(height: 24),
@@ -898,15 +1147,30 @@ class ListingDetailBody extends StatelessWidget {
         // 6. 숙소 편의시설 (Amenity 핵심 섹션)
         const Divider(height: 1, color: Color(0xFFEBEBEB)),
         const SizedBox(height: 24),
-        const Text('숙소 편의시설', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(
+          pickLangText(lang, ko: '숙소 편의시설', en: 'Amenities', ja: '設備・アメニティ', zh: '住宿设施与服务'),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 6),
         Text(
-          '호스트가 제공하는 필수 편의시설과 미제공 시설을 사전에 투명하게 확인하세요.',
+          pickLangText(
+            lang,
+            ko: '호스트가 제공하는 필수 편의시설과 미제공 시설을 사전에 투명하게 확인하세요.',
+            en: 'Check included and unavailable amenities provided by the host in advance.',
+            ja: 'ホストが提供する設備・非対応設備を事前にご確認いただけます。',
+            zh: '提前透明了解房东提供及未提供的设施与服务。',
+          ),
           style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600),
         ),
         const SizedBox(height: 16),
         if (topAmenities.isEmpty)
-          const Text('등록된 편의시설 상세 정보가 없습니다. 호스트 예약 창구에서 확인해 주세요.')
+          Text(pickLangText(
+            lang,
+            ko: '등록된 편의시설 상세 정보가 없습니다. 호스트 예약 창구에서 확인해 주세요.',
+            en: 'Detailed amenity info is not listed. Please check on the host booking page.',
+            ja: '設備詳細情報が登録されていません。ホストの予約窓口でご確認ください。',
+            zh: '暂无详细设施信息，请在房东预订页面确认。',
+          ))
         else
           Wrap(
             spacing: 16,
@@ -962,7 +1226,13 @@ class ListingDetailBody extends StatelessWidget {
             ),
             onPressed: () => _showAllAmenitiesDialog(context, amenityGroups, unavailable, totalAmenities),
             child: Text(
-              '편의시설 $totalAmenities개 모두 보기',
+              pickLangText(
+                lang,
+                ko: '편의시설 $totalAmenities개 모두 보기',
+                en: 'Show all $totalAmenities amenities',
+                ja: '設備・アメニティ $totalAmenities件をすべて見る',
+                zh: '查看全部 $totalAmenities 项设施',
+              ),
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
             ),
           ),
@@ -972,7 +1242,10 @@ class ListingDetailBody extends StatelessWidget {
         // 7. 직거래 요금 안내 테이블
         const Divider(height: 1, color: Color(0xFFEBEBEB)),
         const SizedBox(height: 24),
-        const Text('직거래 기준 요금 안내', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(
+          pickLangText(lang, ko: '직거래 기준 요금 안내', en: 'Direct Booking Base Rates', ja: '直接予約 基準料金のご案内', zh: '直订参考房价'),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 12),
         _PricingTableCard(pricing: pricing),
         const SizedBox(height: 28),
@@ -980,7 +1253,10 @@ class ListingDetailBody extends StatelessWidget {
         // 8. 숙소 이용규칙 및 체크인 안내
         const Divider(height: 1, color: Color(0xFFEBEBEB)),
         const SizedBox(height: 24),
-        const Text('알아두어야 할 사항 (숙소 이용규칙)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(
+          pickLangText(lang, ko: '알아두어야 할 사항 (숙소 이용규칙)', en: 'Things to Know (House Rules)', ja: 'ご案内事項（ハウスルール）', zh: '入住须知（房屋守则）'),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 14),
         _HouseRulesSection(houseRules: houseRules, isForeignOnly: isForeignOnly),
         const SizedBox(height: 28),
@@ -988,9 +1264,12 @@ class ListingDetailBody extends StatelessWidget {
         // 9. 위치 및 주변 안내
         const Divider(height: 1, color: Color(0xFFEBEBEB)),
         const SizedBox(height: 24),
-        const Text('위치 및 주변 정보', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(
+          pickLangText(lang, ko: '위치 및 주변 정보', en: 'Location & Nearby', ja: '所在地・周辺案内', zh: '位置与周边信息'),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 12),
-        _LocationSection(data: data, locationInfo: locationInfo),
+        _LocationSection(data: data, locationInfo: locationInfo, listingId: listingId),
 
         // 9-2. 한국관광공사(locationBasedList2) 반경 5km 공식 주변 명소·맛집
         if ((data['nearby_places'] as List?)?.isNotEmpty == true) ...[
@@ -1030,7 +1309,7 @@ class ListingDetailBody extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
-                localizedListingTitle(data, lang),
+                _tStayTitle(listingId, data, lang),
                 style: TextStyle(fontSize: isDesktop ? 26 : 21, fontWeight: FontWeight.w800, color: const Color(0xFF222222)),
               ),
               if (rating.count > 0)
@@ -1059,7 +1338,7 @@ class ListingDetailBody extends StatelessWidget {
 
           // 에어비앤비 스타일 5분할 벤토 포토 그리드(외부 이미지 URL 링크) 또는 공공숙소 비주얼 히어로
           if (images.isNotEmpty) ...[
-            _BentoGallery(images: images, title: localizedListingTitle(data, lang)),
+            _BentoGallery(images: images, title: _tStayTitle(listingId, data, lang)),
             const SizedBox(height: 28),
           ] else ...[
             _PublicStayVisualHero(data: data, onOpenExternal: _openExternal),
@@ -1092,9 +1371,12 @@ class _VerifiedTrustBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangNotifier.value;
     final rawUrl = (data['direct_booking_url'] ?? data['naver_map_url'] ?? '').toString();
-    final channel = bookingChannelName(rawUrl);
+    final channel = bookingChannelName(rawUrl, lang: lang);
     final publicTier = isPublicUnclaimed(data);
+    final licenseLabel = _tLicenseType((data['license_type'] ?? '').toString(), lang);
+    final licenseNum = (data['license_number'] ?? '').toString();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1125,11 +1407,27 @@ class _VerifiedTrustBar extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        publicTier ? '행정안전부 공공데이터 영업확인 업소' : '지자체 영업신고 확인 완료',
+                        publicTier
+                            ? pickLangText(
+                                lang,
+                                ko: '행정안전부 공공데이터 영업확인 업소',
+                                en: 'Verified Public Lodging Data (MOIS)',
+                                ja: '韓国行政安全部 公共データ営業確認済み',
+                                zh: '韩国行政安全部公共数据营业核验住宿',
+                              )
+                            : pickLangText(
+                                lang,
+                                ko: '지자체 영업신고 확인 완료',
+                                en: 'Municipal Business Registration Verified',
+                                ja: '自治体 営業届出確認済み',
+                                zh: '地方政府营业备案已核验',
+                              ),
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                       ),
-                      Text('${data['license_type']} · ${data['license_number']}',
-                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700)),
+                      Text(
+                        licenseNum.isNotEmpty ? '$licenseLabel · $licenseNum' : licenseLabel,
+                        style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                      ),
                     ],
                   ),
                 ],
@@ -1142,8 +1440,26 @@ class _VerifiedTrustBar extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('게스트 중개수수료 0원', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                      Text('연결 창구: $channel', style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700)),
+                      Text(
+                        pickLangText(
+                          lang,
+                          ko: '게스트 중개수수료 0원',
+                          en: '0% Guest Service Fee',
+                          ja: 'ゲスト仲介手数料 0ウォン',
+                          zh: '旅客平台服务费 0韩元',
+                        ),
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                      ),
+                      Text(
+                        pickLangText(
+                          lang,
+                          ko: '연결 창구: $channel',
+                          en: 'Channel: $channel',
+                          ja: '予約窓口: $channel',
+                          zh: '预订渠道: $channel',
+                        ),
+                        style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                      ),
                     ],
                   ),
                 ],
@@ -1160,14 +1476,20 @@ class _VerifiedTrustBar extends StatelessWidget {
               color: Colors.amber.shade100,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.info_outline, size: 18, color: Color(0xFF664D03)),
-                SizedBox(width: 8),
+                const Icon(Icons.info_outline, size: 18, color: Color(0xFF664D03)),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '외국인 전용 숙소 (외국인관광도시민박업 · 내국인 투숙 불가)',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    pickLangText(
+                      lang,
+                      ko: '외국인 전용 숙소 (외국인관광도시민박업 · 내국인 투숙 불가)',
+                      en: 'Foreign Visitors Only (Licensed Urban Homestay · Domestic Korean guests not eligible)',
+                      ja: '外国人専用宿泊施設（外国人観光都市民泊業・韓国国内居住者は宿泊不可）',
+                      zh: '仅限外籍旅客入住（外国人观光城市民宿 · 韩国本国居民不可入住）',
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ],
@@ -1204,6 +1526,7 @@ class _DirectBookingConversionCard extends StatelessWidget {
   });
 
   void _showGuestPicker(BuildContext context, int maxGuests) {
+    final lang = appLangNotifier.value;
     int tempAdults = adults;
     int tempChildren = children;
     showDialog(
@@ -1212,13 +1535,22 @@ class _DirectBookingConversionCard extends StatelessWidget {
         builder: (ctx, setModalState) {
           final total = tempAdults + tempChildren;
           return AlertDialog(
-            title: Text('인원 선택 (최대 $maxGuests명)', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            title: Text(
+              pickLangText(
+                lang,
+                ko: '인원 선택 (최대 $maxGuests명)',
+                en: 'Select Guests (Max $maxGuests)',
+                ja: '人数選択（最大$maxGuests名）',
+                zh: '选择人数（最多$maxGuests人）',
+              ),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _GuestStepperRow(
-                  label: '성인',
-                  subtitle: '만 13세 이상',
+                  label: pickLangText(lang, ko: '성인', en: 'Adults', ja: '大人', zh: '成人'),
+                  subtitle: pickLangText(lang, ko: '만 13세 이상', en: 'Ages 13 or above', ja: '13歳以上', zh: '13岁及以上'),
                   value: tempAdults,
                   canDec: tempAdults > 1,
                   canInc: total < maxGuests,
@@ -1226,8 +1558,8 @@ class _DirectBookingConversionCard extends StatelessWidget {
                 ),
                 const Divider(),
                 _GuestStepperRow(
-                  label: '어린이',
-                  subtitle: '만 2~12세',
+                  label: pickLangText(lang, ko: '어린이', en: 'Children', ja: '子供', zh: '儿童'),
+                  subtitle: pickLangText(lang, ko: '만 2~12세', en: 'Ages 2–12', ja: '2〜12歳', zh: '2–12岁'),
                   value: tempChildren,
                   canDec: tempChildren > 0,
                   canInc: total < maxGuests,
@@ -1236,14 +1568,17 @@ class _DirectBookingConversionCard extends StatelessWidget {
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(pickLangText(lang, ko: '취소', en: 'Cancel', ja: 'キャンセル', zh: '取消')),
+              ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: kBrand),
                 onPressed: () {
                   onGuestsChanged(tempAdults, tempChildren);
                   Navigator.pop(ctx);
                 },
-                child: const Text('적용'),
+                child: Text(pickLangText(lang, ko: '적용', en: 'Apply', ja: '適用', zh: '应用')),
               ),
             ],
           );
@@ -1254,12 +1589,24 @@ class _DirectBookingConversionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangNotifier.value;
     final pricing = data['pricing'] is Map ? Map<String, dynamic>.from(data['pricing'] as Map) : null;
     final est = calculateStayEstimate(pricing, dateRange: dateRange);
     final rawUrl = (data['direct_booking_url'] ?? '').toString();
-    final channel = bookingChannelName(rawUrl);
+    final channel = bookingChannelName(rawUrl, lang: lang);
     final promoTitle = (data['promo_title'] ?? '').toString().trim();
     final maxGuests = (data['capacity_max'] as num?)?.toInt() ?? 10;
+    final totalGuests = adults + children;
+    final guestSummary = lang == AppLang.ko
+        ? '게스트 $totalGuests명 (성인 $adults${children > 0 ? ', 어린이 $children' : ''})'
+        : pickLangText(
+            lang,
+            ko: '',
+            en: '$totalGuests guest${totalGuests > 1 ? 's' : ''} ($adults adult${adults > 1 ? 's' : ''}${children > 0 ? ', $children child' : ''})',
+            ja: 'ゲスト$totalGuests名（大人$adults${children > 0 ? '・子供$children' : ''}）',
+            zh: '$totalGuests位房客（成人$adults${children > 0 ? '，儿童$children' : ''}）',
+          );
+    final selectDateLabel = pickLangText(lang, ko: '날짜 선택', en: 'Select date', ja: '日付を選択', zh: '选择日期');
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -1290,7 +1637,13 @@ class _DirectBookingConversionCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '일반 숙박앱 대비 수수료 약 ${formatWon(est.estimatedFeeSaved!)} 절약',
+                      pickLangText(
+                        lang,
+                        ko: '일반 숙박앱 대비 수수료 약 ${formatWon(est.estimatedFeeSaved!)} 절약',
+                        en: 'Save approx. ${formatWon(est.estimatedFeeSaved!)} in OTA fees',
+                        ja: '一般予約サイト比で手数料 約${formatWon(est.estimatedFeeSaved!)}お得',
+                        zh: '相比常规平台可省约 ${formatWon(est.estimatedFeeSaved!)} 服务费',
+                      ),
                       style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kBrand),
                     ),
                   ),
@@ -1304,7 +1657,7 @@ class _DirectBookingConversionCard extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                est.estimatedAmount != null ? formatWon(est.estimatedAmount!) : '요금 직접 문의',
+                est.estimatedAmount != null ? formatWon(est.estimatedAmount!) : shortPrice(pricing, lang: lang),
                 style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: Color(0xFF222222)),
               ),
               const SizedBox(width: 6),
@@ -1337,10 +1690,13 @@ class _DirectBookingConversionCard extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('체크인', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800)),
+                              Text(
+                                pickLangText(lang, ko: '체크인', en: 'CHECK-IN', ja: 'チェックイン', zh: '入住'),
+                                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                              ),
                               const SizedBox(height: 2),
                               Text(
-                                dateRange != null ? _fmtDate(dateRange!.start) : '날짜 선택',
+                                dateRange != null ? _fmtDate(dateRange!.start) : selectDateLabel,
                                 style: const TextStyle(fontSize: 13.5),
                               ),
                             ],
@@ -1354,10 +1710,13 @@ class _DirectBookingConversionCard extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('체크아웃', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800)),
+                              Text(
+                                pickLangText(lang, ko: '체크아웃', en: 'CHECK-OUT', ja: 'チェックアウト', zh: '退房'),
+                                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                              ),
                               const SizedBox(height: 2),
                               Text(
-                                dateRange != null ? _fmtDate(dateRange!.end) : '날짜 선택',
+                                dateRange != null ? _fmtDate(dateRange!.end) : selectDateLabel,
                                 style: const TextStyle(fontSize: 13.5),
                               ),
                             ],
@@ -1379,12 +1738,12 @@ class _DirectBookingConversionCard extends StatelessWidget {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('인원', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 2),
                             Text(
-                              '게스트 ${adults + children}명 (성인 $adults${children > 0 ? ', 어린이 $children' : ''})',
-                              style: const TextStyle(fontSize: 13.5),
+                              pickLangText(lang, ko: '인원', en: 'GUESTS', ja: '人数', zh: '人数'),
+                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
                             ),
+                            const SizedBox(height: 2),
+                            Text(guestSummary, style: const TextStyle(fontSize: 13.5)),
                           ],
                         ),
                         const Icon(Icons.keyboard_arrow_down_rounded),
@@ -1423,7 +1782,13 @@ class _DirectBookingConversionCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '문의 시 [$promoTitle] 함께 신청',
+                        pickLangText(
+                          lang,
+                          ko: '문의 시 [$promoTitle] 함께 신청',
+                          en: 'Include [$promoTitle] in inquiry',
+                          ja: 'お問い合わせ時に[$promoTitle]も申請',
+                          zh: '咨询时一并申请[$promoTitle]',
+                        ),
                         style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -1455,22 +1820,34 @@ class _DirectBookingConversionCard extends StatelessWidget {
               ),
               icon: const Icon(Icons.bolt_rounded, size: 20),
               label: Text(
-                bookingCtaLabel(rawUrl, data: data, lang: appLangNotifier.value),
+                bookingCtaLabel(rawUrl, data: data, lang: lang),
                 style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800),
               ),
             ),
           ),
           const SizedBox(height: 10),
-          const Center(
+          Center(
             child: Text(
-              '예약 확정 전에는 요금이 청구되지 않습니다.',
-              style: TextStyle(fontSize: 12.5, color: Color(0xFF555555)),
+              pickLangText(
+                lang,
+                ko: '예약 확정 전에는 요금이 청구되지 않습니다.',
+                en: 'You won\'t be charged before confirmation.',
+                ja: '予約確定前に料金が請求されることはありません。',
+                zh: '在预订确认前不会向您收取费用。',
+              ),
+              style: const TextStyle(fontSize: 12.5, color: Color(0xFF555555)),
             ),
           ),
           const SizedBox(height: 4),
           Center(
             child: Text(
-              '선택한 일정·인원이 자동 복사되어 $channel 창구로 연결됩니다.',
+              pickLangText(
+                lang,
+                ko: '선택한 일정·인원이 자동 복사되어 $channel 창구로 연결됩니다.',
+                en: 'Selected dates & guests are copied and linked to $channel.',
+                ja: '選択した日程・人数が自動コピーされ、$channel窓口へ接続されます。',
+                zh: '所选日期与人数将自动复制并跳转至$channel。',
+              ),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
             ),
@@ -1479,8 +1856,14 @@ class _DirectBookingConversionCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('직스테이 중개수수료', style: TextStyle(fontSize: 13.5, color: Color(0xFF495057))),
-              const Text('0원 (무료 직결)', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF198754))),
+              Text(
+                pickLangText(lang, ko: '직스테이 중개수수료', en: 'Jikstay Service Fee', ja: 'ジクステイ仲介手数料', zh: 'Jikstay 平台服务费'),
+                style: const TextStyle(fontSize: 13.5, color: Color(0xFF495057)),
+              ),
+              Text(
+                pickLangText(lang, ko: '0원 (무료 직결)', en: '₩0 (Direct Free)', ja: '0ウォン（無料直結）', zh: '0韩元（免费直连）'),
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF198754)),
+              ),
             ],
           ),
         ],
@@ -1565,9 +1948,11 @@ class _MobileStickyBookingBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangNotifier.value;
     final pricing = data['pricing'] is Map ? Map<String, dynamic>.from(data['pricing'] as Map) : null;
     final est = calculateStayEstimate(pricing, dateRange: dateRange);
     final rawUrl = (data['direct_booking_url'] ?? '').toString();
+    final channel = bookingChannelName(rawUrl, lang: lang);
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -1587,13 +1972,25 @@ class _MobileStickyBookingBar extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      est.estimatedAmount != null ? formatWon(est.estimatedAmount!) : shortPrice(pricing),
+                      est.estimatedAmount != null ? formatWon(est.estimatedAmount!) : shortPrice(pricing, lang: lang),
                       style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Color(0xFF222222)),
                     ),
                     Text(
                       dateRange != null
-                          ? '${_fmtDate(dateRange!.start)} ~ ${_fmtDate(dateRange!.end)} · 수수료 0원'
-                          : '중개수수료 0원 · ${bookingChannelName(rawUrl)}',
+                          ? pickLangText(
+                              lang,
+                              ko: '${_fmtDate(dateRange!.start)} ~ ${_fmtDate(dateRange!.end)} · 수수료 0원',
+                              en: '${_fmtDate(dateRange!.start)} ~ ${_fmtDate(dateRange!.end)} · 0% Fee',
+                              ja: '${_fmtDate(dateRange!.start)} ~ ${_fmtDate(dateRange!.end)} · 手数料0ウォン',
+                              zh: '${_fmtDate(dateRange!.start)} ~ ${_fmtDate(dateRange!.end)} · 0服务费',
+                            )
+                          : pickLangText(
+                              lang,
+                              ko: '중개수수료 0원 · $channel',
+                              en: '0% Fee · $channel',
+                              ja: '仲介手数料0ウォン · $channel',
+                              zh: '0平台费 · $channel',
+                            ),
                       style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700, decoration: TextDecoration.underline),
                     ),
                   ],
@@ -1638,10 +2035,14 @@ class _PricingTableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangNotifier.value;
     final rows = <(String, num)>[
-      if (pricing['nightly_min'] is num) ('1박 (최저 기준)', pricing['nightly_min'] as num),
-      if (pricing['weekly_price'] is num) ('일주일 (6~7박 연박)', pricing['weekly_price'] as num),
-      if (pricing['monthly_price'] is num) ('한달살기 (28박 이상)', pricing['monthly_price'] as num),
+      if (pricing['nightly_min'] is num)
+        (pickLangText(lang, ko: '1박 (최저 기준)', en: '1 night (from)', ja: '1泊（最低基準）', zh: '每晚（最低参考）'), pricing['nightly_min'] as num),
+      if (pricing['weekly_price'] is num)
+        (pickLangText(lang, ko: '일주일 (6~7박 연박)', en: '1 week (6–7 nights)', ja: '1週間（6〜7泊）', zh: '一周（6~7晚连住）'), pricing['weekly_price'] as num),
+      if (pricing['monthly_price'] is num)
+        (pickLangText(lang, ko: '한달살기 (28박 이상)', en: 'Monthly (28+ nights)', ja: '1ヶ月（28泊以上）', zh: '月租（28晚以上）'), pricing['monthly_price'] as num),
     ];
     final note = (pricing['price_note'] ?? '').toString().trim();
 
@@ -1657,7 +2058,16 @@ class _PricingTableCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (rows.isEmpty)
-            const Text('호스트 예약 창구에서 일정별 정확한 직거래 요금을 확인하세요.', style: TextStyle(fontSize: 14))
+            Text(
+              pickLangText(
+                lang,
+                ko: '호스트 예약 창구에서 일정별 정확한 직거래 요금을 확인하세요.',
+                en: 'Check exact direct rates for your dates on the host booking page.',
+                ja: 'ホストの予約窓口で日程別の正確な直接料金をご確認ください。',
+                zh: '请在房东预订渠道查询具体日期的直订房价。',
+              ),
+              style: const TextStyle(fontSize: 14),
+            )
           else
             ...rows.map((r) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 5),
@@ -1674,9 +2084,15 @@ class _PricingTableCard extends StatelessWidget {
             Text('· $note', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
           ],
           const SizedBox(height: 8),
-          const Text(
-            '· 일반 숙박 플랫폼의 게스트 서비스 수수료(약 14~16%) 없이 호스트에게 직접 예약합니다.',
-            style: TextStyle(fontSize: 12.5, color: kBrand, fontWeight: FontWeight.w600),
+          Text(
+            pickLangText(
+              lang,
+              ko: '· 일반 숙박 플랫폼의 게스트 서비스 수수료(약 14~16%) 없이 호스트에게 직접 예약합니다.',
+              en: '· Book directly with the host without typical OTA guest service fees (~14–16%).',
+              ja: '· 一般的な宿泊サイトのゲスト手数料（約14〜16%）なしでホストへ直接予約します。',
+              zh: '· 无需支付常规订房平台约14~16%的旅客服务费，直接联系房东预订。',
+            ),
+            style: const TextStyle(fontSize: 12.5, color: kBrand, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1692,6 +2108,7 @@ class _HouseRulesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangNotifier.value;
     final checkIn = (houseRules['check_in_time'] ?? '').toString().trim();
     final checkOut = (houseRules['check_out_time'] ?? '').toString().trim();
     final selfCheckIn = (houseRules['self_check_in'] ?? '').toString().trim();
@@ -1701,17 +2118,23 @@ class _HouseRulesSection extends StatelessWidget {
     final extras = List<String>.from(houseRules['extra_rules'] ?? const []);
 
     final items = <(IconData, String, String)>[
-      if (checkIn.isNotEmpty) (Icons.login_rounded, '체크인', checkIn),
-      if (checkOut.isNotEmpty) (Icons.logout_rounded, '체크아웃', checkOut),
-      if (selfCheckIn.isNotEmpty) (Icons.dialpad_rounded, '체크인 방식', selfCheckIn),
-      if (quietHours.isNotEmpty) (Icons.nightlight_outlined, '매너타임', quietHours),
-      if (smoking.isNotEmpty) (Icons.smoke_free_rounded, '금연 안내', smoking),
-      if (pets.isNotEmpty) (Icons.pets_outlined, '반려동물', pets),
+      if (checkIn.isNotEmpty) (Icons.login_rounded, pickLangText(lang, ko: '체크인', en: 'Check-in', ja: 'チェックイン', zh: '入住'), checkIn),
+      if (checkOut.isNotEmpty) (Icons.logout_rounded, pickLangText(lang, ko: '체크아웃', en: 'Check-out', ja: 'チェックアウト', zh: '退房'), checkOut),
+      if (selfCheckIn.isNotEmpty) (Icons.dialpad_rounded, pickLangText(lang, ko: '체크인 방식', en: 'Check-in Method', ja: 'チェックイン方法', zh: '入住方式'), selfCheckIn),
+      if (quietHours.isNotEmpty) (Icons.nightlight_outlined, pickLangText(lang, ko: '매너타임', en: 'Quiet Hours', ja: 'クワイエットアワー', zh: '安静时段'), quietHours),
+      if (smoking.isNotEmpty) (Icons.smoke_free_rounded, pickLangText(lang, ko: '금연 안내', en: 'Smoking Policy', ja: '喫煙ポリシー', zh: '禁烟规定'), smoking),
+      if (pets.isNotEmpty) (Icons.pets_outlined, pickLangText(lang, ko: '반려동물', en: 'Pets', ja: 'ペット', zh: '宠物政策'), pets),
     ];
 
     if (items.isEmpty && extras.isEmpty && !isForeignOnly) {
       return Text(
-        '상세 체크인·체크아웃 시간 및 환불 규정은 호스트 직거래 예약 창구에서 확인해 주세요.',
+        pickLangText(
+          lang,
+          ko: '상세 체크인·체크아웃 시간 및 환불 규정은 호스트 직거래 예약 창구에서 확인해 주세요.',
+          en: 'Please confirm exact check-in/out times and cancellation rules on the host booking page.',
+          ja: 'チェックイン・アウト時間やキャンセル規定の詳細はホストの予約窓口でご確認ください。',
+          zh: '具体入住/退房时间及退改规则请在房东直订页面确认。',
+        ),
         style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
       );
     }
@@ -1774,14 +2197,18 @@ class _HouseRulesSection extends StatelessWidget {
 class _LocationSection extends StatelessWidget {
   final Map<String, dynamic> data;
   final Map<String, dynamic> locationInfo;
+  final String listingId;
 
-  const _LocationSection({required this.data, required this.locationInfo});
+  const _LocationSection({required this.data, required this.locationInfo, this.listingId = ''});
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangNotifier.value;
     final addr = (locationInfo['display_address'] ?? '').toString().trim();
-    final fallbackAddr = '${data['region_depth1'] ?? ''} ${data['region_depth2'] ?? ''}'.trim();
-    final displayAddr = addr.isNotEmpty ? addr : fallbackAddr;
+    final fallbackAddr = _tStayRegion(listingId, data, lang);
+    final displayAddr = lang == AppLang.ko
+        ? (addr.isNotEmpty ? addr : fallbackAddr)
+        : (fallbackAddr.isNotEmpty ? fallbackAddr : addr);
     final nearby = (locationInfo['nearby_spots'] ?? '').toString().trim();
     final parking = (locationInfo['parking_note'] ?? '').toString().trim();
 
@@ -1825,7 +2252,13 @@ class _LocationSection extends StatelessWidget {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 },
                 icon: const Icon(Icons.map_outlined, size: 17, color: Color(0xFF03C75A)),
-                label: const Text('네이버 지도에서 주변 위치 보기'),
+                label: Text(pickLangText(
+                  lang,
+                  ko: '네이버 지도에서 주변 위치 보기',
+                  en: 'View Location on Naver Map',
+                  ja: 'Naverマップで周辺を見る',
+                  zh: '在 Naver 地图查看位置',
+                )),
               ),
               OutlinedButton.icon(
                 onPressed: () async {
@@ -2006,7 +2439,13 @@ class _BentoGalleryState extends State<_BentoGallery> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '사진 투어 · ${widget.title}',
+                            pickLangText(
+                              appLangNotifier.value,
+                              ko: '사진 투어 · ${widget.title}',
+                              en: 'Photo Tour · ${widget.title}',
+                              ja: '写真ツアー · ${widget.title}',
+                              zh: '照片导览 · ${widget.title}',
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
@@ -2184,8 +2623,16 @@ class _BentoGalleryState extends State<_BentoGallery> {
                   ),
                   onPressed: () => _openTour(context),
                   icon: const Icon(Icons.grid_view_rounded, size: 17),
-                  label: Text('사진 모두 보기 (${imgs.length}장)',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  label: Text(
+                    pickLangText(
+                      appLangNotifier.value,
+                      ko: '사진 모두 보기 (${imgs.length}장)',
+                      en: 'Show all photos (${imgs.length})',
+                      ja: '写真をすべて見る (${imgs.length}枚)',
+                      zh: '查看全部照片 (${imgs.length}张)',
+                    ),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
             ],
@@ -2234,7 +2681,10 @@ class _BentoGalleryState extends State<_BentoGallery> {
               child: FilledButton.tonalIcon(
                 onPressed: () => _openTour(context),
                 icon: const Icon(Icons.photo_library_outlined, size: 16),
-                label: const Text('사진 투어', style: TextStyle(fontSize: 12)),
+                label: Text(
+                  pickLangText(appLangNotifier.value, ko: '사진 투어', en: 'Photo Tour', ja: '写真ツアー', zh: '照片导览'),
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
             ),
           ],
