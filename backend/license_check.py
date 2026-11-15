@@ -22,7 +22,8 @@ API 대신 공공데이터포털에서 받은 CSV로 대조할 수도 있다: --
 사용
   python license_check.py probe 농어촌민박업 "바다집"
   python license_check.py check stay_pub_xxxxxxxx [--csv data.csv]   # 숙소 1곳 대조(저장 안 함)
-  python license_check.py recheck [--csv data.csv]                    # 공개 중인 전체 숙소 재확인
+  python license_check.py recheck [--csv data.csv] [--prune-index]    # 공개 중인 전체 숙소 재확인 (+ 정적 색인 정리)
+  python license_check.py prune-index                                  # 정적 색인에서 노출 중지 숙소만 제외
 """
 import argparse
 import csv
@@ -88,6 +89,20 @@ def _api_url(license_type: str) -> str | None:
     return os.environ.get(env, default) if env else None
 
 
+def _get_with_retry(url: str, params: dict, tries: int = 3, timeout: int = 30) -> requests.Response:
+    """인허가 API 는 동시 조회 시 응답이 느려 시간 초과가 잦다 → 잠깐 쉬었다가 다시 시도한다."""
+    import time
+
+    for attempt in range(tries):
+        try:
+            return requests.get(url, params=params, timeout=timeout)
+        except requests.RequestException:
+            if attempt == tries - 1:
+                raise
+            time.sleep(3 * (attempt + 1))
+    raise RuntimeError("unreachable")
+
+
 def query_api(license_type: str, business_name: str, max_pages: int = 5) -> list[dict]:
     url = _api_url(license_type)
     key = os.environ.get("DATA_GO_KR_SERVICE_KEY")
@@ -106,7 +121,7 @@ def query_api(license_type: str, business_name: str, max_pages: int = 5) -> list
         batch = None
         candidates = (base + "/info", base) if page == 1 else (base + "/info",)
         for candidate in candidates:
-            r = requests.get(candidate, params=params, timeout=20)
+            r = _get_with_retry(candidate, params)
             last = r
             if r.status_code == 200:
                 try:
@@ -241,17 +256,33 @@ def check_listing(doc: dict, csv_path: str | None = None) -> dict:
     return out
 
 
-def recheck_all(csv_path: str | None = None):
+def recheck_all(csv_path: str | None = None, workers: int = 1, max_error_ratio: float = 0.5):
     """공개 중인 숙소를 다시 대조. 폐업·휴업이 확실하면 노출 중지(suspended).
-    판단 불가(not_found/uncertain/error)는 자동 조치하지 않고 관리자 확인 대상으로 표시만 한다."""
+    판단 불가(not_found/uncertain/error)는 자동 조치하지 않고 관리자 확인 대상으로 표시만 한다.
+    API 오류가 전체의 max_error_ratio 를 넘으면(키 오류·호출 한도 등) 오류 건은 '확인 필요'로 표시하지 않는다."""
+    from concurrent.futures import ThreadPoolExecutor
+
     from firebase_client import db
 
-    counts = {"closed": 0, "match": 0, "review": 0}
-    for snap in db().collection("listings").where("status", "==", "active").stream():
+    snaps = list(db().collection("listings").where("status", "==", "active").stream())
+
+    def _work(snap):
+        return snap, check_listing(snap.to_dict(), csv_path)
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        results = list(pool.map(_work, snaps))
+
+    errors = sum(1 for _, r in results if r["result"] == "error")
+    api_broken = bool(results) and errors / len(results) > max_error_ratio
+    if api_broken:
+        print(f"[경고] 인허가 API 오류 {errors}/{len(results)}건 — 오류 건은 표시하지 않고 넘어갑니다.")
+
+    counts = {"closed": 0, "match": 0, "review": 0, "skipped_error": 0}
+    batch, ops = db().batch(), 0
+    for snap, res in results:
         doc = snap.to_dict()
-        res = check_listing(doc, csv_path)
         if res["result"] == "closed":
-            snap.reference.update({
+            batch.update(snap.reference, {
                 "status": "suspended",
                 "suspended_reason": f"공공 인허가 데이터 영업상태: {res.get('matched_status')}",
                 "suspended_at": firestore.SERVER_TIMESTAMP,
@@ -259,19 +290,51 @@ def recheck_all(csv_path: str | None = None):
             })
             counts["closed"] += 1
             print(f"노출 중지: {snap.id} {doc.get('title')} ({res.get('matched_status')})")
+        elif res["result"] == "error" and api_broken:
+            counts["skipped_error"] += 1
+            continue
         elif res["result"] != "match":
-            snap.reference.update({"needs_review": True, "needs_review_reason": res.get("error") or res["result"]})
+            batch.update(snap.reference, {"needs_review": True, "needs_review_reason": res.get("error") or res["result"]})
             counts["review"] += 1
-            print(f"확인 필요: {snap.id} {doc.get('title')} ({res['result']})")
         else:
-            snap.reference.update({
+            batch.update(snap.reference, {
                 "needs_review": False,
                 "needs_review_reason": firestore.DELETE_FIELD,
                 "last_license_check_at": firestore.SERVER_TIMESTAMP,
             })
             counts["match"] += 1
-    print(f"재확인 완료: 정상 {counts['match']} · 노출 중지 {counts['closed']} · 확인 필요 {counts['review']}")
+        ops += 1
+        if ops >= 400:
+            batch.commit()
+            batch, ops = db().batch(), 0
+    if ops:
+        batch.commit()
+    print(f"재확인 완료: 정상 {counts['match']} · 노출 중지 {counts['closed']} · 확인 필요 {counts['review']}"
+          + (f" · API 오류로 건너뜀 {counts['skipped_error']}" if counts["skipped_error"] else ""))
     return counts
+
+
+INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "web", "data", "public_stays_index.json")
+
+
+def prune_static_index(index_path: str = INDEX_PATH) -> int:
+    """정적 숙소 색인(public_stays_index.json)에서 Firestore 상태가 active 가 아닌 숙소(노출 중지 등)를 뺀다.
+    앱은 목록·지도를 이 색인으로 그리므로, 노출 중지가 화면에도 반영되려면 이 단계가 필요하다.
+    Firestore 에 문서가 없는 항목은 판단할 수 없어 그대로 둔다."""
+    from firebase_client import db
+
+    with open(index_path, encoding="utf-8") as f:
+        data = json.load(f)
+    items = data.get("items") or []
+    status = {s.id: (s.to_dict() or {}).get("status") for s in db().collection("listings").select(["status"]).stream()}
+    kept = [it for it in items if status.get(str(it.get("listing_id")), "active") == "active"]
+    removed = len(items) - len(kept)
+    if removed:
+        data["items"] = kept
+        with open(index_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"정적 숙소 색인: {len(items)}곳 중 노출 중지 {removed}곳 제외 → {len(kept)}곳")
+    return removed
 
 
 if __name__ == "__main__":
@@ -283,8 +346,11 @@ if __name__ == "__main__":
     p = sub.add_parser("check", help="숙소 1곳 대조 결과 출력(저장하지 않음)")
     p.add_argument("listing_id")
     p.add_argument("--csv")
-    p = sub.add_parser("recheck")
+    p = sub.add_parser("recheck", help="공개 숙소 전체 재확인 (폐업·휴업 → 노출 중지)")
     p.add_argument("--csv")
+    p.add_argument("--workers", type=int, default=4, help="동시 조회 수")
+    p.add_argument("--prune-index", action="store_true", help="끝나면 정적 숙소 색인에서 노출 중지 숙소 제외")
+    sub.add_parser("prune-index", help="정적 숙소 색인에서 노출 중지 숙소 제외")
     a = ap.parse_args()
 
     if a.cmd == "probe":
@@ -298,5 +364,9 @@ if __name__ == "__main__":
         if not snap.exists:
             raise SystemExit(f"숙소 없음: {a.listing_id}")
         print(json.dumps(check_listing(snap.to_dict(), a.csv), ensure_ascii=False, indent=2, default=str))
+    elif a.cmd == "prune-index":
+        prune_static_index()
     else:
-        recheck_all(a.csv)
+        recheck_all(a.csv, workers=a.workers)
+        if a.prune_index:
+            prune_static_index()

@@ -90,7 +90,7 @@ def resolve_city_codes(region_group: str, city: str, memo: dict[str, list[dict[s
     return None
 
 
-def _spot_doc(it: dict[str, Any], kind: str, city: str) -> dict[str, Any] | None:
+def _spot_doc(it: dict[str, Any], kind: str, city: str = "") -> dict[str, Any] | None:
     cid = str(it.get("contentid") or "").strip()
     img = _https(str(it.get("firstimage") or it.get("firstimage2") or ""))
     title = normalize_place_name(str(it.get("title") or ""))
@@ -115,12 +115,13 @@ def _spot_doc(it: dict[str, Any], kind: str, city: str) -> dict[str, Any] | None
         "image_url": img,
         "tel": str(it.get("tel") or "").strip(),
         "map_url": f"https://map.naver.com/p/search/{quote(f'{prov} {title}'.strip())}",
-        "half_price_city": city,
     }
+    if city:
+        doc["half_price_city"] = city
     if kind == "event":
         doc["start_date"] = str(it.get("eventstartdate") or "").strip()
         doc["end_date"] = str(it.get("eventenddate") or "").strip()
-        doc["search_city"] = city
+        doc["search_city"] = city or (d2.split(" ")[0] if d2 else prov)
     return doc
 
 
