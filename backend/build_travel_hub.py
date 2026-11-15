@@ -1468,7 +1468,7 @@ def enrich_spots_and_festivals_details(
             ctype = {"event": "15", "food": "39", "attraction": "12"}.get(kind, "12")
             overview = ""
             homepage = ""
-            if cid:
+            if cid and cid.isdigit():
                 com = _tour_get("detailCommon2", {"contentId": cid}, timeout=9)
                 if com:
                     c_items = (com.get("items") or {}).get("item") or []
