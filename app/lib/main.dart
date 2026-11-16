@@ -781,6 +781,10 @@ class _HomePageState extends State<HomePage> {
             ),
             body: PublicTravelHubView(
               lang: appLangNotifier.value,
+              onOpenSpot: (spot) {
+                final known = _allItems.where((e) => e.id == spot.id);
+                _openItemSheet(known.isNotEmpty ? known.first : spot);
+              },
               onSelectCityForStays: (_, cityKeyword) {
                 Navigator.of(ctx).pop();
                 setState(() {

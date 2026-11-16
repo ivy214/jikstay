@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'detail_page.dart' show StorageImage, kBrand;
+import 'discovery_models.dart';
 import 'hub_details.dart';
 import 'i18n.dart';
 
@@ -80,7 +81,11 @@ class PublicTravelHubView extends StatefulWidget {
     super.key,
     required this.lang,
     required this.onSelectCityForStays,
+    this.onOpenSpot,
   });
+
+  /// 축제·행사 카드 탭 → 앱 내 상세 페이지(SpotDetailSheet)로 연다.
+  final ValueChanged<DiscoveryItem>? onOpenSpot;
 
   @override
   State<PublicTravelHubView> createState() => _PublicTravelHubViewState();
@@ -117,6 +122,15 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
     final uri = Uri.tryParse(url.trim());
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  void _openFestival(Map f) {
+    final item = parseSpotJson(Map<String, dynamic>.from(f), fallbackCategory: DiscoveryCategory.event);
+    if (item != null && widget.onOpenSpot != null) {
+      widget.onOpenSpot!(item);
+      return;
+    }
+    _openUrl((f['map_url'] ?? '').toString());
   }
 
   String _fmtYmd(String raw) {
@@ -432,6 +446,8 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                             borderRadius: BorderRadius.circular(14),
                             side: const BorderSide(color: Color(0xFFE5E7EB)),
                           ),
+                          child: InkWell(
+                          onTap: () => _openFestival(f),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -489,6 +505,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                               ),
                             ],
                           ),
+                          ),
                         ),
                       );
                     },
@@ -506,14 +523,19 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                 const SizedBox(height: 12),
                 ...courses.take(6).map((c) {
                   final stops = (c['stops'] as List? ?? const []).map((e) => e.toString()).toList();
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Material(
+                    color: Colors.white,
+                    clipBehavior: Clip.antiAlias,
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      side: const BorderSide(color: Color(0xFFE5E7EB)),
                     ),
+                    child: InkWell(
+                    onTap: () => _openUrl((c['article_url'] ?? '').toString()),
+                    child: Padding(
+                    padding: const EdgeInsets.all(16),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -582,6 +604,9 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                           ),
                         ),
                       ],
+                    ),
+                    ),
+                    ),
                     ),
                   );
                 }),
