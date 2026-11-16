@@ -123,7 +123,7 @@ backend\.venv\Scripts\python backend\admin_app.py
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 네이버 API Hub(블로그·지역·이미지 검색). 구 `openapi.naver.com` 경로는 401 |
 | `GEMINI_API_KEY` (+선택 `OPENAI_API_KEY`) | 번역·E-book 보강 |
 | `FIREBASE_CREDENTIALS`, `FIREBASE_BUCKET` | Admin SDK (`serviceAccountKey.json`, 커밋 금지) |
-| `RECAPTCHA_SITE_KEY` | Flutter `--dart-define` (App Check) |
+| `RECAPTCHA_SITE_KEY` | Flutter `--dart-define` (App Check). `.env` 가 아닌 Windows 사용자 환경변수 / GitHub 시크릿 |
 
 ### 테스트
 
@@ -138,7 +138,10 @@ backend\.venv\Scripts\python backend\tests\<name>.py   # smoke / admin / curate 
 ## 8. 남은 일 · 알려진 한계
 
 - [ ] `app/lib/legal.dart` 사업자 정보·개인정보 보호책임자 자리표시자 교체 + 법률 검토 (문구 바꾸면 `kConsentVersion` 올리기)
-- [ ] reCAPTCHA Enterprise 키 발급 → `RECAPTCHA_SITE_KEY` 로 빌드·배포한 **뒤에** App Check 다시 시행.
+- [x] ~~reCAPTCHA Enterprise 키 발급~~ → GitHub Actions 시크릿 `RECAPTCHA_SITE_KEY` 등록 완료 (주간 워크플로 빌드에 적용).
+- [ ] 키로 빌드·배포된 것을 확인한 **뒤에** App Check 다시 시행 (Firestore·Storage ENFORCED).
+  로컬 `deploy.ps1` 은 `.env` 를 읽지 않으므로 Windows 사용자 환경변수 `RECAPTCHA_SITE_KEY` 를 설정해 두지 않으면 키 없이 빌드된다
+  → 시행 후 로컬 배포하면 같은 장애가 재발한다.
   2026-11-14~16 사이 키 없이 Firestore·Storage 가 ENFORCED 로 켜져 사이트의 모든 Firestore 요청(숙소 상세·후기·클릭)이 거부됐었다.
   11-16 UNENFORCED 로 되돌림. 순서를 바꾸면 같은 장애가 재발한다.
 - [x] ~~TourAPI 출처 숙소의 인허가 `not_found` 대량 발생~~ → 업종을 관광공사 분류로 추정해 엉뚱한 업종 API 에서 찾던 것이 원인.
