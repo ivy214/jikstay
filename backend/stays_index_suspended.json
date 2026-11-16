@@ -1,0 +1,274 @@
+{
+ "items": [
+  {
+   "listing_id": "stay_pub_5192039d2e",
+   "title": "다람쥐민박",
+   "province": "제주",
+   "region_depth1": "제주특별자치도",
+   "region_depth2": "제주시 조천읍",
+   "lat": 33.54061,
+   "lng": 126.6653,
+   "license_type": "농어촌민박업",
+   "curated_score": 166.0,
+   "accommodation_type": "감성 농어촌민박",
+   "summary_points": [
+    "위치: 제주특별자치도 제주시 조천읍 함덕14길 20-2"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/64/4079364_image2_1.jpg"
+    }
+   ],
+   "naver_link": "https://blog.naver.com/mokhyang4",
+   "naver_category": "숙박>민박",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_eaf79c3266",
+   "title": "평창힐링스테이",
+   "province": "강원",
+   "region_depth1": "강원특별자치도",
+   "region_depth2": "평창군 평창읍",
+   "lat": 37.34706,
+   "lng": 128.41208,
+   "license_type": "농어촌민박업",
+   "curated_score": 166.0,
+   "accommodation_type": "감성 농어촌민박",
+   "summary_points": [
+    "위치: 강원특별자치도 평창군 평창읍 종부1길 242-44"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/35/2800835_image2_1.JPG"
+    }
+   ],
+   "naver_category": "숙박>민박",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_edbb063f7a",
+   "title": "소낭구펜션",
+   "province": "경남",
+   "region_depth1": "경상남도",
+   "region_depth2": "거제시 일운면",
+   "lat": 34.85139,
+   "lng": 128.7248,
+   "license_type": "농어촌민박업",
+   "curated_score": 166.0,
+   "accommodation_type": "감성 농어촌민박",
+   "summary_points": [
+    "위치: 경상남도 거제시 일운면 마전1길 83"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/35/3460135_image2_1.jpg"
+    }
+   ],
+   "naver_link": "http://www.sonanggoo.com/",
+   "naver_category": "숙박>전통숙소",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_0f3bc5a969",
+   "title": "몽산포펜션",
+   "province": "충남",
+   "region_depth1": "충청남도",
+   "region_depth2": "태안군 남면",
+   "lat": 36.66207,
+   "lng": 126.29985,
+   "license_type": "농어촌민박업",
+   "curated_score": 166.0,
+   "accommodation_type": "감성 농어촌민박",
+   "summary_points": [
+    "위치: 충청남도 태안군 남면 달산포로 201-10"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/59/3574859_image2_1.jpg"
+    }
+   ],
+   "naver_link": "https://homepage.staymg.com/태안몽산포펜션",
+   "naver_category": "숙박>펜션",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_f990aa1fe7",
+   "title": "레몬그라스",
+   "province": "경기",
+   "region_depth1": "경기도",
+   "region_depth2": "양평군",
+   "lat": 37.61795,
+   "lng": 127.63115,
+   "license_type": "농어촌민박업",
+   "curated_score": 160.0,
+   "accommodation_type": "감성 농어촌민박",
+   "summary_points": [
+    "위치: 경기도 양평군 명성길 230"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/89/4141789_image2_1.jpg"
+    }
+   ],
+   "naver_link": "http://www.lemon-gras.com/",
+   "naver_category": "숙박>펜션",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_93fe013d95",
+   "title": "햇살좋은날",
+   "province": "경기",
+   "region_depth1": "경기도",
+   "region_depth2": "양평군 강상면",
+   "lat": 37.43979,
+   "lng": 127.49005,
+   "license_type": "농어촌민박업",
+   "curated_score": 160.0,
+   "accommodation_type": "감성 농어촌민박",
+   "summary_points": [
+    "위치: 경기도 양평군 강상면 강남로 1544"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/65/3556165_image2_1.jpg"
+    }
+   ],
+   "naver_link": "http://www.sunyday.co.kr/",
+   "naver_category": "숙박>펜션",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_83023cdadd",
+   "title": "티볼리빌",
+   "province": "경기",
+   "region_depth1": "경기도",
+   "region_depth2": "포천시 내촌면",
+   "lat": 37.76903,
+   "lng": 127.23502,
+   "license_type": "농어촌민박업",
+   "curated_score": 160.0,
+   "accommodation_type": "감성 농어촌민박",
+   "summary_points": [
+    "위치: 경기도 포천시 내촌면 금강로2110번길 88-48"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/88/3573988_image2_1.png"
+    }
+   ],
+   "naver_link": "https://tivoliville.com/",
+   "naver_category": "숙박>펜션",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_7924d2474a",
+   "title": "십일월오일",
+   "province": "경기",
+   "region_depth1": "경기도",
+   "region_depth2": "이천시 모가면",
+   "lat": 37.17089,
+   "lng": 127.49511,
+   "license_type": "농어촌민박업",
+   "curated_score": 130.0,
+   "accommodation_type": "감성 농어촌민박",
+   "summary_points": [
+    "위치: 경기도 이천시 모가면 군들로82번길 39"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/57/4148457_image2_1.jpg"
+    }
+   ],
+   "naver_link": "https://www.instagram.com/11m.05d?igsh=eWFzNXZ1aGRvNzdw&utm_source=qr",
+   "naver_category": "숙박>펜션",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_104f486ce9",
+   "title": "호텔아르누보서초",
+   "province": "서울",
+   "region_depth1": "서울특별시",
+   "region_depth2": "서초구",
+   "lat": 37.49617,
+   "lng": 127.02048,
+   "license_type": "일반/생활숙박업",
+   "curated_score": 166.0,
+   "accommodation_type": "숙박·레지던스",
+   "summary_points": [
+    "위치: 서울특별시 서초구 서초대로 357 (서초동)"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/51/3084351_image2_1.JPG"
+    }
+   ],
+   "naver_link": "http://www.artnouveauseocho.com/",
+   "naver_category": "숙박>호텔",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_48d6d6be4d",
+   "title": "박정우가옥",
+   "province": "경북",
+   "region_depth1": "경상북도",
+   "region_depth2": "영주시 문수면",
+   "lat": 36.73465,
+   "lng": 128.61978,
+   "license_type": "한옥체험업",
+   "curated_score": 165.0,
+   "accommodation_type": "전통 한옥스테이",
+   "summary_points": [
+    "위치: 경상북도 영주시 문수면 무섬로234번길 11-17"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/12/2600212_image2_1.jpg"
+    }
+   ],
+   "naver_category": "숙박>전통숙소",
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_df2a0d697d",
+   "title": "온고을",
+   "province": "전북",
+   "region_depth1": "전북특별자치도",
+   "region_depth2": "전주시 완산구",
+   "lat": 35.81225,
+   "lng": 127.15246,
+   "license_type": "한옥체험업",
+   "curated_score": 185.0,
+   "accommodation_type": "전통 한옥스테이",
+   "summary_points": [
+    "위치: 전북특별자치도 전주시 완산구 향교길 51-10 (교동)"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/02/2568002_image2_1.jpg"
+    }
+   ],
+   "src": "kto"
+  },
+  {
+   "listing_id": "stay_pub_e942f0c526",
+   "title": "북촌 게스트하우스",
+   "province": "서울",
+   "region_depth1": "서울특별시",
+   "region_depth2": "종로구",
+   "lat": 37.57863,
+   "lng": 126.98568,
+   "license_type": "한옥체험업",
+   "curated_score": 177.0,
+   "accommodation_type": "전통 한옥스테이",
+   "summary_points": [
+    "위치: 서울특별시 종로구 북촌로 20-17 (재동)"
+   ],
+   "images": [
+    {
+     "url": "https://tong.visitkorea.or.kr/cms/resource/42/2575642_image2_1.PNG"
+    }
+   ],
+   "src": "kto"
+  }
+ ]
+}
