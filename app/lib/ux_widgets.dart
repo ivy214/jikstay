@@ -64,6 +64,53 @@ Future<void> sharePlace(BuildContext context, {required String title, required S
   ));
 }
 
+/// 찜 토글 + 안내 스낵바 (상단 바 버튼·하단 행동 바 공용). 담았으면 true.
+bool toggleSavedWithSnack(BuildContext context, String itemId, AppLang lang) {
+  final added = SavedPlaces.toggle(itemId);
+  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    duration: const Duration(seconds: 2),
+    content: Text(added
+        ? pickLangText(lang,
+            ko: '찜 목록에 담았습니다. 홈의 ‘찜’에서 다시 볼 수 있어요.',
+            en: 'Saved. Find it under “Saved” on the home screen.',
+            ja: '保存しました。ホームの「保存」から確認できます。',
+            zh: '已收藏，可在首頁「收藏」查看。')
+        : pickLangText(lang, ko: '찜을 해제했습니다.', en: 'Removed from saved.', ja: '保存を解除しました。', zh: '已取消收藏。')),
+  ));
+  return added;
+}
+
+/// 상세 상단 바용 찜 버튼 (넓은 화면에서는 하단 행동 바가 없으므로 여기서 찜한다).
+class SaveAppBarButton extends StatelessWidget {
+  const SaveAppBarButton({super.key, required this.itemId, required this.lang});
+
+  final String itemId;
+  final AppLang lang;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<String>>(
+      valueListenable: SavedPlaces.ids,
+      builder: (context, saved, _) {
+        final on = saved.contains(itemId);
+        return TextButton.icon(
+          key: const Key('appbar_save_btn'),
+          onPressed: () => toggleSavedWithSnack(context, itemId, lang),
+          icon: Icon(on ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              size: 18, color: on ? const Color(0xFFE11D48) : const Color(0xFF334155)),
+          label: Text(
+            on
+                ? pickLangText(lang, ko: '찜함', en: 'Saved', ja: '保存済', zh: '已收藏')
+                : pickLangText(lang, ko: '찜하기', en: 'Save', ja: '保存', zh: '收藏'),
+            style: TextStyle(color: on ? const Color(0xFFE11D48) : const Color(0xFF334155)),
+          ),
+        );
+      },
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 상세 하단 고정 행동 바 (모바일) — 길찾기를 스크롤 끝까지 찾지 않아도 되게
 // ---------------------------------------------------------------------------
@@ -148,20 +195,7 @@ class DetailActionBar extends StatelessWidget {
                       label: on
                           ? pickLangText(lang, ko: '찜함', en: 'Saved', ja: '保存済', zh: '已收藏')
                           : pickLangText(lang, ko: '찜', en: 'Save', ja: '保存', zh: '收藏'),
-                      onTap: () {
-                        final added = SavedPlaces.toggle(itemId);
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          duration: const Duration(seconds: 2),
-                          content: Text(added
-                              ? pickLangText(lang,
-                                  ko: '찜 목록에 담았습니다. 홈의 ‘찜’에서 다시 볼 수 있어요.',
-                                  en: 'Saved. Find it under “Saved” on the home screen.',
-                                  ja: '保存しました。ホームの「保存」から確認できます。',
-                                  zh: '已收藏，可在首頁「收藏」查看。')
-                              : pickLangText(lang, ko: '찜을 해제했습니다.', en: 'Removed from saved.', ja: '保存を解除しました。', zh: '已取消收藏。')),
-                        ));
-                      },
+                      onTap: () => toggleSavedWithSnack(context, itemId, lang),
                     );
                   },
                 ),

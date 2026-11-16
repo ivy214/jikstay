@@ -228,6 +228,7 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
             padding: EdgeInsets.symmetric(vertical: 8),
             child: LangSelectorButton(),
           ),
+          if (isWide) SaveAppBarButton(itemId: _story.id, lang: lang),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: TextButton.icon(

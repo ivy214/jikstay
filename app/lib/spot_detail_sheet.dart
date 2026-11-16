@@ -540,6 +540,8 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
             padding: EdgeInsets.symmetric(vertical: 8),
             child: LangSelectorButton(),
           ),
+          if (isWide && _current.category != DiscoveryCategory.ebook)
+            SaveAppBarButton(itemId: _current.id, lang: lang),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: TextButton.icon(
