@@ -8,7 +8,8 @@
    - 사라진 곳이 확인 대상의 10%를 넘으면 API 이상으로 보고 건너뛴다.
 2) 반값여행 25개 시·군: 1)로 빠졌거나 모자란 만큼 조회순으로 다시 채운다 (collect_half_price_spots).
 3) 신규 등록: 시·도마다 최근 14일 안에 관광공사에 새로 등록된 볼거리·먹거리를 종류별 최대 2곳 추가한다.
-   시·도별 일반 항목이 40곳 이상이면 더 넣지 않는다(첫 화면 데이터가 끝없이 커지지 않도록).
+   시·도별 상한은 두지 않는다. 첫 화면 데이터에는 카드·검색·지도에 쓰는 필드만 들어가고
+   (split_hub.py, 한 곳 약 0.6KB) 본문·사진·후기 등은 상세 화면을 열 때 시·도별 파일로 받는다.
 4) 새 항목은 상세(개요·이용안내·사진)·네이버 방문기 보강 후 허브 JSON 에 저장하고,
    Firebase 자격 증명이 있으면 Firestore spots 문서를 만든다(후기·클릭 집계용).
 
@@ -40,7 +41,6 @@ from collect_half_price_spots import DETAIL_CACHE, HUB_PATH, _items, _load_env, 
 SPOT_KINDS = {"12": "attraction", "39": "food"}
 NEW_DAYS = 14
 NEW_PER_TYPE = 2
-PROVINCE_CAP = 40
 MAX_REMOVE_RATIO = 0.10
 
 
@@ -84,18 +84,11 @@ def find_closed(hub: dict[str, Any], live: set[str]) -> list[dict[str, Any]]:
     return gone
 
 
-def fetch_new_registrations(hub: dict[str, Any], existing_cids: set[str]) -> list[dict[str, Any]]:
+def fetch_new_registrations(existing_cids: set[str]) -> list[dict[str, Any]]:
     cutoff = (dt.date.today() - dt.timedelta(days=NEW_DAYS)).strftime("%Y%m%d")
     today = dt.date.today().strftime("%Y%m%d")
-    per_prov: dict[str, int] = {}
-    for s in hub.get("spots") or []:
-        if not s.get("half_price_city"):
-            per_prov[s.get("province", "")] = per_prov.get(s.get("province", ""), 0) + 1
-
     out: list[dict[str, Any]] = []
     for prov, q_list in PROVINCE_17_TOUR_PARAMS:
-        if per_prov.get(prov, 0) >= PROVINCE_CAP:
-            continue
         for ctype, kind in SPOT_KINDS.items():
             added = 0
             for q in q_list[:1]:
@@ -191,7 +184,7 @@ def main() -> None:
 
     print("[weekly-spots] 3) 최근 등록된 볼거리·먹거리 확인 중...")
     existing = {str(x.get("content_id") or "") for x in [*(hub.get("spots") or []), *(hub.get("festivals") or []), *hp_spots, *hp_events]}
-    new_regs = fetch_new_registrations(hub, existing)
+    new_regs = fetch_new_registrations(existing)
     for s in new_regs:
         print(f"  신규: {s['province']} {s['kind']} {s['title']}")
 

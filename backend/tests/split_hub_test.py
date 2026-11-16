@@ -25,6 +25,11 @@ hub = {
             "map_url": _default_map_url("대구", "수성못"),
             "lat": 35.8,
             "lng": 128.6,
+            "pull_quote": "호수 위 분수쇼",
+            "naver_link": "https://instagram.com/x",
+            "content_id": "126543",
+            "tel": "053-000-0000",
+            "url": "https://suseong.example",
         },
         {"id": "spot_b", "kind": "food", "title": "짧은집", "province": "세종", "overview": "짧다", "map_url": "https://custom"},
     ],
@@ -40,6 +45,10 @@ for f in ("paragraphs", "naver_reviews", "practical_info", "images"):
     assert f in details["daegu"]["spot_a"], f
 assert a["has_details"] is True
 assert a["lat"] == 35.8 and a["title"] == "수성못"
+# 상세 화면 전용(인용문·공식 링크·콘텐츠 ID)은 상세로, 목록 단계에서 쓰는 전화·URL 은 core 에
+for f in ("pull_quote", "naver_link", "content_id"):
+    assert f not in a and f in details["daegu"]["spot_a"], f
+assert a["tel"] == "053-000-0000" and a["url"] == "https://suseong.example"
 
 # 긴 개요는 미리보기만 core에, 전체는 상세에. 잘려 나간 여행 키워드는 kw 로 보존
 assert len(a["overview"]) == OVERVIEW_PREVIEW_CHARS + 1 and a["overview"].endswith("…")
@@ -63,12 +72,17 @@ bundle = {
     "lang": "en",
     "stories": {"st1": {"title": "Story", "paragraphs": ["p"]}},
     "stays": {"stay_1": {"title": "Stay"}},
-    "items": {"spot_a": {"title": "Suseong Lake", "overview": "x" * 400, "paragraphs": ["p1"], "practical_info": [{"label": "a", "value": "b"}]}},
+    "items": {"spot_a": {"title": "Suseong Lake", "overview": "x" * 400, "paragraphs": ["p1"], "practical_info": [{"label": "a", "value": "b"}],
+                         "pull_quote": "Fountain show on the lake"}},
 }
 t_core, t_det = split_translations(bundle, {"spot_a": "대구"})
 assert t_core["stories"] == bundle["stories"] and t_core["stays"] == bundle["stays"]
 assert t_core["items"]["spot_a"]["title"] == "Suseong Lake"
 assert "paragraphs" not in t_core["items"]["spot_a"] and t_core["items"]["spot_a"]["overview"].endswith("…")
 assert t_det["daegu"]["spot_a"]["paragraphs"] == ["p1"] and len(t_det["daegu"]["spot_a"]["overview"]) == 400
+assert "pull_quote" not in t_core["items"]["spot_a"] and t_det["daegu"]["spot_a"]["pull_quote"].startswith("Fountain")
+# 번역 개요가 없는 항목은 카드 설명으로 pull_quote 를 쓰므로 core 에 남김
+t_core2, _ = split_translations({"items": {"spot_b": {"title": "B", "pull_quote": "Quote"}}}, {"spot_b": "세종"})
+assert t_core2["items"]["spot_b"]["pull_quote"] == "Quote"
 print("[OK] 번역 번들 core / 시·도별 상세 분할")
 print("ALL OK")

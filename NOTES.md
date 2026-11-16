@@ -48,8 +48,11 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 브라우저: core.json·숙소 색인(정적) → 상세 화면에서 시·도 상세 JSON 지연 로드 → Firestore 는 평점·클릭·후기만 덧씌움
 ```
 
-- **첫 화면 용량**: 허브 원본 약 1.55MB 중 core.json 약 525KB만 받는다. 본문 문단·네이버 방문기·탐방정보·갤러리·긴 개요는
-  `details_{seoul|busan|…}.json`(평균 65KB)에 있고, 상세 화면을 열 때 해당 시·도 파일만 1회 받는다.
+- **첫 화면 용량**: 허브 원본 약 2.4MB 중 core.json 약 530KB(gzip 125KB)만 받는다. 본문 문단·네이버 방문기·탐방정보·갤러리·
+  긴 개요·인용문(pull_quote)·공식 링크(naver_link)·content_id 는 `details_{seoul|busan|…}.json`(평균 114KB)에 있고,
+  상세 화면을 열 때 해당 시·도 파일만 1회 받는다. core 의 개요는 카드·검색용 50자 미리보기.
+  볼거리·먹거리 수에는 상한이 없다(주간 신규 등록이 계속 쌓임) — core 는 한 곳에 약 0.6KB씩 늘어난다.
+  더 줄여야 하면 다음 단계는 카드 설명까지 지연 로드(core 를 검색·지도용 색인만으로)하는 것.
   core 가 없으면(로컬 개발) 앱이 원본 `public_travel_hub.json` 으로 대체한다.
 - **번역**: `translate_hub.py` 가 원문 해시 캐시(`backend/translation_cache.json`, git 커밋)로 변경분만 Gemini 번역.
   앱은 외국어 전환 시 `i18n/{lang}/core.json`(목록용)만 받고, 상세를 열면 그 시·도의 본문 번역을 추가로 받는다.
@@ -108,7 +111,7 @@ backend\.venv\Scripts\python backend\admin_app.py
   숙소 재확인(`license_check.py recheck --rotate 4 --prune-index`) → 번역 → 다이제스트 → 데이터 커밋(허브·숙소 색인).
   `FIREBASE_SERVICE_ACCOUNT_JIKSTAY` 시크릿이 있으면 Hosting(+템플릿 바뀌면 Functions)까지 배포하고, 같은 키로 Firestore 도 갱신한다
   (키에 Firestore 쓰기 권한이 없으면 인허가 재확인 단계가 실패로 표시됨). 번역·볼거리·인허가 단계가 실패해도 나머지 데이터는 커밋하고 워크플로만 실패 표시.
-  - 볼거리·먹거리: 관광공사 목록에서 사라진 곳 제거(Firestore `closed`) · 반값여행 시·군 보충 · 최근 14일 신규 등록 시·도별 종류당 2곳(시·도당 40곳 상한)
+  - 볼거리·먹거리: 관광공사 목록에서 사라진 곳 제거(Firestore `closed`) · 반값여행 시·군 보충 · 최근 14일 신규 등록 시·도별 종류당 2곳(상한 없음)
     · Firestore 문서가 없는 허브 항목(주간 축제 포함) 보충. Firestore 쓰기를 먼저 하고 허브를 저장하며, 쓰기 권한이 없으면 아무것도 바꾸지 않고 실패
   - 숙소: 폐업·휴업이 확실할 때만 `suspended` + 정적 색인에서 제외. 못 찾음·불확실·API 오류는 `needs_review` 표시만(관리자 화면에서 확인)
 
