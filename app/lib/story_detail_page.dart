@@ -228,7 +228,6 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
             padding: EdgeInsets.symmetric(vertical: 8),
             child: LangSelectorButton(),
           ),
-          if (isWide) SaveAppBarButton(itemId: _story.id, lang: lang),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: TextButton.icon(
@@ -341,15 +340,30 @@ class _StoryDetailPageState extends State<StoryDetailPage> {
                   ],
 
                   // 3. 매거진 타이틀 & 지자체 책자 스타일 부제(주소)
-                  Text(
-                    tTitle,
-                    style: TextStyle(
-                      fontSize: isWide ? 28 : 22.5,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF14532D),
-                      height: 1.28,
-                      letterSpacing: -0.4,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          tTitle,
+                          style: TextStyle(
+                            fontSize: isWide ? 28 : 22.5,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF14532D),
+                            height: 1.28,
+                            letterSpacing: -0.4,
+                          ),
+                        ),
+                      ),
+                      // 넓은 화면은 하단 행동 바가 없으므로 제목 옆에서 찜한다
+                      if (isWide) ...[
+                        const SizedBox(width: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: SaveAppBarButton(itemId: _story.id, lang: lang),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Container(
