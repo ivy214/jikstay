@@ -113,7 +113,8 @@ def _get_with_retry(url: str, params: dict, tries: int = 3, timeout: int = 30) -
     raise RuntimeError("unreachable")
 
 
-def query_api(license_type: str, business_name: str, max_pages: int = 5) -> list[dict]:
+def query_api(license_type: str, business_name: str, max_pages: int = 5, field: str = "BPLC_NM") -> list[dict]:
+    """field 조건으로 LIKE 검색. 기본은 상호(BPLC_NM), 주소로 찾을 때는 field="ROAD_NM_ADDR"."""
     url = _api_url(license_type)
     key = os.environ.get("DATA_GO_KR_SERVICE_KEY")
     if not url or not key:
@@ -126,7 +127,7 @@ def query_api(license_type: str, business_name: str, max_pages: int = 5) -> list
 
     for page in range(1, max_pages + 1):
         params = {"serviceKey": key, "pageNo": page, "numOfRows": per_page, "returnType": "json",
-                  "cond[BPLC_NM::LIKE]": business_name}
+                  f"cond[{field}::LIKE]": business_name}
         last = None
         batch = None
         candidates = (base + "/info", base) if page == 1 else (base + "/info",)
@@ -534,12 +535,16 @@ def sync_static_index(index_path: str = INDEX_PATH, held_path: str = HELD_PATH) 
     return removed, restored
 
 
+def _doc_addr(doc: dict) -> str:
+    loc = doc.get("location_info") or {}
+    return str(loc.get("display_address") or loc.get("lot_address") or "")
+
+
 def find_license_for_kto(doc: dict) -> dict:
     """관광공사 출처 숙소를 4개 업종 인허가 API 에서 모두 찾아본다(추정 업종 먼저).
     상호+주소가 확실히 맞는 첫 결과(match/closed)를 업종과 함께 돌려준다."""
     name = str(doc.get("title") or "")
-    loc = doc.get("location_info") or {}
-    addr = str(loc.get("display_address") or loc.get("lot_address") or "")
+    addr = _doc_addr(doc)
     guessed = str(doc.get("license_type") or "")
     order = [guessed] + [lt for lt in API_ENV if lt != guessed] if guessed in API_ENV else list(API_ENV)
     errors = []
@@ -553,13 +558,97 @@ def find_license_for_kto(doc: dict) -> dict:
         if ev["result"] in ("match", "closed"):
             ev["license_type"] = lt
             ev["guessed_license_type"] = guessed
+            ev["matched_by"] = "name_address"
             return ev
-    if errors and len(errors) == len(order):
+
+    # 상호로 못 찾으면 도로명 주소(예: '귀계길 17-25')로 찾고, 같은 시·군 + 상호 핵심어가 겹칠 때만 연결한다.
+    # (관광공사 이름과 등록 상호가 다른 경우: '구토란펜션' ↔ '경주 한옥펜션 구토란')
+    road = road_key(addr)
+    if road:
+        for lt in order:
+            try:
+                rows = query_api(lt, road, max_pages=1, field="ROAD_NM_ADDR")
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{lt}(주소): {str(e)[:120]}")
+                continue
+            best = pick_address_match(name, addr, rows)
+            if best:
+                status = _first(best, STATUS_KEYS)
+                return {
+                    "result": _status_result(status),
+                    "score": 5.0,
+                    "candidates": len(rows),
+                    "matched_name": _first(best, NAME_KEYS),
+                    "matched_address": _first(best, ADDR_KEYS),
+                    "matched_status": status,
+                    "matched_permit_date": _first(best, DATE_KEYS),
+                    "matched_closed_date": str(best.get("CLSBIZ_YMD") or ""),
+                    "matched_mng_no": str(best.get("MNG_NO") or ""),
+                    "matched_by": "road_address",
+                    "license_type": lt,
+                    "guessed_license_type": guessed,
+                }
+    if errors and len(errors) >= len(order) * (2 if road else 1):
         return {"result": "error", "error": " | ".join(errors)}
     return {"result": "not_found", "partial_errors": errors}
 
 
-def link_kto_listings(apply: bool = False, workers: int = 3, index_path: str = INDEX_PATH) -> dict:
+_ROAD_RE = re.compile(r"([가-힣A-Za-z0-9·]+(?:로|길))\s*(\d+(?:-\d+)?)")
+# 상호 비교에서 빼는 일반어 (업종·형태를 나타낼 뿐 업소를 구분하지 않음)
+_GENERIC_NAME_WORDS = ("게스트하우스", "풀빌라", "펜션", "민박", "한옥", "호텔", "스테이", "하우스", "리조트",
+                       "모텔", "캠핑", "글램핑", "레지던스", "the", "더")
+
+
+def road_key(addr: str) -> str:
+    """'경상북도 경주시 내남면 귀계길 17-25' → '귀계길 17-25' (도로명 + 건물번호). 없으면 ''."""
+    m = _ROAD_RE.search(addr or "")
+    return f"{m.group(1)} {m.group(2)}" if m else ""
+
+
+def _core_name(s: str) -> str:
+    n = _norm(s).lower()
+    for w in _GENERIC_NAME_WORDS:
+        n = n.replace(w, "")
+    return n
+
+
+def _bigrams(s: str) -> set[str]:
+    return {s[i:i + 2] for i in range(len(s) - 1)}
+
+
+def names_match_loosely(a: str, b: str) -> bool:
+    """일반어를 뺀 상호 핵심이 한쪽에 포함되거나, 두 글자 조각이 절반 이상 겹치면 같은 업소로 본다."""
+    ca, cb = _core_name(a), _core_name(b)
+    if len(ca) >= 2 and len(cb) >= 2 and (ca in cb or cb in ca):
+        return True
+    ba, bb = _bigrams(ca), _bigrams(cb)
+    return bool(ba and bb) and len(ba & bb) / min(len(ba), len(bb)) >= 0.5
+
+
+def _city_tokens(addr: str) -> set[str]:
+    return {t for t in _addr_tokens(addr) if t.endswith(("시", "군", "구"))}
+
+
+def pick_address_match(name: str, addr: str, rows: list[dict]) -> dict | None:
+    """같은 도로명·건물번호로 찾은 인허가 행 중 같은 시·군·구이고 상호가 비슷한 행. 영업 중인 행을 우선한다."""
+    key, cities = road_key(addr), _city_tokens(addr)
+    hits = []
+    for row in rows:
+        row_addr = " ".join(str(row.get(k) or "") for k in ADDR_KEYS)
+        if key and not re.search(re.escape(key) + r"(?![\d-])", row_addr):
+            continue  # LIKE 검색이라 '귀계길 17-251' 같은 다른 번지가 섞일 수 있음
+        if cities and not (cities & _city_tokens(row_addr)):
+            continue
+        if names_match_loosely(name, _first(row, NAME_KEYS)):
+            hits.append(row)
+    if not hits:
+        return None
+    hits.sort(key=lambda r: _status_result(_first(r, STATUS_KEYS)) != "match")
+    return hits[0]
+
+
+def link_kto_listings(apply: bool = False, workers: int = 3, index_path: str = INDEX_PATH,
+                      results_path: str | None = None) -> dict:
     """(한 번만 실행) 관광공사 출처 숙소의 실제 인허가를 찾아 연결한다.
 
     - match: 실제 업종·인허가 관리번호를 저장(public_mng_no 를 행안부 번호로 바꿈, 관광공사 ID 는 kto_content_id 로 보존)
@@ -572,20 +661,46 @@ def link_kto_listings(apply: bool = False, workers: int = 3, index_path: str = I
     from firebase_client import db
 
     all_snaps = list(db().collection("listings").stream())
-    used_mng = {str((s.to_dict() or {}).get("public_mng_no") or "") for s in all_snaps}
+    # 한옥체험업·외국인관광도시민박업 관리번호는 지자체별 일련번호라 전국에서 겹친다(NOTES §9)
+    # → 관리번호가 같아도 이름이나 주소까지 같아야 같은 숙소(중복 등록)로 본다.
+    holders: dict[str, list[tuple[str, str, set[str]]]] = {}
+    for s in all_snaps:
+        d = s.to_dict() or {}
+        holders.setdefault(str(d.get("public_mng_no") or ""), []).append(
+            (s.id, _norm(str(d.get("title") or "")), _addr_tokens(_doc_addr(d))))
+
+    def _same_stay(mng: str, sid: str, doc: dict) -> str | None:
+        name, addr = _norm(str(doc.get("title") or "")), _addr_tokens(_doc_addr(doc))
+        for other_id, other_name, other_addr in holders.get(mng, []):
+            if other_id != sid and (other_name == name or len(addr & other_addr) >= 4):
+                return other_id
+        return None
+
     kto = [s for s in all_snaps if is_kto(s.to_dict() or {}) and (s.to_dict() or {}).get("status") == "active"]
-    print(f"관광공사 출처 공개 숙소 {len(kto)}곳을 4개 업종 인허가 API 에서 찾는 중...")
 
-    def _work(snap):
-        try:
-            return snap, find_license_for_kto(snap.to_dict() or {})
-        except Exception as e:  # noqa: BLE001
-            return snap, {"result": "error", "error": str(e)[:200]}
+    if results_path and apply and os.path.exists(results_path):
+        # 미리보기에서 저장한 결과를 그대로 반영 (같은 조회를 다시 하지 않고, 확인한 결과와 반영 결과가 같도록)
+        with open(results_path, encoding="utf-8") as f:
+            saved = json.load(f)
+        results = [(s, saved[s.id]) for s in kto if s.id in saved]
+        print(f"저장된 미리보기 결과 {len(results)}곳을 반영합니다 ({results_path})")
+    else:
+        print(f"관광공사 출처 공개 숙소 {len(kto)}곳을 4개 업종 인허가 API 에서 찾는 중...")
 
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        results = list(pool.map(_work, kto))
+        def _work(snap):
+            try:
+                return snap, find_license_for_kto(snap.to_dict() or {})
+            except Exception as e:  # noqa: BLE001
+                return snap, {"result": "error", "error": str(e)[:200]}
 
-    counts = {"match": 0, "match_other_type": 0, "closed": 0, "duplicate": 0, "not_found": 0, "error": 0}
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            results = list(pool.map(_work, kto))
+        if results_path:
+            with open(results_path, "w", encoding="utf-8") as f:
+                json.dump({s.id: r for s, r in results}, f, ensure_ascii=False, default=str)
+            print(f"조회 결과 저장: {results_path}")
+
+    counts = {"match": 0, "match_other_type": 0, "by_address": 0, "closed": 0, "duplicate": 0, "no_mng": 0, "not_found": 0, "error": 0}
     linked: dict[str, dict] = {}
     batch, ops = db().batch(), 0
     for snap, res in results:
@@ -593,17 +708,25 @@ def link_kto_listings(apply: bool = False, workers: int = 3, index_path: str = I
         r = res["result"]
         title = doc.get("title")
         mng = str(res.get("matched_mng_no") or "")
-        if r == "match":
-            if not mng or mng in used_mng:
-                counts["duplicate"] += 1
-                print(f"[중복?] {snap.id} {title} → {res.get('matched_name')} {mng} (이미 다른 숙소가 쓰는 관리번호)")
-                continue
-            used_mng.add(mng)
+        if r == "match" and not mng:
+            counts["no_mng"] += 1  # 인허가 행에 관리번호가 없어 연결할 수 없음
+            continue
+        other = _same_stay(mng, snap.id, doc) if r == "match" else None
+        if other:
+            counts["duplicate"] += 1
+            print(f"[중복] {snap.id} {title} — 같은 인허가({mng})로 이미 등록된 숙소 {other}")
+            upd = {"needs_review": True, "needs_review_reason": "duplicate",
+                   "needs_review_detail": f"같은 인허가 관리번호 {mng} 로 등록된 숙소 {other} 와 중복 — 한쪽 노출 중지 검토"}
+        elif r == "match":
+            holders.setdefault(mng, []).append((snap.id, _norm(str(title or "")), _addr_tokens(_doc_addr(doc))))
             counts["match"] += 1
             if res["license_type"] != res["guessed_license_type"]:
                 counts["match_other_type"] += 1
+            if res.get("matched_by") == "road_address":
+                counts["by_address"] += 1
             print(f"[연결] {snap.id} {title} — {res['guessed_license_type']} → {res['license_type']} {mng} "
-                  f"({res.get('matched_status')}, {str(res.get('matched_address'))[:40]})")
+                  f"({res.get('matched_status')}, {str(res.get('matched_address'))[:40]}"
+                  + (f", 주소로 찾음: 등록 상호 '{res.get('matched_name')}'" if res.get("matched_by") == "road_address" else "") + ")")
             linked[snap.id] = {"license_type": res["license_type"]}
             upd = {
                 "license_type": res["license_type"],
@@ -647,8 +770,9 @@ def link_kto_listings(apply: bool = False, workers: int = 3, index_path: str = I
         with open(index_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
-    print(f"{'반영' if apply else '미리보기'}: 연결 {counts['match']}곳(추정 업종과 다름 {counts['match_other_type']}) · "
-          f"폐업 기록 {counts['closed']} · 관리번호 중복 {counts['duplicate']} · 못 찾음 {counts['not_found']} · 오류 {counts['error']}"
+    print(f"{'반영' if apply else '미리보기'}: 연결 {counts['match']}곳(추정 업종과 다름 {counts['match_other_type']} · 주소로 찾음 {counts['by_address']}) · "
+          f"폐업 기록 {counts['closed']} · 중복 등록 {counts['duplicate']} · 관리번호 없음 {counts['no_mng']} · "
+          f"못 찾음 {counts['not_found']} · 오류 {counts['error']}"
           + ("" if apply else "  (--apply 로 반영)"))
     return counts
 
@@ -672,6 +796,7 @@ if __name__ == "__main__":
     sub.add_parser("prune-index", help="정적 숙소 색인을 Firestore 상태에 맞춤(노출 중지 제외·재개 복원)")
     p = sub.add_parser("link-kto", help="(한 번) 관광공사 출처 숙소의 실제 인허가를 4개 업종에서 찾아 연결")
     p.add_argument("--apply", action="store_true", help="Firestore·정적 색인에 반영 (없으면 미리보기)")
+    p.add_argument("--results", help="미리보기 때 조회 결과를 이 파일에 저장, --apply 때 있으면 이 결과로 반영(재조회 안 함)")
     p.add_argument("--workers", type=int, default=3)
     a = ap.parse_args()
 
@@ -689,7 +814,7 @@ if __name__ == "__main__":
     elif a.cmd == "prune-index":
         sync_static_index()
     elif a.cmd == "link-kto":
-        link_kto_listings(apply=a.apply, workers=a.workers)
+        link_kto_listings(apply=a.apply, workers=a.workers, results_path=a.results)
     else:
         try:
             recheck_all(a.csv, workers=a.workers, rotate=a.rotate)

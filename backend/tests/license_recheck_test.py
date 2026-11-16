@@ -72,6 +72,28 @@ assert plan_update({**K, "needs_review": True, "needs_review_reason": "not_found
 # 다른 업종에서 폐업으로 확인된 표시(license_closed)는 관광공사 목록만으로 풀지 않음
 assert plan_update({**K, "needs_review": True, "needs_review_reason": "license_closed"}, {"result": "match", "source": "tourapi"}) is None
 
+# --- 주소로 찾기 (관광공사 이름 ≠ 등록 상호) ---
+from license_check import names_match_loosely, pick_address_match, road_key  # noqa: E402
+
+assert road_key("경상북도 경주시 내남면 귀계길 17-25") == "귀계길 17-25"
+assert road_key("제주특별자치도 제주시 조천읍 함덕14길 20-2") == "함덕14길 20-2"
+assert road_key("경기도 양평군 강상면 강남로 1544") == "강남로 1544"
+assert road_key("서울특별시 송파구 방이동 88") == ""  # 지번 주소는 주소 검색 안 함
+assert names_match_loosely("구토란펜션", "경주 한옥펜션 구토란")
+assert names_match_loosely("한옥펜션 나비의 꿈", "나비의꿈")
+assert not names_match_loosely("바다펜션", "산속민박")
+assert not names_match_loosely("펜션", "호텔")  # 일반어만 같으면 다른 업소
+row = lambda name, addr, st="영업/정상": {"BPLC_NM": name, "ROAD_NM_ADDR": addr, "SALS_STTS_NM": st}
+A = "경상북도 경주시 내남면 귀계길 17-25"
+assert pick_address_match("구토란펜션", A, [row("경주 한옥펜션 구토란", A)])["BPLC_NM"] == "경주 한옥펜션 구토란"
+# 다른 번지(17-251)·다른 시·군의 같은 도로명·다른 상호는 연결 안 함
+assert pick_address_match("구토란펜션", A, [row("구토란", "경상북도 경주시 내남면 귀계길 17-251")]) is None
+assert pick_address_match("구토란펜션", A, [row("구토란", "전라남도 여수시 귀계길 17-25")]) is None
+assert pick_address_match("구토란펜션", A, [row("햇살민박", A)]) is None
+# 같은 주소에 폐업한 예전 등록과 영업 중인 등록이 있으면 영업 중인 쪽
+assert pick_address_match("구토란펜션", A, [row("구토란펜션", A, "폐업"), row("구토란 한옥", A)])["BPLC_NM"] == "구토란 한옥"
+
+
 # --- 4주 순환 ---
 assert rotation_bucket("stay_pub_abc", 4) == rotation_bucket("stay_pub_abc", 4)  # 고정
 buckets = [rotation_bucket(f"stay_pub_{i}", 4) for i in range(400)]
