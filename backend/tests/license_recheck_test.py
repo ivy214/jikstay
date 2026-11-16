@@ -7,7 +7,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from firebase_admin import firestore  # noqa: E402
 
-from license_check import plan_index_sync, plan_update  # noqa: E402
+import datetime as dt  # noqa: E402
+
+from license_check import (  # noqa: E402
+    check_kto_listing,
+    current_rotation,
+    is_kto,
+    plan_index_sync,
+    plan_update,
+    rotation_bucket,
+)
 
 DEL = firestore.DELETE_FIELD
 
@@ -37,6 +46,39 @@ upd = plan_update({"needs_review": True, "needs_review_reason": "not_found"}, {"
 assert upd["needs_review_reason"] == "error" and upd["needs_review_detail"].startswith("API 응답 오류")
 # 예전 형식(사유에 오류 문구 전체) → 한 번은 새 형식으로 다시 씀
 assert plan_update({"needs_review": True, "needs_review_reason": "API 응답 오류 500"}, {"result": "error", "error": "x"}) is not None
+
+
+# --- 노출 중지 숙소 ---
+SUS = {"status": "suspended"}
+# 다시 영업으로 확인 → 자동 재공개 없이 '재개 검토' 표시만
+upd = plan_update(SUS, {"result": "match", "matched_status": "영업/정상"})
+assert upd["needs_review_reason"] == "reopened" and "status" not in upd
+assert plan_update({**SUS, "needs_review": True, "needs_review_reason": "reopened"}, {"result": "match"}) is None
+# 여전히 폐업이면 아무것도 안 씀 / 재개 검토 표시였는데 다시 폐업이면 표시 해제
+assert plan_update(SUS, {"result": "closed"}) is None
+assert plan_update({**SUS, "needs_review": True, "needs_review_reason": "reopened"}, {"result": "closed"})["needs_review"] is False
+# 판단 불가·오류는 노출 중지 숙소에 표시하지 않음
+assert plan_update(SUS, {"result": "not_found"}) is None and plan_update(SUS, {"result": "error", "error": "x"}) is None
+
+# --- 관광공사 출처 ---
+K = {"status": "active", "public_mng_no": "KTO-12345"}
+assert is_kto(K) and not is_kto({"public_mng_no": "CDFI123"})
+assert check_kto_listing(K, {"12345"})["result"] == "match"
+miss = check_kto_listing(K, {"999"})
+assert miss["result"] == "kto_missing"
+assert plan_update(K, miss)["needs_review_reason"] == "kto_missing"
+# 관광공사 목록에 있으면 예전 인허가 대조(not_found)·kto_missing 표시는 풀고
+assert plan_update({**K, "needs_review": True, "needs_review_reason": "not_found"}, {"result": "match", "source": "tourapi"})["needs_review"] is False
+# 다른 업종에서 폐업으로 확인된 표시(license_closed)는 관광공사 목록만으로 풀지 않음
+assert plan_update({**K, "needs_review": True, "needs_review_reason": "license_closed"}, {"result": "match", "source": "tourapi"}) is None
+
+# --- 4주 순환 ---
+assert rotation_bucket("stay_pub_abc", 4) == rotation_bucket("stay_pub_abc", 4)  # 고정
+buckets = [rotation_bucket(f"stay_pub_{i}", 4) for i in range(400)]
+assert set(buckets) == {0, 1, 2, 3} and min(buckets.count(b) for b in range(4)) > 60  # 고르게 나뉨
+weeks = {current_rotation(4, dt.date(2026, 11, 16) + dt.timedelta(weeks=w)) for w in range(4)}
+assert weeks == {0, 1, 2, 3}  # 연속 4주면 모든 그룹을 한 번씩
+assert rotation_bucket("x", 1) == 0 == current_rotation(1)
 
 
 # --- plan_index_sync ---

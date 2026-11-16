@@ -85,7 +85,8 @@ jobs:
         id: licenses
         if: steps.admin.outputs.enabled == 'true'
         continue-on-error: true
-        run: python backend/license_check.py recheck --workers 3 --prune-index
+        # 인허가 출처는 4주에 한 번씩(매주 1/4), 관광공사 출처는 매주 전체를 관광공사 숙박 목록과 대조
+        run: python backend/license_check.py recheck --workers 3 --rotate 4 --prune-index
 
       - name: Incremental translations (EN/JA/ZH)
         id: translate

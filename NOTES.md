@@ -89,7 +89,7 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 | `enrich_naver_local.py` | 네이버 지역 검색으로 `naver_link`(공식 링크, OTA 제외)·`naver_category` 보강. 허브/색인을 다시 만들면 재실행(캐시로 즉시 복원) |
 | `clean_naver_reviews.py` | 장소와 무관한 네이버 방문기 제거(`is_relevant_place_snippet`), `--refetch` 로 빈 곳 재검색 |
 | `split_hub.py` | 빌드 직전 허브 분할 (deploy.ps1·CI 가 자동 실행) |
-| `license_check.py` | 인허가 대조. `recheck` = 공개 숙소 전체 폐업·휴업 재확인 → 확실하면 `suspended`, 애매하면 `needs_review`. 상태가 바뀐 숙소만 저장(100건마다), 조회 오류가 20% 넘으면 오류 건은 표시 안 하고 실패 처리, 실행 기록은 `meta/license_recheck`. `--prune-index`/`prune-index` = 정적 색인을 Firestore 상태에 맞춤(노출 중지 제외 → `backend/stays_index_suspended.json` 보류, 재개되면 복원) |
+| `license_check.py` | 인허가 대조. `recheck` = 공개 숙소 전체 폐업·휴업 재확인 → 확실하면 `suspended`, 애매하면 `needs_review`. 인허가 출처는 `--rotate 4` 로 매주 1/4(4주에 한 번 전체, 노출 중지 숙소도 다시 조회해 영업이면 `reopened` 표시), 관광공사 출처(`KTO-`)는 매주 전체를 TourAPI 숙박 목록과 대조(사라지면 `kto_missing`). `link-kto [--apply]` = (한 번) 관광공사 출처의 실제 인허가를 4개 업종에서 찾아 관리번호 연결. 상태가 바뀐 숙소만 저장(100건마다), 조회 오류가 20% 넘으면 오류 건은 표시 안 하고 실패 처리, 실행 기록은 `meta/license_recheck`. `--prune-index`/`prune-index` = 정적 색인을 Firestore 상태에 맞춤(노출 중지 제외 → `backend/stays_index_suspended.json` 보류, 재개되면 복원) |
 | `enrich_ebooks_and_spots.py` · `upgrade_web_magazines_and_links.py` · `fetch_chapter_media.py` | 지자체 E-book·웹매거진·챕터 사진 보강 (수동 실행) |
 | `generate_weekly_digest.py` · `notify_indexnow.py` | 주간 SNS 다이제스트 · IndexNow 제출 |
 | `admin_app.py` | 로컬 관리자(127.0.0.1:8765, CSRF): 숙소·후기 삭제·노출 상태, 스팟 쿠폰, 통계, 공공 수집 실행, 재확인 |
@@ -105,7 +105,7 @@ backend\.venv\Scripts\python backend\admin_app.py
 
 - **CI (`ci.yml`, push·PR)**: Flutter analyze/test · Functions 단위 테스트 · 보안 규칙 에뮬레이터 테스트(`demo-jikstay`) · 백엔드 단위 테스트.
 - **주간 (`weekly-travel-hub-update.yml`, 월 06:00 KST)**: 축제 갱신 → 볼거리·먹거리 갱신(`weekly_spot_refresh.py`) →
-  숙소 인허가 재확인(`license_check.py recheck --prune-index`, 약 70분) → 번역 → 다이제스트 → 데이터 커밋(허브·숙소 색인).
+  숙소 재확인(`license_check.py recheck --rotate 4 --prune-index`) → 번역 → 다이제스트 → 데이터 커밋(허브·숙소 색인).
   `FIREBASE_SERVICE_ACCOUNT_JIKSTAY` 시크릿이 있으면 Hosting(+템플릿 바뀌면 Functions)까지 배포하고, 같은 키로 Firestore 도 갱신한다
   (키에 Firestore 쓰기 권한이 없으면 인허가 재확인 단계가 실패로 표시됨). 번역·볼거리·인허가 단계가 실패해도 나머지 데이터는 커밋하고 워크플로만 실패 표시.
   - 볼거리·먹거리: 관광공사 목록에서 사라진 곳 제거(Firestore `closed`) · 반값여행 시·군 보충 · 최근 14일 신규 등록 시·도별 종류당 2곳(시·도당 40곳 상한)
@@ -138,7 +138,9 @@ backend\.venv\Scripts\python backend\tests\<name>.py   # smoke / admin / curate 
 - [ ] reCAPTCHA Enterprise 키 발급 → `RECAPTCHA_SITE_KEY` 로 빌드·배포한 **뒤에** App Check 다시 시행.
   2026-11-14~16 사이 키 없이 Firestore·Storage 가 ENFORCED 로 켜져 사이트의 모든 Firestore 요청(숙소 상세·후기·클릭)이 거부됐었다.
   11-16 UNENFORCED 로 되돌림. 순서를 바꾸면 같은 장애가 재발한다.
-- [ ] `license_check.recheck`: TourAPI 출처 숙소는 관리번호가 `KTO-…`(관광공사 ID)라 상호 LIKE 검색에 의존 → 등록 상호가 다르면 `not_found` 로 `needs_review` 가 많이 생길 수 있음
+- [x] ~~TourAPI 출처 숙소의 인허가 `not_found` 대량 발생~~ → 업종을 관광공사 분류로 추정해 엉뚱한 업종 API 에서 찾던 것이 원인.
+  2026-11-16 부터 관광공사 출처는 관광공사 숙박 목록으로 확인. `link-kto` 로 실제 인허가를 찾은 숙소는 관리번호로 대조
+- [ ] 관광공사 출처 숙소의 `public_licensed_at` 은 인허가일이 아니라 관광공사 정보 수정일(`curate_public_stays.py` 보충 경로) — 화면에 쓰지 말 것
 - [ ] 숙소 348곳은 아직 근사 좌표(`approx_coord`) — 화면은 거리 대신 '시·군 단위 위치'로 표시, '내 주변' 정렬에서는 뒤로
 - [ ] 이름·지역이 같은 숙소 13쌍, 대표사진을 공유하는 숙소 34곳 — 중복 등록 또는 사진 오매칭 여부 수동 확인 필요
 - [ ] 네이버 검색 API 결과 저장·표시 조건(이용약관) 확인. 현재 링크·업종만 저장하고 "정보 출처: 네이버" 표기
