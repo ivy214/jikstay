@@ -37,6 +37,14 @@
       transition: opacity 0.22s ease-out;
     }
     #jikstay-splash.fade-out { opacity: 0; pointer-events: none; }
+    /* 서버(serveApp)가 넣는 페이지 본문: 검색엔진·JS 미지원 환경용. 앱이 뜨면 flutter-view 가 위를 덮는다 */
+    #jikstay-seo { max-width: 820px; margin: 0 auto; padding: 24px 16px 48px; color: #1f2937;
+      font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+    #jikstay-seo h1 { font-size: 24px; line-height: 1.3; margin: 8px 0 12px; }
+    #jikstay-seo h2 { font-size: 17px; margin: 24px 0 8px; }
+    #jikstay-seo img { max-width: 100%; height: auto; border-radius: 12px; }
+    #jikstay-seo nav, #jikstay-seo nav a { color: #6b7280; font-size: 13px; }
+    #jikstay-seo a { color: #0f766e; }
     .js-topbar {
       width: 100%; background: #ffffff; border-bottom: 1px solid #e2e8f0;
       position: sticky; top: 0; z-index: 2;
