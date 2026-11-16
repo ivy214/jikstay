@@ -20,6 +20,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -90,11 +91,26 @@ def resolve_city_codes(region_group: str, city: str, memo: dict[str, list[dict[s
     return None
 
 
+# 표지석·추념탑만 있는 현충 표지 장소(예: "이재명 의거지", "신석구 사택 터", "순국선열추념탑")는
+# 여행지로 볼거리가 없어 볼거리 목록에 넣지 않는다. 이름 끝이 이 말로 끝날 때만 제외한다
+# ("OO기념관", "OO추모공원"처럼 실제 시설은 유지).
+MINOR_MEMORIAL_RE = re.compile(
+    r"(의거지|의거\s?터|사택\s?터|집\s?터|생가\s?터|옛\s?터|거주지|활동지"
+    r"|추념탑|추모탑|추모비|기념비|기념탑|현충탑|충혼탑|위령탑|표석|표지석)$"
+)
+
+
+def is_minor_memorial(title: str) -> bool:
+    return bool(MINOR_MEMORIAL_RE.search(title.strip()))
+
+
 def _spot_doc(it: dict[str, Any], kind: str, city: str = "") -> dict[str, Any] | None:
     cid = str(it.get("contentid") or "").strip()
     img = _https(str(it.get("firstimage") or it.get("firstimage2") or ""))
     title = normalize_place_name(str(it.get("title") or ""))
     if not cid or not img or not title:
+        return None
+    if kind == "attraction" and is_minor_memorial(title):
         return None
     addr1 = str(it.get("addr1") or "").strip()
     d1, d2 = parse_korean_address(addr1)
