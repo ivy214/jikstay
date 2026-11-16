@@ -4,6 +4,8 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 
+const seo = require("./seo_content");
+
 initializeApp();
 
 const LISTING_ID_RE = /^stay_[a-zA-Z0-9_-]{4,32}$/;
@@ -18,7 +20,40 @@ const PROVINCE_EN = {
   충북: "Chungbuk", 충남: "Chungnam", 전북: "Jeonbuk", 전남: "Jeonnam", 경북: "Gyeongbuk",
   경남: "Gyeongnam", 제주: "Jeju",
 };
+const PROVINCE_JA = {
+  서울: "ソウル", 부산: "釜山", 대구: "大邱", 인천: "仁川", 광주: "光州", 대전: "大田", 울산: "蔚山", 세종: "世宗",
+  경기: "京畿道", 강원: "江原道", 충북: "忠清北道", 충남: "忠清南道", 전북: "全羅北道", 전남: "全羅南道",
+  경북: "慶尚北道", 경남: "慶尚南道", 제주: "済州",
+};
+const PROVINCE_ZH = {
+  서울: "首爾", 부산: "釜山", 대구: "大邱", 인천: "仁川", 광주: "光州", 대전: "大田", 울산: "蔚山", 세종: "世宗",
+  경기: "京畿道", 강원: "江原道", 충북: "忠清北道", 충남: "忠清南道", 전북: "全羅北道", 전남: "全羅南道",
+  경북: "慶尚北道", 경남: "慶尚南道", 제주: "濟州",
+};
 const SUPPORTED_LANGS = new Set(["ko", "en", "ja", "zh"]);
+const HANGUL_RE = /[가-힣]/;
+
+function provinceLabel(prov, lang) {
+  if (lang === "en") return PROVINCE_EN[prov] || prov;
+  if (lang === "ja") return PROVINCE_JA[prov] || prov;
+  if (lang === "zh") return PROVINCE_ZH[prov] || prov;
+  return prov;
+}
+
+/** '서울특별시'→'서울', '충청북도'→'충북', '전북특별자치도'→'전북', '전남광주통합특별시'→'전남' */
+function shortProvince(name) {
+  const s = String(name || "").trim();
+  if (/^(충청|전라|경상)/.test(s)) return s[0] + s[2];
+  return s.slice(0, 2);
+}
+
+/** "['위치: …', '주차 …']" 처럼 목록이 문자열로 저장된 요약을 '위치: … · 주차 …' 로 */
+function cleanListSummary(s) {
+  const t = String(s || "").trim();
+  if (!(t.startsWith("[") && t.endsWith("]"))) return t;
+  const parts = t.slice(1, -1).match(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g);
+  return parts ? parts.map((p) => p.slice(1, -1)).filter(Boolean).join(" · ") : t;
+}
 const BOT_UA_RE =
   /bot|crawler|spider|slurp|yeti|daumoa|bingpreview|facebookexternalhit|kakaotalk-scrap|slackbot|discordbot|whatsapp|telegrambot|headless|curl|wget|python-requests/i;
 const TEMPLATE_PATH = path.join(__dirname, "index.html");
@@ -49,8 +84,12 @@ function fallbackNaverMapUrl(listing) {
   return `https://map.naver.com/p/search/${encodeURIComponent(q)}`;
 }
 
-function buildLocalizedMeta(listing, lang) {
-  const i18n = listing && typeof listing.i18n === "object" ? listing.i18n[lang] : null;
+function buildLocalizedMeta(listing, lang, tStay = null) {
+  const docI18n = listing && typeof listing.i18n === "object" ? listing.i18n[lang] : null;
+  // 숙소 문서의 i18n 제목은 한국어 상호 그대로인 경우가 많다('리코 하우스 2 (Seoul)').
+  // 번역 번들(translations_{lang}.json 의 stays)에 제대로 번역된 제목이 있으면 그것을 쓴다.
+  const i18n = docI18n ? { ...docI18n } : {};
+  if (tStay && tStay.title && (!i18n.title || HANGUL_RE.test(i18n.title))) i18n.title = String(tStay.title);
   const region = [listing.region_depth1, listing.region_depth2].filter(Boolean).join(" ").trim();
   const points = Array.isArray(listing.summary_points) ? listing.summary_points.slice(0, 2).join(" · ") : "";
 
@@ -92,9 +131,10 @@ function buildLocalizedMeta(listing, lang) {
   return { htmlLang: "ko", titleText, descText };
 }
 
-function buildOgHtml(template, listing, listingId, origin, rawLang = "ko") {
+function buildOgHtml(template, listing, listingId, origin, rawLang = "ko", data = null) {
   const lang = normalizeLang(rawLang);
-  const { htmlLang, titleText, descText } = buildLocalizedMeta(listing, lang);
+  const tStay = (lang !== "ko" && data && data.i18nCore && data.i18nCore.stays && data.i18nCore.stays[listingId]) || null;
+  const { htmlLang, titleText, descText } = buildLocalizedMeta(listing, lang, tStay);
   const images = Array.isArray(listing.images) ? listing.images : [];
   const imageUrl = images.length > 0 && images[0].url ? String(images[0].url) : "";
   const encodedId = encodeURIComponent(listingId);
@@ -146,13 +186,36 @@ function buildOgHtml(template, listing, listingId, origin, rawLang = "ko") {
   const safeJsonLd = JSON.stringify(jsonLdObj).replace(/</g, "\\u003c");
   const jsonLdTag = `\n  <script type="application/ld+json">${safeJsonLd}</script>`;
 
-  const reviews = Array.isArray(listing.naver_reviews) ? listing.naver_reviews.slice(0, 3) : [];
-  const reviewItemsHtml = reviews
-    .map((r) => `<li>${escapeHtml(r.title || "")} - ${escapeHtml(r.summary || "")}</li>`)
-    .join("");
-  const seoNoscript = `<noscript id="jikstay-seo"><article><h1>${escapedTitle}</h1><p>${escapedDesc}</p><p>${escapeHtml(
-    locInfo.display_address || ""
-  )} · ${escapeHtml(listing.license_type || "")}</p>${reviewItemsHtml ? `<ul>${reviewItemsHtml}</ul>` : ""}</article></noscript>`;
+  const L = seo.LABELS[lang] || seo.LABELS.ko;
+  const prov = shortProvince(listing.region_depth1);
+  const provLabel = provinceLabel(prov, lang);
+  const plainTitle = titleText.replace(/\s*\|[^|]*$/, "");
+  // 네이버 방문기는 한국어 원문이라 한국어 페이지에만 넣는다
+  const reviews = lang === "ko" && Array.isArray(listing.naver_reviews) ? listing.naver_reviews.slice(0, 3) : [];
+  const reviewHtml = reviews.length
+    ? `<ul>${reviews.map((r) => `<li>${escapeHtml(r.title || "")} - ${escapeHtml(r.summary || "")}</li>`).join("")}</ul>`
+    : "";
+  const tSummary = tStay ? cleanListSummary(tStay.summary) : "";
+  const practical = [];
+  if (listing.license_type) practical.push({ label: lang === "ko" ? "업종" : "License", value: String(listing.license_type) });
+  if (tSummary) practical.push({ label: L.info, value: tSummary });
+  const seoMain = seo.renderSeoMain({
+    lang,
+    title: plainTitle,
+    lead: descText,
+    address: lang === "ko" ? locInfo.display_address : (tStay && tStay.region) || locInfo.display_address,
+    imageUrl,
+    imageAlt: plainTitle,
+    practical,
+    breadcrumbs: [
+      { href: lang === "ko" ? `${origin}/` : `${origin}/?lang=${lang}`, text: L.home },
+      seo.regionLink(origin, prov, provLabel, lang),
+    ],
+    sections: [
+      { heading: lang === "ko" ? "방문기" : "", html: reviewHtml },
+      { heading: `${provLabel} · ${L.nearby}`, html: seo.linkList(seo.nearbyLinks(origin, lang, data, { id: listingId, province: prov }, 10)) },
+    ],
+  });
 
   return template
     .replace(/<html>/i, `<html lang="${htmlLang}">`)
@@ -163,7 +226,7 @@ function buildOgHtml(template, listing, listingId, origin, rawLang = "ko") {
       /<meta\s+property="og:description"\s+content="[^"]*">/,
       `<meta property="og:description" content="${escapedDesc}">${ogImageTag}${ogUrlTag}${hreflangTags}${jsonLdTag}`
     )
-    .replace(/<\/body>/i, `  ${seoNoscript}\n</body>`);
+    .replace(/<\/body>/i, `  ${seoMain}\n</body>`);
 }
 
 function fmtYmdIso(ymd) {
@@ -171,33 +234,37 @@ function fmtYmdIso(ymd) {
   return /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : "";
 }
 
-function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko") {
+function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko", data = null) {
   const lang = normalizeLang(rawLang);
   const htmlLang = lang === "zh" ? "zh-Hant" : lang;
   const prov = String(spot.province || "");
   const provEn = PROVINCE_EN[prov] || prov || "Korea";
+  const provLabel = provinceLabel(prov, lang);
   const kind = String(spot.kind || spot.category || "attraction");
   const isStory = spot.is_story === true;
-  const title = String(spot.title || "로컬 명소");
-  const addr = String(spot.addr || spot.address || spot.region_label || prov);
+  // 외국어 페이지는 번역 번들의 이름·주소·개요·본문을 쓴다 (없으면 한국어 원문)
+  const loc = seo.localizeSpot(spot, spotId, lang, data);
+  const title = loc.title || "로컬 명소";
+  const addr = loc.addr || String(spot.region_label || prov);
   const imageUrl = spot.image_url ? String(spot.image_url) : spot.image ? String(spot.image) : "";
   const queryKey = isStory ? "story" : "spot";
+  const overviewDesc = loc.overview ? seo.truncate(loc.overview, 155) : "";
 
   let titleText = isStory ? `${title} · ${spot.source_book || prov} | 직스테이 로컬 스토리` : `${title} (${prov}) | 직스테이 로컬`;
   let descText = spot.summary
     ? `${spot.summary} (${addr})`
-    : `${addr} · 주변 맛집·지자체 공식 관광지도·숙소 동선 안내`;
+    : overviewDesc || `${addr} · 주변 맛집·지자체 공식 관광지도·숙소 동선 안내`;
   if (lang === "en") {
     titleText = `${title} (${provEn}) | Jikstay Korea`;
-    descText = spot.en_summary
+    descText = (loc.translated && overviewDesc) || (spot.en_summary
       ? String(spot.en_summary)
-      : `${addr} — Explore official municipal PDF maps, public transit routes, nearby local food & stays in ${provEn}.`;
+      : `${addr} — Explore official municipal PDF maps, public transit routes, nearby local food & stays in ${provEn}.`);
   } else if (lang === "ja") {
-    titleText = `${title}（${prov}）| Jikstay Korea`;
-    descText = `${addr} — 自治体公式観光地図PDF・乗換ルート・周辺グルメ・宿泊ガイド。`;
+    titleText = `${title}（${provLabel}）| Jikstay Korea`;
+    descText = (loc.translated && overviewDesc) || `${addr} — 自治体公式観光地図PDF・乗換ルート・周辺グルメ・宿泊ガイド。`;
   } else if (lang === "zh") {
-    titleText = `${title}（${prov}）| Jikstay 韓國`;
-    descText = `${addr} — 官方旅遊地圖PDF、大眾運輸路線、周邊在地美食與住宿指南。`;
+    titleText = `${title}（${provLabel}）| Jikstay 韓國`;
+    descText = (loc.translated && overviewDesc) || `${addr} — 官方旅遊地圖PDF、大眾運輸路線、周邊在地美食與住宿指南。`;
   }
 
   const encodedId = encodeURIComponent(spotId);
@@ -227,6 +294,7 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko") {
     url: canonicalUrl,
     address: { "@type": "PostalAddress", addressCountry: "KR", addressRegion: prov, streetAddress: addr },
   };
+  if (loc.koTitle && loc.koTitle !== title) jsonLdObj.alternateName = loc.koTitle; // 한국어 이름으로 검색해도 연결
   if (imageUrl) jsonLdObj.image = [imageUrl];
   if (spot.tel) jsonLdObj.telephone = String(spot.tel);
   if (typeof spot.lat === "number" && typeof spot.lng === "number") {
@@ -251,13 +319,27 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko") {
   }
   const safeJsonLd = JSON.stringify(jsonLdObj).replace(/</g, "\\u003c");
   const jsonLdTag = `\n  <script type="application/ld+json">${safeJsonLd}</script>`;
-  const storyBodyHtml = Array.isArray(spot.paragraphs)
-    ? spot.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("")
-    : "";
-  const practicalHtml = Array.isArray(spot.practical_info) && spot.practical_info.length > 0
-    ? `<ul>${spot.practical_info.map((r) => `<li>${escapeHtml(r.label || "")}: ${escapeHtml(r.value || "")}</li>`).join("")}</ul>`
-    : "";
-  const seoNoscript = `<noscript id="jikstay-seo"><article><h1>${escapedTitle}</h1><p>${escapedDesc}</p>${storyBodyHtml}${practicalHtml}</article></noscript>`;
+  const L = seo.LABELS[lang] || seo.LABELS.ko;
+  const seoMain = seo.renderSeoMain({
+    lang,
+    title,
+    lead: loc.pullQuote || "",
+    address: addr,
+    imageUrl,
+    imageAlt: title,
+    paragraphs: loc.paragraphs.length ? loc.paragraphs : loc.overview ? [loc.overview] : [],
+    practical: loc.practical,
+    breadcrumbs: [
+      { href: lang === "ko" ? `${origin}/` : `${origin}/?lang=${lang}`, text: L.home },
+      seo.regionLink(origin, prov, provLabel, lang),
+    ],
+    sections: [
+      {
+        heading: L.nearby,
+        html: seo.linkList(seo.nearbyLinks(origin, lang, data, { id: spotId, province: prov, lat: spot.lat, lng: spot.lng })),
+      },
+    ],
+  });
 
   return template
     .replace(/<html>/i, `<html lang="${htmlLang}">`)
@@ -268,7 +350,7 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko") {
       /<meta\s+property="og:description"\s+content="[^"]*">/,
       `<meta property="og:description" content="${escapedDesc}">${ogImageTag}${ogUrlTag}${hreflangTags}${jsonLdTag}`
     )
-    .replace(/<\/body>/i, `  ${seoNoscript}\n</body>`);
+    .replace(/<\/body>/i, `  ${seoMain}\n</body>`);
 }
 
 function buildPlanOgHtml(template, rawPlan, origin, rawLang = "ko") {
@@ -314,21 +396,23 @@ function buildPlanOgHtml(template, rawPlan, origin, rawLang = "ko") {
     .replace(/<\/body>/i, `  ${noscript}\n</body>`);
 }
 
-function buildRegionOgHtml(template, province, origin, rawLang = "ko") {
+function buildRegionOgHtml(template, province, origin, rawLang = "ko", data = null, staysIndex = null) {
   const lang = normalizeLang(rawLang);
   const htmlLang = lang === "zh" ? "zh-Hant" : lang;
   const provEn = PROVINCE_EN[province] || province;
-  let titleText = `${province} 여행 공식 관광지도·축제·로컬맛집·숙소 총정리 | 직스테이 로컬`;
-  let descText = `${province} 지자체 공식 가이드북(PDF/E-book), 진행 중인 축제·오일장, 로컬 맛집 쿠폰과 공공데이터 등록 숙소를 한눈에 확인하세요.`;
+  const provLabel = provinceLabel(province, lang);
+  // 외국인은 장소 이름보다 '지역 + 할 것·맛집·숙소'로 검색한다 → 제목을 그 검색어에 맞춘다
+  let titleText = `${province} 여행 가볼만한 곳·축제·맛집·숙소 총정리 | 직스테이 로컬`;
+  let descText = `${province} 가볼만한 곳, 진행 중인 축제·오일장, 로컬 맛집, 지자체 공식 가이드북(PDF/E-book)과 공공데이터 등록 숙소를 한눈에 확인하세요.`;
   if (lang === "en") {
-    titleText = `${provEn} Official Tourist Maps PDF, Festivals, Food & Stays | Jikstay Korea`;
-    descText = `Explore ${provEn}, Korea with free official municipal PDF guidebooks, public transit routes, local festivals, restaurants, and stays.`;
+    titleText = `Things to Do in ${provEn}, Korea: Festivals, Local Food & Stays | Jikstay Korea`;
+    descText = `Things to do in ${provEn}, Korea: attractions, festivals happening now, local food and places to stay, plus free official municipal tourist maps (PDF).`;
   } else if (lang === "ja") {
-    titleText = `${province} 公式観光地図PDF・祭り・グルメ・宿泊まとめ | Jikstay Korea`;
-    descText = `${province}の自治体公式ガイドブックPDF、開催中の祭り、地元グルメ、宿泊施設をまとめて検索。`;
+    titleText = `${provLabel}観光 おすすめスポット・祭り・グルメ・宿泊 | Jikstay Korea`;
+    descText = `${provLabel}のおすすめ観光スポット、開催中の祭り、地元グルメ、宿泊施設と自治体公式観光ガイドブックPDFをまとめて紹介。`;
   } else if (lang === "zh") {
-    titleText = `${province} 官方旅遊地圖PDF・慶典・美食・住宿總整理 | Jikstay 韓國`;
-    descText = `一鍵開啟${province}地方政府官方旅遊指南PDF、大眾運輸路線、慶典活動、在地美食與住宿。`;
+    titleText = `${provLabel}旅遊 必去景點・慶典・美食・住宿 | Jikstay 韓國`;
+    descText = `${provLabel}必去景點、正在舉行的慶典、在地美食與住宿，以及地方政府官方旅遊指南PDF一次看。`;
   }
 
   const encodedProv = encodeURIComponent(province);
@@ -355,7 +439,42 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko") {
   };
   const safeJsonLd = JSON.stringify(jsonLdObj).replace(/</g, "\\u003c");
   const jsonLdTag = `\n  <script type="application/ld+json">${safeJsonLd}</script>`;
-  const seoNoscript = `<noscript id="jikstay-seo"><article><h1>${escapedTitle}</h1><p>${escapedDesc}</p></article></noscript>`;
+
+  const L = seo.LABELS[lang] || seo.LABELS.ko;
+  const hub = (data && data.hub) || {};
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
+  const spotLinks = (items, limit) =>
+    items.slice(0, limit).map((x) => ({
+      href: seo.pageUrl(origin, "spot", x.id, lang),
+      text: seo.localizedTitleOf(x.id, String(x.title), lang, data),
+    }));
+  const inProv = (x) => x && x.id && x.title && x.province === province;
+  const festivals = (hub.festivals || [])
+    .filter((x) => inProv(x) && (!x.end_date || String(x.end_date) >= today))
+    .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")));
+  const spots = (hub.spots || []).filter(inProv);
+  const stays = ((staysIndex && staysIndex.items) || [])
+    .filter((x) => x && x.listing_id && x.province === province)
+    .sort((a, b) => (Number(b.curated_score) || 0) - (Number(a.curated_score) || 0))
+    .slice(0, 15)
+    .map((x) => {
+      const t = lang !== "ko" && data && data.i18nCore && data.i18nCore.stays && data.i18nCore.stays[x.listing_id];
+      return { href: seo.pageUrl(origin, "id", x.listing_id, lang), text: (t && t.title) || String(x.title || "") };
+    });
+  const otherRegions = PROVINCES_17.filter((p) => p !== province).map((p) => seo.regionLink(origin, p, provinceLabel(p, lang), lang));
+  const seoMain = seo.renderSeoMain({
+    lang,
+    title: titleText.replace(/\s*\|[^|]*$/, ""),
+    lead: descText,
+    breadcrumbs: [{ href: lang === "ko" ? `${origin}/` : `${origin}/?lang=${lang}`, text: L.home }],
+    sections: [
+      { heading: `${provLabel} · ${L.festivals}`, html: seo.linkList(spotLinks(festivals, 15)) },
+      { heading: `${provLabel} · ${L.attractions}`, html: seo.linkList(spotLinks(spots.filter((x) => x.kind === "attraction"), 30)) },
+      { heading: `${provLabel} · ${L.food}`, html: seo.linkList(spotLinks(spots.filter((x) => x.kind === "food"), 30)) },
+      { heading: `${provLabel} · ${L.stays}`, html: seo.linkList(stays) },
+      { heading: L.regions, html: seo.linkList(otherRegions) },
+    ],
+  });
 
   return template
     .replace(/<html>/i, `<html lang="${htmlLang}">`)
@@ -366,7 +485,7 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko") {
       /<meta\s+property="og:description"\s+content="[^"]*">/,
       `<meta property="og:description" content="${escapedDesc}">${ogUrlTag}${hreflangTags}${jsonLdTag}`
     )
-    .replace(/<\/body>/i, `  ${seoNoscript}\n</body>`);
+    .replace(/<\/body>/i, `  ${seoMain}\n</body>`);
 }
 
 exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => {
@@ -391,7 +510,9 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
         res.status(200).send(template);
         return;
       }
-      const html = buildOgHtml(template, data, effectiveId, origin, rawLang);
+      const lang0 = normalizeLang(rawLang);
+      const seoData = await seo.loadSeoData(origin, lang0, null);
+      const html = buildOgHtml(template, data, effectiveId, origin, rawLang, seoData);
       res.set("Cache-Control", "public, max-age=300, s-maxage=600");
       res.status(200).send(html);
       return;
@@ -408,7 +529,8 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
       const snap = await getFirestore().collection("spots").doc(rawSpot).get();
       const data = snap.exists ? snap.data() : null;
       if (data && data.status === "active") {
-        const html = buildSpotOgHtml(template, data, rawSpot, origin, rawLang);
+        const seoData = await seo.loadSeoData(origin, normalizeLang(rawLang), seo.provinceCode(String(data.province || "")));
+        const html = buildSpotOgHtml(template, data, rawSpot, origin, rawLang, seoData);
         res.set("Cache-Control", "public, max-age=300, s-maxage=600");
         res.status(200).send(html);
         return;
@@ -427,7 +549,11 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   }
 
   if (PROVINCES_17.includes(rawRegion)) {
-    const html = buildRegionOgHtml(template, rawRegion, origin, rawLang);
+    const [seoData, staysIndex] = await Promise.all([
+      seo.loadSeoData(origin, normalizeLang(rawLang), null),
+      seo.fetchJsonCached(`${origin}/data/public_stays_index.json`),
+    ]);
+    const html = buildRegionOgHtml(template, rawRegion, origin, rawLang, seoData, staysIndex);
     res.set("Cache-Control", "public, max-age=600, s-maxage=1200");
     res.status(200).send(html);
     return;
@@ -455,7 +581,9 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
       .replace(/<meta name="description" content="[^"]*"\s*\/?>/i, `<meta name="description" content="${d}" />`)
       .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${t}" />`)
       .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/i, `<meta property="og:description" content="${d}" />`)
-      .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/i, `<meta property="og:url" content="${escapeHtml(canon)}" />`);
+      .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/i, `<meta property="og:url" content="${escapeHtml(canon)}" />`)
+      .replace(/<\/body>/i, `  ${buildHomeSeoMain(origin, lang, homeTitles[lang] || homeTitles.en, homeDescs[lang] || homeDescs.en)}
+</body>`);
     res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=3600");
     res.status(200).send(html);
     return;
@@ -463,8 +591,25 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
 
   // 기본 홈(/)은 브라우저 재검증(max-age=0) + 글로벌 CDN 엣지 캐시(s-maxage=300)로 콜드스타트 없이 즉시 응답
   res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=3600");
-  res.status(200).send(template);
+  res.status(200).send(
+    template.replace(
+      /<\/body>/i,
+      `  ${buildHomeSeoMain(origin, "ko", "직스테이 로컬 — 전국 17개 시·도 여행 정보", "공공데이터에 등록된 숙소와 전국 17개 시·도의 볼거리·먹거리·축제, 지자체 공식 관광 가이드북을 한 곳에서 찾아보세요.")}
+</body>`
+    )
+  );
 });
+
+/** 홈: 17개 시·도 여행 정보 페이지로 가는 링크 (검색엔진이 지역 페이지를 찾아가는 입구) */
+function buildHomeSeoMain(origin, lang, title, lead) {
+  const L = seo.LABELS[lang] || seo.LABELS.ko;
+  return seo.renderSeoMain({
+    lang,
+    title,
+    lead,
+    sections: [{ heading: L.regions, html: seo.linkList(PROVINCES_17.map((p) => seo.regionLink(origin, p, provinceLabel(p, lang), lang))) }],
+  });
+}
 
 /**
  * 숙소 외부 연결 리다이렉트 (/go?id=stay_xxx)
@@ -513,8 +658,15 @@ exports.goRedirect = onRequest({ region: "asia-northeast3" }, async (req, res) =
   }
 });
 
+/** 문서가 마지막으로 바뀐 날 (검색엔진이 다시 가져올 페이지를 고르는 데 쓴다) */
+function lastmodTag(doc) {
+  const t = doc && doc.updateTime && typeof doc.updateTime.toDate === "function" ? doc.updateTime.toDate() : null;
+  return t ? `\n    <lastmod>${t.toISOString().slice(0, 10)}</lastmod>` : "";
+}
+
 /**
  * 국내(네이버) + 해외(구글/빙) 다국어 Programmatic SEO 사이트맵 (/sitemap.xml)
+ * 상한 없음: 볼거리·축제는 매주 늘어난다. 사이트맵 한 파일은 50,000 URL 까지 가능하다.
  */
 exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res) => {
   const proto = req.get("x-forwarded-proto") || "https";
@@ -524,8 +676,8 @@ exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res)
   try {
     const db = getFirestore();
     const [listingSnap, spotSnap] = await Promise.all([
-      db.collection("listings").where("status", "==", "active").limit(2500).get(),
-      db.collection("spots").where("status", "==", "active").limit(1000).get(),
+      db.collection("listings").where("status", "==", "active").get(),
+      db.collection("spots").where("status", "==", "active").get(),
     ]);
     const urls = [];
 
@@ -551,12 +703,12 @@ exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res)
       const d = doc.data() || {};
       const paramKey = d.is_story === true ? "story" : "spot";
       const q = `${paramKey}=${encodeURIComponent(doc.id)}`;
-      urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>\n${buildAlternates(q)}\n  </url>`);
+      urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>${lastmodTag(doc)}\n${buildAlternates(q)}\n  </url>`);
     });
     listingSnap.forEach((doc) => {
       if (!LISTING_ID_RE.test(doc.id)) return;
       const q = `id=${encodeURIComponent(doc.id)}`;
-      urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>\n${buildAlternates(q)}\n  </url>`);
+      urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>${lastmodTag(doc)}\n${buildAlternates(q)}\n  </url>`);
     });
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join(
@@ -585,3 +737,6 @@ exports.buildRegionOgHtml = buildRegionOgHtml;
 exports.escapeHtml = escapeHtml;
 exports.directBookingUrl = directBookingUrl;
 exports.normalizeLang = normalizeLang;
+exports.shortProvince = shortProvince;
+exports.cleanListSummary = cleanListSummary;
+exports.lastmodTag = lastmodTag;

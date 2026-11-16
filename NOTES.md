@@ -73,9 +73,9 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 
 | 함수 | 경로 | 역할 |
 | --- | --- | --- |
-| `serveApp` | `**` | Flutter `index.html` 템플릿에 `?id=` `?spot=` `?story=` `?region=` 별 OG·hreflang·JSON-LD·noscript 본문 주입 |
+| `serveApp` | `**` | Flutter `index.html` 템플릿에 `?id=` `?spot=` `?story=` `?region=` 별 OG·hreflang·JSON-LD 와 검색엔진용 본문 `<main id="jikstay-seo">`(그 언어의 이름·설명·본문·이용 안내·주변/지역 링크) 주입. 번역은 호스팅의 `data/i18n/{lang}/` 분할 파일을 받아 10분 캐시(`seo_content.js`). Flutter 는 캔버스라 이 본문이 없으면 구글이 읽을 내용이 없다 |
 | `goRedirect` | `/go?id=` | 숙소 외부 연결: 봇이 아니면 `outbound_clicks` +1(통계) 후 운영자 직거래 링크 → 없으면 네이버 지도 검색으로 이동. 과금 없음 |
-| `serveSitemap` / `serveRobots` | `/sitemap.xml` `/robots.txt` | 동적 사이트맵(숙소 2,500·스팟 1,000 상한) |
+| `serveSitemap` / `serveRobots` | `/sitemap.xml` `/robots.txt` | 동적 사이트맵(상한 없음, `lastmod`=문서 수정일) |
 
 `firebase/public` 에 `index.html` 이 있으면 rewrite 가 무시되어 위 주입이 멈춘다 → 배포 스크립트·CI 모두 index.html 을 빼고 복사한다.
 
