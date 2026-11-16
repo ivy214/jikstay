@@ -47,11 +47,18 @@ jobs:
 
       - name: Firebase Admin credentials (Firestore spots·listings 갱신용)
         id: admin
+        continue-on-error: true  # 키가 잘못돼도 축제 갱신·커밋은 계속하고, 끝에서 실패로 표시
         env:
           FB_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JIKSTAY }}
         run: |
           if [ -n "$FB_SA" ]; then
             printf '%s' "$FB_SA" > "$RUNNER_TEMP/firebase-admin.json"
+            # 붙여 넣기 실수(일부만 복사·앞뒤 문자)를 바로 알 수 있게 형식만 검사하고 계정 이름을 남긴다 (키 값은 출력 안 함)
+            if ! python -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('type')=='service_account' and d.get('private_key') and d.get('client_email'); print('서비스 계정:', d['client_email'], '/ 프로젝트:', d.get('project_id'))" "$RUNNER_TEMP/firebase-admin.json"; then
+              echo "::error::FIREBASE_SERVICE_ACCOUNT_JIKSTAY 시크릿이 서비스 계정 키 JSON 형식이 아닙니다. 키 파일 내용 전체({ 부터 } 까지)를 다시 등록하세요."
+              rm -f "$RUNNER_TEMP/firebase-admin.json"
+              exit 1
+            fi
             echo "FIREBASE_CREDENTIALS=$RUNNER_TEMP/firebase-admin.json" >> "$GITHUB_ENV"
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
@@ -186,13 +193,14 @@ jobs:
         run: rm -f "$RUNNER_TEMP/firebase-admin.json"
 
       - name: Fail if spot refresh or license recheck failed
-        if: steps.spots.outcome == 'failure' || steps.licenses.outcome == 'failure'
+        # !cancelled() 가 없으면 앞 단계(배포 등)가 실패했을 때 이 검사 자체가 건너뛰어진다
+        if: ${{ !cancelled() && (steps.admin.outcome == 'failure' || steps.spots.outcome == 'failure' || steps.licenses.outcome == 'failure') }}
         run: |
-          echo "::error::볼거리·먹거리 갱신(${{ steps.spots.outcome }}) 또는 숙소 인허가 재확인(${{ steps.licenses.outcome }})이 실패했습니다. 나머지 데이터는 커밋·배포됐습니다."
+          echo "::error::Firebase 키(${{ steps.admin.outcome }}) · 볼거리·먹거리 갱신(${{ steps.spots.outcome }}) · 숙소 인허가 재확인(${{ steps.licenses.outcome }}) 중 실패한 단계가 있습니다. 나머지 데이터는 커밋됐습니다."
           exit 1
 
       - name: Fail if translation failed
-        if: steps.translate.outcome == 'failure'
+        if: ${{ !cancelled() && steps.translate.outcome == 'failure' }}
         run: |
           echo "::error::다국어 번역 단계가 실패했습니다. 축제 데이터는 커밋·배포됐지만 번역은 이전 버전입니다."
           exit 1
