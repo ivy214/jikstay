@@ -115,15 +115,34 @@ def fetch_new_registrations(hub: dict[str, Any], existing_cids: set[str]) -> lis
     return out
 
 
-def _firestore_ready() -> bool:
+def _firestore_writable() -> bool:
+    """읽기만으로는 권한을 알 수 없으므로 실행 기록 문서 하나를 실제로 써 본다."""
     try:
+        from firebase_admin import firestore
+
         from firebase_client import db
 
-        db().collection("spots").limit(1).get()
+        db().collection("meta").document("weekly_spot_refresh").set(
+            {"started_at": firestore.SERVER_TIMESTAMP}, merge=True)
         return True
     except Exception as exc:  # noqa: BLE001
-        print(f"  [Firestore 생략] {str(exc)[:160]}")
+        print(f"  [Firestore 쓰기 불가] {str(exc)[:200]}")
         return False
+
+
+def find_missing_in_firestore(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """허브에 있는데 Firestore spots 문서가 없는 항목 (후기·클릭 집계가 안 되는 상태).
+    이전 실행에서 업로드가 빠졌거나, 주간 축제 갱신(weekly_hub_refresh)으로 들어온 축제 등."""
+    from firebase_client import db
+
+    col = db().collection("spots")
+    cands = [x for x in items if str(x.get("id") or "").startswith("spot_")]
+    missing: list[dict[str, Any]] = []
+    for i in range(0, len(cands), 200):
+        chunk = cands[i : i + 200]
+        exists = {s.id for s in db().get_all([col.document(str(x["id"])) for x in chunk]) if s.exists}
+        missing += [x for x in chunk if str(x["id"]) not in exists]
+    return missing
 
 
 def mark_closed_in_firestore(spots: list[dict[str, Any]]) -> None:
@@ -149,6 +168,10 @@ def main() -> None:
     args = ap.parse_args()
 
     _load_env()
+    use_fs = not args.no_firestore
+    if use_fs and not args.dry_run and not _firestore_writable():
+        # 허브만 바꾸고 Firestore 문서를 못 만들면 새 항목은 후기·클릭이 영영 안 된다 → 아무것도 바꾸지 않고 실패
+        raise SystemExit("[weekly-spots] Firestore 에 쓸 수 없어 중단 (권한 확인 · 허브만 갱신하려면 --no-firestore)")
     if _tour_get("ldongCode2", {"numOfRows": 1, "pageNo": 1}) is None:
         print("[weekly-spots] TourAPI 응답 없음 (키 오류 또는 호출 한도) — 변경 없이 종료")
         return
@@ -173,23 +196,41 @@ def main() -> None:
         print(f"  신규: {s['province']} {s['kind']} {s['title']}")
 
     new_items = [*hp_spots, *new_regs]
+    added = [*new_items, *hp_events]
     print(f"[weekly-spots] 결과: 삭제 {len(closed)} · 반값여행 시·군 보충 {len(hp_spots)} · 축제 {len(hp_events)} · 신규 등록 {len(new_regs)}")
-    if args.dry_run or not (closed or new_items or hp_events):
+
+    # 기존 허브 항목 중 Firestore 문서가 없는 것 (새 항목은 아래에서 함께 올라감)
+    missing = find_missing_in_firestore([*(hub.get("spots") or []), *(hub.get("festivals") or [])]) if use_fs else []
+    if missing:
+        print(f"[weekly-spots] Firestore 문서 없는 기존 항목 {len(missing)}곳 → 보충")
+    if args.dry_run or not (closed or added or missing):
         return
 
-    if new_items or hp_events:
-        enrich_spots_and_festivals_details([*new_items, *hp_events], cache_path=str(DETAIL_CACHE))
-    hub["spots"] = [*(hub.get("spots") or []), *new_items]
-    hub["festivals"] = [*(hub.get("festivals") or []), *hp_events]
-    hub["updated_at"] = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
-    HUB_PATH.write_text(json.dumps(hub, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"[weekly-spots] 저장: {HUB_PATH.name} ({HUB_PATH.stat().st_size / 1024:.0f} KB)")
+    if added:
+        enrich_spots_and_festivals_details(added, cache_path=str(DETAIL_CACHE))
 
-    if not args.no_firestore and _firestore_ready():
-        if new_items or hp_events:
-            upload_spots_to_firestore([*new_items, *hp_events])
+    # Firestore 를 먼저 쓴다: 실패하면 허브도 바꾸지 않아 둘이 어긋나지 않고, 다음 주에 다시 시도된다.
+    # upload_spots_to_firestore 는 기존 클릭수·후기 집계를 보존하는 업서트라 다시 올려도 안전하다.
+    if use_fs:
+        if added or missing:
+            upload_spots_to_firestore([*added, *missing])
         if closed:
             mark_closed_in_firestore(closed)
+        from firebase_admin import firestore
+
+        from firebase_client import db
+
+        db().collection("meta").document("weekly_spot_refresh").set({
+            "finished_at": firestore.SERVER_TIMESTAMP,
+            "closed": len(closed), "added": len(added), "backfilled": len(missing),
+        }, merge=True)
+
+    if closed or added:
+        hub["spots"] = [*(hub.get("spots") or []), *new_items]
+        hub["festivals"] = [*(hub.get("festivals") or []), *hp_events]
+        hub["updated_at"] = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
+        HUB_PATH.write_text(json.dumps(hub, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(f"[weekly-spots] 저장: {HUB_PATH.name} ({HUB_PATH.stat().st_size / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":

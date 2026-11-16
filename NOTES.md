@@ -83,12 +83,13 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 | `curate_public_stays.py` | 행안부 인허가 + TourAPI + 네이버 블로그로 권역×업종별 숙소 선별 → `public_stays_index.json` (+ `--upload`) |
 | `build_travel_hub.py` | 17개 시·도 E-book·볼거리·먹거리·축제·코스 허브 생성 → `public_travel_hub.json` (+ `--upload-spots`) |
 | `weekly_hub_refresh.py` | 주간: 진행 중 축제 갱신·상세 보강 (CI 에서는 `--no-translate` 후 번역을 별도 단계로) |
+| `weekly_spot_refresh.py` | 주간: 볼거리·먹거리 삭제 확인·반값여행 시·군 보충·신규 등록 추가 (`--dry-run` 으로 미리 보기) |
 | `collect_half_price_spots.py` | 반값여행 대상 25개 시·군별 볼거리 6·먹거리 4·축제(조회순)를 시·군 코드로 추가 수집(`half_price_city` 표시, `--upload` 로 Firestore 문서 생성). 허브를 `build_travel_hub.py` 로 새로 만들면 다시 실행 |
 | `translate_hub.py` | EN/JA/ZH 증분 번역 (Gemini, 키 없으면 OpenAI) |
 | `enrich_naver_local.py` | 네이버 지역 검색으로 `naver_link`(공식 링크, OTA 제외)·`naver_category` 보강. 허브/색인을 다시 만들면 재실행(캐시로 즉시 복원) |
 | `clean_naver_reviews.py` | 장소와 무관한 네이버 방문기 제거(`is_relevant_place_snippet`), `--refetch` 로 빈 곳 재검색 |
 | `split_hub.py` | 빌드 직전 허브 분할 (deploy.ps1·CI 가 자동 실행) |
-| `license_check.py` | 인허가 대조. `recheck` = 공개 숙소 전체 폐업·휴업 재확인 → 확실하면 `suspended`, 애매하면 `needs_review` |
+| `license_check.py` | 인허가 대조. `recheck` = 공개 숙소 전체 폐업·휴업 재확인 → 확실하면 `suspended`, 애매하면 `needs_review`. 상태가 바뀐 숙소만 저장(100건마다), 조회 오류가 20% 넘으면 오류 건은 표시 안 하고 실패 처리, 실행 기록은 `meta/license_recheck`. `--prune-index`/`prune-index` = 정적 색인을 Firestore 상태에 맞춤(노출 중지 제외 → `backend/stays_index_suspended.json` 보류, 재개되면 복원) |
 | `enrich_ebooks_and_spots.py` · `upgrade_web_magazines_and_links.py` · `fetch_chapter_media.py` | 지자체 E-book·웹매거진·챕터 사진 보강 (수동 실행) |
 | `generate_weekly_digest.py` · `notify_indexnow.py` | 주간 SNS 다이제스트 · IndexNow 제출 |
 | `admin_app.py` | 로컬 관리자(127.0.0.1:8765, CSRF): 숙소·후기 삭제·노출 상태, 스팟 쿠폰, 통계, 공공 수집 실행, 재확인 |
@@ -103,8 +104,13 @@ backend\.venv\Scripts\python backend\admin_app.py
 ```
 
 - **CI (`ci.yml`, push·PR)**: Flutter analyze/test · Functions 단위 테스트 · 보안 규칙 에뮬레이터 테스트(`demo-jikstay`) · 백엔드 단위 테스트.
-- **주간 (`weekly-travel-hub-update.yml`, 월 06:00 KST)**: 축제 갱신 → 번역 → 다이제스트 → 데이터 커밋.
-  `FIREBASE_SERVICE_ACCOUNT_JIKSTAY` 시크릿이 있으면 Hosting(+템플릿 바뀌면 Functions)까지 배포. 번역 실패 시 데이터는 커밋하고 워크플로만 실패 표시.
+- **주간 (`weekly-travel-hub-update.yml`, 월 06:00 KST)**: 축제 갱신 → 볼거리·먹거리 갱신(`weekly_spot_refresh.py`) →
+  숙소 인허가 재확인(`license_check.py recheck --prune-index`, 약 70분) → 번역 → 다이제스트 → 데이터 커밋(허브·숙소 색인).
+  `FIREBASE_SERVICE_ACCOUNT_JIKSTAY` 시크릿이 있으면 Hosting(+템플릿 바뀌면 Functions)까지 배포하고, 같은 키로 Firestore 도 갱신한다
+  (키에 Firestore 쓰기 권한이 없으면 인허가 재확인 단계가 실패로 표시됨). 번역·볼거리·인허가 단계가 실패해도 나머지 데이터는 커밋하고 워크플로만 실패 표시.
+  - 볼거리·먹거리: 관광공사 목록에서 사라진 곳 제거(Firestore `closed`) · 반값여행 시·군 보충 · 최근 14일 신규 등록 시·도별 종류당 2곳(시·도당 40곳 상한)
+    · Firestore 문서가 없는 허브 항목(주간 축제 포함) 보충. Firestore 쓰기를 먼저 하고 허브를 저장하며, 쓰기 권한이 없으면 아무것도 바꾸지 않고 실패
+  - 숙소: 폐업·휴업이 확실할 때만 `suspended` + 정적 색인에서 제외. 못 찾음·불확실·API 오류는 `needs_review` 표시만(관리자 화면에서 확인)
 
 ### 환경변수 (`.env`, GitHub Actions 시크릿은 같은 이름)
 

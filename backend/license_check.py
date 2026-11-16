@@ -22,8 +22,8 @@ API 대신 공공데이터포털에서 받은 CSV로 대조할 수도 있다: --
 사용
   python license_check.py probe 농어촌민박업 "바다집"
   python license_check.py check stay_pub_xxxxxxxx [--csv data.csv]   # 숙소 1곳 대조(저장 안 함)
-  python license_check.py recheck [--csv data.csv] [--prune-index]    # 공개 중인 전체 숙소 재확인 (+ 정적 색인 정리)
-  python license_check.py prune-index                                  # 정적 색인에서 노출 중지 숙소만 제외
+  python license_check.py recheck [--csv data.csv] [--prune-index]    # 공개 중인 전체 숙소 재확인 (+ 정적 색인 맞춤)
+  python license_check.py prune-index                                  # 정적 색인을 Firestore 상태에 맞춤(제외·복원)
 """
 import argparse
 import csv
@@ -89,17 +89,23 @@ def _api_url(license_type: str) -> str | None:
     return os.environ.get(env, default) if env else None
 
 
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
 def _get_with_retry(url: str, params: dict, tries: int = 3, timeout: int = 30) -> requests.Response:
-    """인허가 API 는 동시 조회 시 응답이 느려 시간 초과가 잦다 → 잠깐 쉬었다가 다시 시도한다."""
+    """인허가 API 는 동시 조회 시 응답이 느려 시간 초과·5xx·429 가 잦다 → 잠깐 쉬었다가 다시 시도한다.
+    (일일 호출 한도 초과는 200 + 오류 본문이라 재시도해도 소용없으므로 그대로 돌려준다.)"""
     import time
 
     for attempt in range(tries):
         try:
-            return requests.get(url, params=params, timeout=timeout)
+            r = requests.get(url, params=params, timeout=timeout)
+            if r.status_code not in RETRY_STATUS or attempt == tries - 1:
+                return r
         except requests.RequestException:
             if attempt == tries - 1:
                 raise
-            time.sleep(3 * (attempt + 1))
+        time.sleep(3 * (attempt + 1))
     raise RuntimeError("unreachable")
 
 
@@ -256,85 +262,175 @@ def check_listing(doc: dict, csv_path: str | None = None) -> dict:
     return out
 
 
-def recheck_all(csv_path: str | None = None, workers: int = 1, max_error_ratio: float = 0.5):
+def plan_update(doc: dict, res: dict) -> dict | None:
+    """대조 결과로 숙소 문서에서 바꿀 필드. 이미 같은 상태면 None(쓰기 생략).
+    매주 전체 숙소를 조회하지만, Firestore 에는 상태가 바뀐 숙소만 쓴다."""
+    result = res.get("result")
+    if result == "closed":
+        return {
+            "status": "suspended",
+            "suspended_reason": f"공공 인허가 데이터 영업상태: {res.get('matched_status')}",
+            "suspended_at": firestore.SERVER_TIMESTAMP,
+            "last_license_check": res,
+        }
+    if result == "match":
+        if doc.get("needs_review") or "needs_review_reason" in doc or "needs_review_detail" in doc:
+            return {
+                "needs_review": False,
+                "needs_review_reason": firestore.DELETE_FIELD,
+                "needs_review_detail": firestore.DELETE_FIELD,
+            }
+        return None
+    # not_found / uncertain / error — 사유 분류가 같으면 다시 쓰지 않는다 (오류 문구는 매번 달라 비교에서 뺌)
+    if doc.get("needs_review") is True and doc.get("needs_review_reason") == result:
+        return None
+    upd = {"needs_review": True, "needs_review_reason": result}
+    upd["needs_review_detail"] = str(res["error"])[:300] if res.get("error") else firestore.DELETE_FIELD
+    return upd
+
+
+def recheck_all(csv_path: str | None = None, workers: int = 1, max_error_ratio: float = 0.2,
+                flush_every: int = 100) -> dict:
     """공개 중인 숙소를 다시 대조. 폐업·휴업이 확실하면 노출 중지(suspended).
     판단 불가(not_found/uncertain/error)는 자동 조치하지 않고 관리자 확인 대상으로 표시만 한다.
-    API 오류가 전체의 max_error_ratio 를 넘으면(키 오류·호출 한도 등) 오류 건은 '확인 필요'로 표시하지 않는다."""
+
+    - 결과는 flush_every 건마다 바로 저장한다(도중에 끊겨도 그때까지의 결과는 남음).
+    - 저장 직전에 문서를 다시 읽어, 그사이 삭제됐거나 관리자가 상태를 바꾼 숙소는 건너뛴다.
+    - 상태가 바뀐 숙소만 쓴다(plan_update).
+    - API·CSV 조회 오류는 끝까지 모아 두었다가, 오류 비율이 max_error_ratio 이하일 때만 '확인 필요'로 표시한다
+      (키 오류·호출 한도·장애로 수백 곳이 한꺼번에 표시되지 않도록)."""
     from concurrent.futures import ThreadPoolExecutor
 
     from firebase_client import db
 
     snaps = list(db().collection("listings").where("status", "==", "active").stream())
+    counts = {"checked": 0, "match": 0, "closed": 0, "review": 0, "error": 0,
+              "written": 0, "unchanged": 0, "skipped_stale": 0, "skipped_error": 0}
 
     def _work(snap):
-        return snap, check_listing(snap.to_dict(), csv_path)
+        try:
+            return snap, check_listing(snap.to_dict() or {}, csv_path)
+        except Exception as e:  # noqa: BLE001
+            return snap, {"result": "error", "error": str(e)[:300], "source": "csv" if csv_path else "api"}
 
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        results = list(pool.map(_work, snaps))
-
-    errors = sum(1 for _, r in results if r["result"] == "error")
-    api_broken = bool(results) and errors / len(results) > max_error_ratio
-    if api_broken:
-        print(f"[경고] 인허가 API 오류 {errors}/{len(results)}건 — 오류 건은 표시하지 않고 넘어갑니다.")
-
-    counts = {"closed": 0, "match": 0, "review": 0, "skipped_error": 0}
-    batch, ops = db().batch(), 0
-    for snap, res in results:
-        doc = snap.to_dict()
-        if res["result"] == "closed":
-            batch.update(snap.reference, {
-                "status": "suspended",
-                "suspended_reason": f"공공 인허가 데이터 영업상태: {res.get('matched_status')}",
-                "suspended_at": firestore.SERVER_TIMESTAMP,
-                "last_license_check": res,
-            })
-            counts["closed"] += 1
-            print(f"노출 중지: {snap.id} {doc.get('title')} ({res.get('matched_status')})")
-        elif res["result"] == "error" and api_broken:
-            counts["skipped_error"] += 1
-            continue
-        elif res["result"] != "match":
-            batch.update(snap.reference, {"needs_review": True, "needs_review_reason": res.get("error") or res["result"]})
-            counts["review"] += 1
-        else:
-            batch.update(snap.reference, {
-                "needs_review": False,
-                "needs_review_reason": firestore.DELETE_FIELD,
-                "last_license_check_at": firestore.SERVER_TIMESTAMP,
-            })
-            counts["match"] += 1
-        ops += 1
-        if ops >= 400:
+    def _flush(items):
+        if not items:
+            return
+        fresh = {s.id: s for s in db().get_all([snap.reference for snap, _ in items])}
+        batch, ops = db().batch(), 0
+        for snap, res in items:
+            cur = fresh.get(snap.id)
+            cur_doc = (cur.to_dict() or {}) if cur is not None and cur.exists else None
+            if cur_doc is None or cur_doc.get("status") != "active":
+                counts["skipped_stale"] += 1
+                continue
+            upd = plan_update(cur_doc, res)
+            if upd is None:
+                counts["unchanged"] += 1
+                continue
+            batch.update(cur.reference, upd)
+            ops += 1
+            title = cur_doc.get("title")
+            if res["result"] == "closed":
+                print(f"노출 중지: {snap.id} {title} ({res.get('matched_status')})")
+            elif res["result"] == "match":
+                print(f"확인 해제: {snap.id} {title}")
+            else:
+                print(f"확인 필요: {snap.id} {title} ({res['result']}{': ' + str(res['error'])[:80] if res.get('error') else ''})")
+        if ops:
             batch.commit()
-            batch, ops = db().batch(), 0
-    if ops:
-        batch.commit()
-    print(f"재확인 완료: 정상 {counts['match']} · 노출 중지 {counts['closed']} · 확인 필요 {counts['review']}"
-          + (f" · API 오류로 건너뜀 {counts['skipped_error']}" if counts["skipped_error"] else ""))
+            counts["written"] += ops
+
+    pending, deferred = [], []
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        for snap, res in pool.map(_work, snaps):  # 끝난 순서가 아니라 제출 순서로 받지만, 조회는 병렬로 진행된다
+            counts["checked"] += 1
+            r = res["result"]
+            counts["review" if r in ("not_found", "uncertain") else r] += 1
+            if r == "error" and res.get("source"):  # 조회 오류(상호·업종 누락 같은 문서 문제는 바로 표시)
+                deferred.append((snap, res))
+                continue
+            pending.append((snap, res))
+            if len(pending) >= flush_every:
+                _flush(pending)
+                pending = []
+    _flush(pending)
+
+    api_errors = len(deferred)
+    api_broken = counts["checked"] > 0 and api_errors / counts["checked"] > max_error_ratio
+    if api_broken:
+        counts["skipped_error"] = api_errors
+        print(f"[경고] 인허가 조회 오류 {api_errors}/{counts['checked']}건(기준 {max_error_ratio:.0%} 초과) "
+              "— 키·호출 한도·API 장애로 보고 오류 건은 표시하지 않습니다.")
+    else:
+        for i in range(0, len(deferred), flush_every):
+            _flush(deferred[i:i + flush_every])
+
+    summary = (f"재확인 완료: {counts['checked']}곳 조회 · 정상 {counts['match']} · 노출 중지 {counts['closed']} · "
+               f"판단 불가 {counts['review']} · 오류 {counts['error']} → 저장 {counts['written']}건 "
+               f"(변화 없음 {counts['unchanged']} · 도중 변경으로 건너뜀 {counts['skipped_stale']}"
+               + (f" · 오류 표시 생략 {counts['skipped_error']}" if counts["skipped_error"] else "") + ")")
+    print(summary)
+    try:  # 실행 기록은 숙소마다가 아니라 문서 하나에만 남긴다
+        db().collection("meta").document("license_recheck").set(
+            {**counts, "api_broken": api_broken, "source": "csv" if csv_path else "api",
+             "finished_at": firestore.SERVER_TIMESTAMP})
+    except Exception as e:  # noqa: BLE001
+        print(f"[경고] 실행 기록 저장 실패: {str(e)[:160]}")
+    if api_broken:
+        raise RuntimeError(summary + " — 인허가 조회 오류가 많아 일부만 반영됨")
     return counts
 
 
-INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "web", "data", "public_stays_index.json")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+INDEX_PATH = os.path.join(_HERE, "..", "app", "web", "data", "public_stays_index.json")
+# 노출 중지로 색인에서 뺀 숙소 원본. 다시 active 가 되면 여기서 색인으로 되돌린다.
+HELD_PATH = os.path.join(_HERE, "stays_index_suspended.json")
 
 
-def prune_static_index(index_path: str = INDEX_PATH) -> int:
-    """정적 숙소 색인(public_stays_index.json)에서 Firestore 상태가 active 가 아닌 숙소(노출 중지 등)를 뺀다.
-    앱은 목록·지도를 이 색인으로 그리므로, 노출 중지가 화면에도 반영되려면 이 단계가 필요하다.
-    Firestore 에 문서가 없는 항목은 판단할 수 없어 그대로 둔다."""
+def plan_index_sync(items: list[dict], held: list[dict], status: dict[str, str]) -> tuple[list[dict], list[dict], int, int]:
+    """(새 색인 항목, 새 보류 항목, 뺀 수, 되돌린 수).
+    - 색인: Firestore 상태가 active 가 아닌 숙소를 뺀다(문서가 없으면 판단할 수 없어 그대로 둔다).
+    - 보류: Firestore 에서 다시 active 가 된 숙소는 색인으로 되돌린다.
+      색인을 새로 만들어(curate_public_stays) 이미 색인에 다시 있는 숙소는 보류에서 지운다."""
+    def lid(it):
+        return str(it.get("listing_id"))
+
+    kept = [it for it in items if status.get(lid(it), "active") == "active"]
+    removed = [it for it in items if status.get(lid(it), "active") != "active"]
+    in_index = {lid(it) for it in items}
+    restore = [it for it in held if lid(it) not in in_index and status.get(lid(it)) == "active"]
+    restored_ids = {lid(it) for it in restore}
+    new_held = [it for it in held if lid(it) not in in_index and lid(it) not in restored_ids]
+    held_ids = {lid(it) for it in new_held}
+    new_held += [it for it in removed if lid(it) not in held_ids]
+    return kept + restore, new_held, len(removed), len(restore)
+
+
+def sync_static_index(index_path: str = INDEX_PATH, held_path: str = HELD_PATH) -> tuple[int, int]:
+    """정적 숙소 색인(public_stays_index.json)을 Firestore 숙소 상태에 맞춘다.
+    앱은 목록·지도를 이 색인으로 그리므로, 노출 중지·재개가 화면에 반영되려면 이 단계(+배포)가 필요하다."""
     from firebase_client import db
 
     with open(index_path, encoding="utf-8") as f:
         data = json.load(f)
+    held: list[dict] = []
+    if os.path.exists(held_path):
+        with open(held_path, encoding="utf-8") as f:
+            held = (json.load(f) or {}).get("items") or []
     items = data.get("items") or []
     status = {s.id: (s.to_dict() or {}).get("status") for s in db().collection("listings").select(["status"]).stream()}
-    kept = [it for it in items if status.get(str(it.get("listing_id")), "active") == "active"]
-    removed = len(items) - len(kept)
-    if removed:
-        data["items"] = kept
+    new_items, new_held, removed, restored = plan_index_sync(items, held, status)
+
+    if removed or restored:
+        data["items"] = new_items
         with open(index_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"정적 숙소 색인: {len(items)}곳 중 노출 중지 {removed}곳 제외 → {len(kept)}곳")
-    return removed
+    if new_held != held:
+        with open(held_path, "w", encoding="utf-8") as f:
+            json.dump({"items": new_held}, f, ensure_ascii=False, indent=1)
+    print(f"정적 숙소 색인: 노출 중지 {removed}곳 제외 · 재개 {restored}곳 복원 → {len(new_items)}곳 (보류 {len(new_held)}곳)")
+    return removed, restored
 
 
 if __name__ == "__main__":
@@ -349,8 +445,9 @@ if __name__ == "__main__":
     p = sub.add_parser("recheck", help="공개 숙소 전체 재확인 (폐업·휴업 → 노출 중지)")
     p.add_argument("--csv")
     p.add_argument("--workers", type=int, default=4, help="동시 조회 수")
-    p.add_argument("--prune-index", action="store_true", help="끝나면 정적 숙소 색인에서 노출 중지 숙소 제외")
-    sub.add_parser("prune-index", help="정적 숙소 색인에서 노출 중지 숙소 제외")
+    p.add_argument("--prune-index", action="store_true",
+                   help="끝나면 정적 숙소 색인을 Firestore 상태에 맞춤(노출 중지 제외·재개 복원)")
+    sub.add_parser("prune-index", help="정적 숙소 색인을 Firestore 상태에 맞춤(노출 중지 제외·재개 복원)")
     a = ap.parse_args()
 
     if a.cmd == "probe":
@@ -365,8 +462,11 @@ if __name__ == "__main__":
             raise SystemExit(f"숙소 없음: {a.listing_id}")
         print(json.dumps(check_listing(snap.to_dict(), a.csv), ensure_ascii=False, indent=2, default=str))
     elif a.cmd == "prune-index":
-        prune_static_index()
+        sync_static_index()
     else:
-        recheck_all(a.csv, workers=a.workers)
-        if a.prune_index:
-            prune_static_index()
+        try:
+            recheck_all(a.csv, workers=a.workers)
+        finally:
+            # 오류가 많아 실패로 끝나도, 그때까지 저장된 노출 중지는 색인에 반영한다
+            if a.prune_index:
+                sync_static_index()

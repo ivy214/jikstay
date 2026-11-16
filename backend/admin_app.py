@@ -388,15 +388,23 @@ def review():
 <form method=post action="/recheck"><input type=hidden name=csrf value="{{csrf}}">
 CSV(선택) <input type=text name=csv> <button class=primary>공개 숙소 전체 재확인 실행</button></form>
 <h3>노출 중지 (폐업·휴업 확인)</h3><ul>{% for id, d in suspended %}<li><a href="/listing/{{id}}">{{d.title}}</a> — {{d.suspended_reason}}</li>{% else %}<li>없음</li>{% endfor %}</ul>
-<h3>판단 불가 (직접 확인)</h3><ul>{% for id, d in flagged %}<li><a href="/listing/{{id}}">{{d.title}}</a> — {{d.needs_review_reason}}</li>{% else %}<li>없음</li>{% endfor %}</ul>
+<h3>판단 불가 (직접 확인)</h3><ul>{% for id, d in flagged %}<li><a href="/listing/{{id}}">{{d.title}}</a> — {{d.needs_review_reason}}{% if d.needs_review_detail %} <small>({{d.needs_review_detail}})</small>{% endif %}</li>{% else %}<li>없음</li>{% endfor %}</ul>
 """, flagged=flagged, suspended=suspended)
 
 
 @app.post("/recheck")
 def recheck():
-    from license_check import recheck_all
+    from license_check import recheck_all, sync_static_index
 
-    job = run_job("인허가 정기 재확인", recheck_all, request.form.get("csv") or None)
+    def _recheck_and_sync(csv_path):
+        try:
+            recheck_all(csv_path, workers=3)
+        finally:
+            removed, restored = sync_static_index()
+            if removed or restored:
+                print("정적 숙소 색인이 바뀌었습니다 — 배포해야 앱 목록·지도에 반영됩니다.")
+
+    job = run_job("인허가 정기 재확인", _recheck_and_sync, request.form.get("csv") or None)
     return redirect(url_for("jobs", highlight=job))
 
 
