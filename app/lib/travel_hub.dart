@@ -1,6 +1,8 @@
 // 2026 반값여행(지역사랑 휴가지원) 이벤트 상세 화면 — 홈 상단 이벤트 배너에서 연다.
 // 공식 혜택 안내 · 25개 대상 지역별 숙소 연결 · 신청 가이드 · 지역 축제/추천 코스(한국관광공사 TourAPI).
 // - 앱 번들 크기를 늘리지 않기 위해 정적 빌드된 허브 핵심 데이터(/data/hub/core.json)를 탭 진입 시 지연 로드한다.
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -96,6 +98,35 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
   Map<String, dynamic>? _hub;
   bool _loading = true;
   String _regionFilter = '전체';
+  final ScrollController _festivalCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _festivalCtrl.dispose();
+    super.dispose();
+  }
+
+  /// 축제 가로 목록을 화면 폭의 80%만큼 좌우로 넘긴다 (데스크톱 마우스는 가로 휠·드래그가 안 되므로 화살표 제공).
+  void _scrollFestivals(int dir) {
+    if (!_festivalCtrl.hasClients) return;
+    final pos = _festivalCtrl.position;
+    final target = (pos.pixels + dir * pos.viewportDimension * 0.8).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+    _festivalCtrl.animateTo(target, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+  }
+
+  Widget _festivalArrow(IconData icon, int dir) => Material(
+        color: Colors.white,
+        shape: const CircleBorder(side: BorderSide(color: Color(0xFFE5E7EB))),
+        elevation: 3,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => _scrollFestivals(dir),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Icon(icon, size: 22, color: const Color(0xFF374151)),
+          ),
+        ),
+      );
 
   @override
   void initState() {
@@ -429,8 +460,17 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 270,
+                  child: Stack(
+                  children: [
+                  ScrollConfiguration(
+                  // 웹·데스크톱에서 마우스 드래그로도 넘길 수 있게 한다
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad},
+                  ),
                   child: ListView.separated(
+                    controller: _festivalCtrl,
                     scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
                     itemCount: festivals.length,
                     separatorBuilder: (_, _) => const SizedBox(width: 14),
                     itemBuilder: (_, idx) {
@@ -509,6 +549,28 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
                         ),
                       );
                     },
+                  ),
+                  ),
+                  // 좌우 화살표: 넘길 내용이 있을 때만 표시
+                  ListenableBuilder(
+                    listenable: _festivalCtrl,
+                    builder: (_, _) {
+                      final has = _festivalCtrl.hasClients && _festivalCtrl.position.hasContentDimensions;
+                      final canLeft = has && _festivalCtrl.position.pixels > _festivalCtrl.position.minScrollExtent + 1;
+                      final canRight = has
+                          ? _festivalCtrl.position.pixels < _festivalCtrl.position.maxScrollExtent - 1
+                          : festivals.length > 1;
+                      return Stack(
+                        children: [
+                          if (canLeft)
+                            Positioned(left: 4, top: 50, child: _festivalArrow(Icons.chevron_left_rounded, -1)),
+                          if (canRight)
+                            Positioned(right: 4, top: 50, child: _festivalArrow(Icons.chevron_right_rounded, 1)),
+                        ],
+                      );
+                    },
+                  ),
+                  ],
                   ),
                 ),
                 const SizedBox(height: 32),
