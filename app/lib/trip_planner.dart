@@ -95,7 +95,7 @@ bool _isForeignerEligibleStay(DiscoveryItem s) {
 int _stayForeignerScore(DiscoveryItem s) {
   final lic = s.licenseType;
   if (lic.contains('외국인')) return 3;
-  if (lic.contains('한옥') || lic.contains('호텔') || lic.contains('호스텔')) return 2;
+  if (lic.contains('한옥') || lic.contains('호텔') || lic.contains('호스텔') || lic == '관광숙박업') return 2;
   return 1;
 }
 

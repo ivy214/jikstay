@@ -45,6 +45,9 @@ API_ENV = {
     "외국인관광도시민박업": ("LICENSE_API_FOREIGN", None),
     "한옥체험업": ("LICENSE_API_HANOK", None),
     "일반/생활숙박업": ("LICENSE_API_LODGING", None),
+    # 관광진흥법 등록 업종 (관광호텔·휴양콘도·호스텔 등 / 관광펜션). 2026-11-16 활용신청 승인, 필드 이름은 위와 같음
+    "관광숙박업": ("LICENSE_API_TOURIST_ACCOMMODATION", "https://apis.data.go.kr/1741000/tourist_accommodations"),
+    "관광펜션업": ("LICENSE_API_TOURIST_PENSION", "https://apis.data.go.kr/1741000/tourist_pensions"),
 }
 
 NAME_KEYS = ("BPLC_NM", "bplcNm", "bplcnm", "사업장명")
@@ -541,7 +544,7 @@ def _doc_addr(doc: dict) -> str:
 
 
 def find_license_for_kto(doc: dict) -> dict:
-    """관광공사 출처 숙소를 4개 업종 인허가 API 에서 모두 찾아본다(추정 업종 먼저).
+    """관광공사 출처 숙소를 업종별 인허가 API(6개) 에서 모두 찾아본다(추정 업종 먼저).
     상호+주소가 확실히 맞는 첫 결과(match/closed)를 업종과 함께 돌려준다."""
     name = str(doc.get("title") or "")
     addr = _doc_addr(doc)
@@ -685,7 +688,7 @@ def link_kto_listings(apply: bool = False, workers: int = 3, index_path: str = I
         results = [(s, saved[s.id]) for s in kto if s.id in saved]
         print(f"저장된 미리보기 결과 {len(results)}곳을 반영합니다 ({results_path})")
     else:
-        print(f"관광공사 출처 공개 숙소 {len(kto)}곳을 4개 업종 인허가 API 에서 찾는 중...")
+        print(f"관광공사 출처 공개 숙소 {len(kto)}곳을 {len(API_ENV)}개 업종 인허가 API 에서 찾는 중...")
 
         def _work(snap):
             try:
@@ -794,7 +797,7 @@ if __name__ == "__main__":
     p.add_argument("--prune-index", action="store_true",
                    help="끝나면 정적 숙소 색인을 Firestore 상태에 맞춤(노출 중지 제외·재개 복원)")
     sub.add_parser("prune-index", help="정적 숙소 색인을 Firestore 상태에 맞춤(노출 중지 제외·재개 복원)")
-    p = sub.add_parser("link-kto", help="(한 번) 관광공사 출처 숙소의 실제 인허가를 4개 업종에서 찾아 연결")
+    p = sub.add_parser("link-kto", help="(한 번) 관광공사 출처 숙소의 실제 인허가를 6개 업종에서 찾아 연결")
     p.add_argument("--apply", action="store_true", help="Firestore·정적 색인에 반영 (없으면 미리보기)")
     p.add_argument("--results", help="미리보기 때 조회 결과를 이 파일에 저장, --apply 때 있으면 이 결과로 반영(재조회 안 함)")
     p.add_argument("--workers", type=int, default=3)

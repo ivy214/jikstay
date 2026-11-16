@@ -52,6 +52,8 @@ const List<String> kLicenseCategories = [
   '일반/생활숙박업',
   '한옥체험업',
   '외국인관광도시민박업',
+  '관광숙박업',
+  '관광펜션업',
 ];
 
 String trProvince(String key, AppLang lang) {
@@ -99,6 +101,8 @@ String trLicenseCategory(String key, AppLang lang) {
     '일반/생활숙박업': '🏢 일반·생활숙박',
     '한옥체험업': '🏯 한옥체험',
     '외국인관광도시민박업': '🌏 외국인도시민박',
+    '관광숙박업': '🏨 관광호텔·리조트',
+    '관광펜션업': '🌲 관광펜션',
   };
   if (lang == AppLang.ko) return koLabels[key] ?? key;
   const map = {
@@ -107,6 +111,8 @@ String trLicenseCategory(String key, AppLang lang) {
     '일반/생활숙박업': {AppLang.en: '🏢 Hotel & Residence', AppLang.ja: '🏢 ホテル・レジデンス', AppLang.zh: '🏢 酒店・公寓式住宿'},
     '한옥체험업': {AppLang.en: '🏯 Traditional Hanok', AppLang.ja: '🏯 伝統韓屋ステイ', AppLang.zh: '🏯 傳統韓屋體驗'},
     '외국인관광도시민박업': {AppLang.en: '🌏 Foreigner Homestay', AppLang.ja: '🌏 外国人専用都市民宿', AppLang.zh: '🌏 外國旅客都市民宿'},
+    '관광숙박업': {AppLang.en: '🏨 Tourist Hotel & Resort', AppLang.ja: '🏨 観光ホテル・リゾート', AppLang.zh: '🏨 觀光飯店・度假村'},
+    '관광펜션업': {AppLang.en: '🌲 Tourist Pension', AppLang.ja: '🌲 観光ペンション', AppLang.zh: '🌲 觀光民宿'},
   };
   return map[key]?[lang] ?? key;
 }

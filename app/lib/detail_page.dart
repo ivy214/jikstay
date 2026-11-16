@@ -251,6 +251,16 @@ String _tLicenseType(String raw, AppLang lang) {
       AppLang.ja: 'ホステル業',
       AppLang.zh: '持牌旅舍',
     },
+    '관광숙박업': {
+      AppLang.en: 'Registered Tourist Hotel / Resort',
+      AppLang.ja: '観光宿泊業（観光ホテル・リゾート）',
+      AppLang.zh: '观光住宿业（观光酒店・度假村）',
+    },
+    '관광펜션업': {
+      AppLang.en: 'Registered Tourist Pension',
+      AppLang.ja: '観光ペンション業',
+      AppLang.zh: '观光民宿业',
+    },
   };
   return map[raw]?[lang] ?? raw;
 }
