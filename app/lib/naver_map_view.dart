@@ -152,6 +152,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
       DiscoveryCategory.event => '축제 행사',
       DiscoveryCategory.attraction => '가볼만한곳 명소',
       DiscoveryCategory.food => '로컬 맛집',
+      DiscoveryCategory.market => '전통시장 5일장',
       DiscoveryCategory.stay => '펜션 민박 숙소',
       DiscoveryCategory.ebook => '관광안내소',
       DiscoveryCategory.all => '가볼만한곳 맛집',

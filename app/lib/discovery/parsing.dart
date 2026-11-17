@@ -57,7 +57,7 @@ DiscoveryItem? parseSpotJson(Map<String, dynamic> m, {required DiscoveryCategory
     'food' => DiscoveryCategory.food,
     'ebook' => DiscoveryCategory.ebook,
     'stay' => DiscoveryCategory.stay,
-    'market' => DiscoveryCategory.food, // 전통시장·5일장: 먹거리 분류로 묶고 배지만 따로
+    'market' => DiscoveryCategory.market,
     _ => fallbackCategory,
   };
   final lat = (m['lat'] as num?)?.toDouble();
@@ -85,6 +85,7 @@ DiscoveryItem? parseSpotJson(Map<String, dynamic> m, {required DiscoveryCategory
     DiscoveryCategory.ebook => 110.0,
     DiscoveryCategory.food => 90.0,
     DiscoveryCategory.attraction => 88.0,
+    DiscoveryCategory.market => 80.0,
     DiscoveryCategory.stay => 75.0,
     DiscoveryCategory.all => 50.0,
   };
@@ -309,6 +310,7 @@ ConnectedBundle buildConnectedBundle(
       case DiscoveryCategory.attraction:
         scoredAttractions.add((effectiveDist, it));
       case DiscoveryCategory.food:
+      case DiscoveryCategory.market: // 시장은 주변 먹거리 동선에 함께
         scoredFoods.add((effectiveDist, it));
       case DiscoveryCategory.stay:
         scoredStays.add((effectiveDist, it));

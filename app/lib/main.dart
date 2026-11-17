@@ -397,7 +397,7 @@ class _HomePageState extends State<HomePage> {
     if (marketsJson != null && marketsJson['markets'] is List) {
       for (final raw in (marketsJson['markets'] as List)) {
         if (raw is Map) {
-          final parsed = parseSpotJson(Map<String, dynamic>.from(raw), fallbackCategory: DiscoveryCategory.food);
+          final parsed = parseSpotJson(Map<String, dynamic>.from(raw), fallbackCategory: DiscoveryCategory.market);
           if (parsed != null) itemsById[parsed.id] = parsed;
         }
       }
@@ -638,7 +638,9 @@ class _HomePageState extends State<HomePage> {
     final relevance = <String, int>{};
     // 전통시장·5일장은 기본 피드에는 넣지 않고 검색할 때만 결과에 포함 ("강진" → 강진오일시장)
     final pool = q.isEmpty
-        ? (includeMarkets ? _allItems : _allItems.where((it) => !it.isMarket).toList())
+        ? (includeMarkets || _category == DiscoveryCategory.market
+            ? _allItems
+            : _allItems.where((it) => !it.isMarket).toList())
         : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
     final out = pool.where((it) {
       if (_savedOnly && !saved.contains(it.id)) return false;
@@ -1139,7 +1141,8 @@ class _HomePageState extends State<HomePage> {
                                         _feedVisibleCount = _feedPageSize;
                                         if (_viewMode == HomeViewMode.calendar &&
                                             cat != DiscoveryCategory.all &&
-                                            cat != DiscoveryCategory.event) {
+                                            cat != DiscoveryCategory.event &&
+                                            cat != DiscoveryCategory.market) {
                                           _viewMode = HomeViewMode.feed;
                                         }
                                       }),

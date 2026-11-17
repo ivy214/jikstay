@@ -151,7 +151,11 @@ bool _isCityLevelMatch(DiscoveryItem it, String term) {
 /// 검색어와 맞지 않으면 null, 맞으면 관련도 (클수록 앞).
 /// 시·군 이름이 맞으면 3점, 제목에 있으면 2점, 그 밖(읍·면·설명)에서 맞으면 1점.
 int? searchRelevance(DiscoveryItem it, ParsedSearchQuery q) {
-  if (q.category != null && it.category != q.category) return null;
+  // "강진 맛집" 처럼 먹거리로 찾을 때는 전통시장도 함께
+  final catOk = q.category == null ||
+      it.category == q.category ||
+      (q.category == DiscoveryCategory.food && it.category == DiscoveryCategory.market);
+  if (!catOk) return null;
   final hay = _haystack(it);
   var score = 0;
   if (q.province != null) {
@@ -191,7 +195,7 @@ DiscoveryItem marketToDiscoveryItem(TraditionalMarketInfo m) {
   final regionLabel = '${m.province} ${m.city}'.trim();
   return DiscoveryItem(
     id: m.id,
-    category: DiscoveryCategory.food,
+    category: DiscoveryCategory.market,
     title: m.title,
     province: m.province,
     regionLabel: regionLabel,

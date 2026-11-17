@@ -16,6 +16,7 @@ enum DiscoveryCategory {
   event('cat_event', Icons.celebration_rounded, Color(0xFF7C3AED)),
   attraction('cat_attraction', Icons.landscape_rounded, Color(0xFF059669)),
   food('cat_food', Icons.restaurant_rounded, Color(0xFFD97706)),
+  market('cat_market', Icons.storefront_rounded, Color(0xFF92400E)),
   stay('cat_stay', Icons.cottage_rounded, Color(0xFFE11D48)),
   ebook('cat_ebook', Icons.menu_book_rounded, Color(0xFF2563EB));
 
@@ -458,10 +459,10 @@ class DiscoveryItem {
 
   double get averageRating => reviewCount > 0 ? scoreSum / reviewCount : 0.0;
 
-  /// 전통시장·5일장. 분류는 먹거리지만 표시는 시장으로.
+  /// 전통시장·5일장 (지역시장 분류).
   /// - spot_mk_… : 한국관광공사 전국 전통시장 (Firestore 문서 있음 → 후기·찜·클릭 집계)
   /// - mkt_…     : 손으로 정리한 대표 5일장을 검색 결과용으로만 만든 항목 (Firestore 문서 없음)
-  bool get isMarket => raw['kind'] == 'market' || id.startsWith('mkt_');
+  bool get isMarket => category == DiscoveryCategory.market || raw['kind'] == 'market' || id.startsWith('mkt_');
 
   /// Firestore spots/listings 문서가 있어 후기 작성·클릭 집계가 가능한 항목
   bool get hasFirestoreDoc => category != DiscoveryCategory.ebook && !id.startsWith('mkt_');
@@ -657,6 +658,7 @@ class DiscoveryItem {
     DiscoveryCategory.event => '🎉',
     DiscoveryCategory.attraction => '🏞️',
     DiscoveryCategory.food => '🍲',
+    DiscoveryCategory.market => '🧺',
     DiscoveryCategory.stay => '🏡',
     DiscoveryCategory.ebook => '📖',
     DiscoveryCategory.all => '✨',
@@ -668,6 +670,7 @@ class DiscoveryItem {
     DiscoveryCategory.event => pickLangText(lang, ko: '축제·행사', en: 'Event', ja: '祭り・イベント', zh: '慶典活動'),
     DiscoveryCategory.attraction => pickLangText(lang, ko: '볼거리', en: 'Sight', ja: '観光名所', zh: '必訪景點'),
     DiscoveryCategory.food => pickLangText(lang, ko: '먹거리', en: 'Food', ja: 'グルメ', zh: '在地美食'),
+    DiscoveryCategory.market => pickLangText(lang, ko: '전통시장', en: 'Market', ja: '伝統市場', zh: '傳統市場'),
     DiscoveryCategory.stay => pickLangText(lang, ko: '숙소', en: 'Stay', ja: '宿泊', zh: '住宿'),
     DiscoveryCategory.ebook => pickLangText(lang, ko: '공식 관광지도', en: 'Guide PDF', ja: '公式ガイド', zh: '官方指南'),
     DiscoveryCategory.all => pickLangText(lang, ko: '전체', en: 'All', ja: 'すべて', zh: '全部'),
