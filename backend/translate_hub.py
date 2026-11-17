@@ -272,7 +272,7 @@ def main() -> None:
 
     story_records = [(st["id"], build_story_payload(st)) for st in hub.get("daily_stories", []) if st.get("id")]
     item_records = []
-    for it in hub.get("festivals", []) + hub.get("spots", []):
+    for it in hub.get("festivals", []) + hub.get("spots", []) + hub.get("markets", []):
         if it.get("id"):
             item_records.append((str(it["id"]), build_item_payload(it)))
     market_records = [(mk["id"], build_market_payload(mk)) for mk in hub.get("traditional_markets", []) if mk.get("id")]

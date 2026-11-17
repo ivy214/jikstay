@@ -76,7 +76,7 @@ jobs:
       - name: Unit tests
         run: |
           set -e
-          for t in smoke_test admin_test curate_test naver_filters_test split_hub_test license_recheck_test; do
+          for t in smoke_test admin_test curate_test naver_filters_test split_hub_test license_recheck_test markets_test; do
             echo "::group::$t"
             python backend/tests/$t.py
             echo "::endgroup::"

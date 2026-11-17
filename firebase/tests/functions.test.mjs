@@ -38,7 +38,7 @@ describe("Cloud Functions 다국어 SEO 및 스키마 생성", () => {
   it("한국어·영어·일본어·번체중국어 OG, hreflang, JSON-LD, noscript 요약 주입", () => {
     const koHtml = fn.buildOgHtml(SAMPLE_TPL, sampleListing, "stay_pub_abc123", "https://jikstay.kr", "ko");
     assert.match(koHtml, /<html lang="ko">/);
-    assert.match(koHtml, /애월 돌담 스테이 \| 직스테이/);
+    assert.match(koHtml, /애월 돌담 스테이 \(제주 펜션·민박\) \| 직스테이/);
     assert.match(koHtml, /"@type":"LodgingBusiness"/);
     assert.match(koHtml, /"@type":"AggregateRating"/);
     assert.match(koHtml, /"ratingValue":4\.75/);
@@ -190,5 +190,66 @@ describe("대표 도메인 이동", () => {
     assert.equal(fn.primaryDomainRedirectUrl("jikstay.app", "/"), "");
     assert.equal(fn.primaryDomainRedirectUrl("www.jikstay.app", "/"), "");
     assert.equal(fn.primaryDomainRedirectUrl("", "/"), "");
+  });
+});
+
+describe("숙소 한국어 검색 제목", () => {
+  it("지역(시·군 / 광역시 구)과 검색어로 쓰는 업종을 붙인다", () => {
+    const q = fn.stayTitleQualifierKo;
+    assert.equal(q({ region_depth1: "충청남도", region_depth2: "태안군 남면", license_type: "농어촌민박업" }), "태안 펜션·민박");
+    assert.equal(q({ region_depth1: "제주특별자치도", region_depth2: "서귀포시", license_type: "한옥체험업" }), "서귀포 한옥스테이");
+    assert.equal(q({ region_depth1: "부산광역시", region_depth2: "해운대구", license_type: "외국인관광도시민박업" }), "부산 해운대구 게스트하우스");
+    assert.equal(q({ region_depth1: "세종특별자치시", region_depth2: "", license_type: "일반/생활숙박업" }), "세종 숙소");
+    assert.equal(q({ title: "펜션이룸", region_depth1: "경기도", region_depth2: "가평군", license_type: "일반/생활숙박업" }), "가평 펜션");
+  });
+
+  it("검색 제목에는 붙이고 본문 제목(h1)은 상호만", () => {
+    const listing = { title: "그림일기펜션", region_depth1: "충청남도", region_depth2: "태안군 남면", license_type: "농어촌민박업" };
+    const html = fn.buildOgHtml(SAMPLE_TPL, listing, "stay_pub_abc123", "https://jikstay.app", "ko", null);
+    assert.match(html, /<title>그림일기펜션 \(태안 펜션·민박\) \| 직스테이<\/title>/);
+    assert.doesNotMatch(html, /<h1>[^<]*\(태안/);
+  });
+});
+
+describe("주제 페이지 (축제 일정 · 5일장 장날)", () => {
+  const hub = {
+    festivals: [
+      { id: "spot_ev_1", title: "진행축제", province: "전북", region_label: "전북 남원시", start_date: "20261101", end_date: "20261130" },
+      { id: "spot_ev_2", title: "예정축제", province: "전북", region_label: "전북 전주시", start_date: "20261220", end_date: "20261225" },
+      { id: "spot_ev_3", title: "끝난축제", province: "전북", start_date: "20260101", end_date: "20260102" },
+    ],
+    traditional_markets: [{ id: "mkt_a", province: "전북", city: "무주군", title: "무주장", days: [1, 6], specialty: "어죽" }],
+  };
+
+  it("5일장 장날과 다음 장날 (31일 제외, 다음 달로 넘어감)", () => {
+    assert.deepEqual(fn.marketDaysOfMonth([1, 6]), [1, 6, 11, 16, 21, 26]);
+    assert.equal(fn.nextMarketYmd([1, 6], "20261117"), "20261121");
+    assert.equal(fn.nextMarketYmd([1, 6], "20261127"), "20261201");
+    assert.equal(fn.nextMarketYmd([1, 6], "20261121"), "20261121");
+  });
+
+  it("지역 축제 페이지: 진행·예정만, 끝난 축제 제외, 제목에 지역·연도", () => {
+    const html = fn.buildTopicOgHtml(SAMPLE_TPL, "festival", "전북", "https://jikstay.app", "ko", { hub });
+    assert.match(html, /<title>전북 축제 일정 \d{4} · 지역 축제·행사 모음 \| 직스테이 로컬<\/title>/);
+    assert.match(html, /진행축제/);
+    assert.match(html, /예정축제/);
+    assert.doesNotMatch(html, /끝난축제/);
+    assert.match(html, /rel="canonical" href="https:\/\/jikstay\.app\/\?topic=festival&amp;region=%EC%A0%84%EB%B6%81"/);
+  });
+
+  it("5일장 페이지: 장날·특산물 표시", () => {
+    const html = fn.buildTopicOgHtml(SAMPLE_TPL, "market", "", "https://jikstay.app", "ko", { hub });
+    assert.match(html, /<title>전국 5일장 장날 일정/);
+    assert.match(html, /무주장<\/strong> — 전북 무주군 · 매월 1·6·11·16·21·26일/);
+    assert.match(html, /어죽/);
+  });
+});
+
+describe("전통시장 상세 페이지", () => {
+  it("검색 제목에 시·군과 시장 종류·장날을 붙이고 Store 스키마", () => {
+    const spot = { title: "간성전통시장", kind: "market", market_type: "5일장", days: [2, 7], province: "강원", city: "고성군", region_label: "강원 고성군 간성읍", status: "active" };
+    const html = fn.buildSpotOgHtml(SAMPLE_TPL, spot, "spot_mk_132783", "https://jikstay.app", "ko", null);
+    assert.match(html, /<title>간성전통시장 \(고성 5일장 · 장날\) \| 직스테이 로컬<\/title>/);
+    assert.match(html, /"@type":"Store"/);
   });
 });

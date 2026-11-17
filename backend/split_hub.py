@@ -38,7 +38,9 @@ PROVINCE_CODES = {
 }
 OTHER_CODE = "etc"
 
-SPLIT_SECTIONS = ("spots", "festivals")
+SPLIT_SECTIONS = ("spots", "festivals", "markets")
+# 전통시장(약 800곳)은 첫 화면에 필요 없어 core 에서 빼고 hub/markets.json 으로 따로 둔다 (앱이 2단계에서 받음)
+SEPARATE_SECTIONS = ("markets",)
 # 상세 화면(spot_detail_sheet·story_detail_page, hydrateDiscoveryItem 으로 합침)에서만 쓰는 필드.
 # 첫 화면 데이터는 볼거리 수에 비례해 커지므로(상한 없음) 카드·검색·지도·일정 짜기에 안 쓰는 필드는 모두 여기로.
 # tel(자동 생성 스토리)·url(이벤트 배너)은 목록 단계에서도 쓰므로 core 에 둔다.
@@ -130,10 +132,14 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for old in OUT_DIR.glob("details_*.json"):
         old.unlink()
+    separate = {sec: core.pop(sec, []) for sec in SEPARATE_SECTIONS}
     core_bytes = _dump(OUT_DIR / "core.json", core)
+    for sec, items in separate.items():
+        size = _dump(OUT_DIR / f"{sec}.json", {sec: items})
+        print(f"[split-hub] {sec}: {len(items)}곳 → {sec}.json {size / 1024:.0f}KB")
     detail_sizes = {code: _dump(OUT_DIR / f"details_{code}.json", d) for code, d in sorted(details.items())}
 
-    province_of = {str(it.get("id")): str(it.get("province") or "") for sec in ("spots", "festivals") for it in hub.get(sec, [])}
+    province_of = {str(it.get("id")): str(it.get("province") or "") for sec in SPLIT_SECTIONS for it in hub.get(sec, [])}
     for lang in LANGS:
         src = I18N_SRC_DIR / f"translations_{lang}.json"
         if not src.exists():

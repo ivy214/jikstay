@@ -111,7 +111,8 @@ class TraditionalMarketInfo {
     required this.specialty,
   });
 
-  bool opensOnDay(int dayOfMonth) => days.contains(dayOfMonth % 10);
+  // 5일장은 31일에는 서지 않는다 (1·6일장도 31일은 쉼)
+  bool opensOnDay(int dayOfMonth) => dayOfMonth <= 30 && days.contains(dayOfMonth % 10);
 
   String tTitle(AppLang lang) => TranslationStore.field(lang, 'markets', id, 'title', title);
   String tCity(AppLang lang) => TranslationStore.field(lang, 'markets', id, 'city', city);
@@ -457,11 +458,13 @@ class DiscoveryItem {
 
   double get averageRating => reviewCount > 0 ? scoreSum / reviewCount : 0.0;
 
-  /// 5일장(mkt_…)은 검색 결과용으로만 만든 항목이라 Firestore 문서가 없다 → 후기·클릭 집계 대상 아님
-  bool get isMarket => id.startsWith('mkt_');
+  /// 전통시장·5일장. 분류는 먹거리지만 표시는 시장으로.
+  /// - spot_mk_… : 한국관광공사 전국 전통시장 (Firestore 문서 있음 → 후기·찜·클릭 집계)
+  /// - mkt_…     : 손으로 정리한 대표 5일장을 검색 결과용으로만 만든 항목 (Firestore 문서 없음)
+  bool get isMarket => raw['kind'] == 'market' || id.startsWith('mkt_');
 
   /// Firestore spots/listings 문서가 있어 후기 작성·클릭 집계가 가능한 항목
-  bool get hasFirestoreDoc => category != DiscoveryCategory.ebook && !isMarket;
+  bool get hasFirestoreDoc => category != DiscoveryCategory.ebook && !id.startsWith('mkt_');
 
   String get _searchLocationPrefix => (regionLabel.isNotEmpty ? regionLabel : province).trim();
 
@@ -650,7 +653,7 @@ class DiscoveryItem {
     return pickLangText(lang, ko: '약 $v', en: '$v away', ja: '約$v', zh: '約 $v');
   }
 
-  String get categoryEmoji => switch (category) {
+  String get categoryEmoji => isMarket ? '🧺' : switch (category) {
     DiscoveryCategory.event => '🎉',
     DiscoveryCategory.attraction => '🏞️',
     DiscoveryCategory.food => '🍲',
@@ -659,7 +662,9 @@ class DiscoveryItem {
     DiscoveryCategory.all => '✨',
   };
 
-  String categoryBadgeText(AppLang lang) => switch (category) {
+  String categoryBadgeText(AppLang lang) => isMarket
+      ? pickLangText(lang, ko: '전통시장', en: 'Market', ja: '伝統市場', zh: '傳統市場')
+      : switch (category) {
     DiscoveryCategory.event => pickLangText(lang, ko: '축제·행사', en: 'Event', ja: '祭り・イベント', zh: '慶典活動'),
     DiscoveryCategory.attraction => pickLangText(lang, ko: '볼거리', en: 'Sight', ja: '観光名所', zh: '必訪景點'),
     DiscoveryCategory.food => pickLangText(lang, ko: '먹거리', en: 'Food', ja: 'グルメ', zh: '在地美食'),

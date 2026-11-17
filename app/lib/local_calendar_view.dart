@@ -395,6 +395,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
     final monthEvents = allEvents.where((e) => e.overlapsMonth(_focusedMonth.year, _focusedMonth.month)).toList();
 
     final sourceMarkets = widget.markets.isNotEmpty ? widget.markets : kFallbackTraditional5DayMarkets;
+    final marketItemsById = {for (final it in widget.allItems) if (it.isMarket) it.id: it};
     final exactProvMarkets = widget.selectedProvince == '전체'
         ? sourceMarkets.where((m) => m.opensOnDay(_selectedDate.day)).toList()
         : sourceMarkets
@@ -515,7 +516,7 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '[${trProvince(mkt.province, lang)} ${mkt.tCity(lang)}] ${mkt.tTitle(lang)} (${mkt.days.join("·")}${pickLangText(lang, ko: '일장', en: ' Market', ja: '日市', zh: '日市')})',
+                                  '[${trProvince(mkt.province, lang)} ${mkt.tCity(lang)}] ${mkt.tTitle(lang)} (${mkt.days.map((d) => d == 0 ? '10' : '$d').join("·")}${pickLangText(lang, ko: '일장', en: ' Market', ja: '日市', zh: '日市')})',
                                   style: const TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w800,
@@ -530,6 +531,21 @@ class _LocalCalendarViewState extends State<LocalCalendarView> {
                               ],
                             ),
                           ),
+                          // 시장 상세 페이지가 있으면 (전국 전통시장 데이터) 상세로
+                          if (marketItemsById[mkt.id] != null) ...[
+                            const SizedBox(width: 8),
+                            FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              ),
+                              onPressed: () => widget.onSelectItem(marketItemsById[mkt.id]!),
+                              child: Text(
+                                pickLangText(lang, ko: '상세', en: 'Details', ja: '詳細', zh: '詳情'),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ],
                           const SizedBox(width: 8),
                           OutlinedButton(
                             style: OutlinedButton.styleFrom(

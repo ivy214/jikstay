@@ -208,6 +208,7 @@ class DirectStayApp extends StatelessWidget {
     final initialSpotId = params['spot'];
     final initialStoryId = params['story'];
     final initialPlanParam = params['plan'];
+    final initialTopic = params['topic'];
     final demoMode = params['demo'] == '1' || params['demo'] == 'true';
 
     Widget homeBuilder(BuildContext _) => HomePage(initialDemoMode: demoMode);
@@ -228,6 +229,7 @@ class DirectStayApp extends StatelessWidget {
               initialSpotId: initialSpotId,
               initialStoryId: initialStoryId,
               initialPlanParam: initialPlanParam,
+              initialTopic: initialTopic,
             ),
     );
   }
@@ -241,6 +243,9 @@ class HomePage extends StatefulWidget {
   final String? initialStoryId;
   final String? initialPlanParam;
 
+  /// 검색 유입용 주제 페이지(?topic=festival|market) → 축제·장날 달력 화면으로 연다
+  final String? initialTopic;
+
   const HomePage({
     super.key,
     this.initialDemoMode = false,
@@ -249,6 +254,7 @@ class HomePage extends StatefulWidget {
     this.initialSpotId,
     this.initialStoryId,
     this.initialPlanParam,
+    this.initialTopic,
   });
 
   @override
@@ -278,6 +284,7 @@ class _HomePageState extends State<HomePage> {
   List<DiscoveryItem> _allItems = kBuiltInSeedDiscoveryItems;
   List<DailyStoryItem> _dailyStories = kFallbackDailyMunicipalStories;
   List<TraditionalMarketInfo> _markets = kFallbackTraditional5DayMarkets;
+  bool _marketDeepLinkHandled = false;
   String? _selectedItemId;
   int _feedVisibleCount = _feedPageSize;
   bool _initialDeepLinkHandled = false;
@@ -384,6 +391,21 @@ class _HomePageState extends State<HomePage> {
     // 프레임 양보 후 2단계 (백그라운드 비차단 로드): 전국 합법 숙소 경량 색인 병합
     await Future<void>.delayed(const Duration(milliseconds: 60));
     if (!mounted) return;
+
+    // 전국 전통시장·5일장 (약 800곳, 첫 화면에는 필요 없어 따로 받는다)
+    final marketsJson = await fetchWebJson('data/hub/markets.json');
+    if (marketsJson != null && marketsJson['markets'] is List) {
+      for (final raw in (marketsJson['markets'] as List)) {
+        if (raw is Map) {
+          final parsed = parseSpotJson(Map<String, dynamic>.from(raw), fallbackCategory: DiscoveryCategory.food);
+          if (parsed != null) itemsById[parsed.id] = parsed;
+        }
+      }
+      if (mounted) {
+        setState(() => _allItems = itemsById.values.toList());
+        _openPendingMarketDeepLink();
+      }
+    }
 
     final staysJson = await fetchWebJson('data/public_stays_index.json');
     if (staysJson != null && staysJson['items'] is List) {
@@ -549,6 +571,11 @@ class _HomePageState extends State<HomePage> {
       _selectProvince(initReg);
     }
 
+    final initTopic = (widget.initialTopic ?? '').trim();
+    if (initTopic == 'festival' || initTopic == 'market') {
+      setState(() => _viewMode = HomeViewMode.calendar);
+    }
+
     final initStory = (widget.initialStoryId ?? '').trim();
     if (initStory.isNotEmpty) {
       for (final st in _dailyStories) {
@@ -585,6 +612,19 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 시장 상세 링크(?spot=spot_mk_…)는 시장 목록을 2단계에서 받은 뒤에야 열 수 있다.
+  void _openPendingMarketDeepLink() {
+    final id = (widget.initialSpotId ?? '').trim();
+    if (!id.startsWith('spot_mk_') || _marketDeepLinkHandled) return;
+    _marketDeepLinkHandled = true;
+    for (final it in _allItems) {
+      if (it.id == id) {
+        _openItemSheet(it);
+        return;
+      }
+    }
+  }
+
   void _onSavedChanged() {
     if (mounted) setState(() {});
   }
@@ -595,9 +635,9 @@ class _HomePageState extends State<HomePage> {
     final saved = SavedPlaces.ids.value.toSet();
     final weekend = upcomingWeekend(DateTime.now());
     final relevance = <String, int>{};
-    // 5일장은 기본 피드에는 넣지 않고 검색할 때만 결과에 포함 ("강진" → 강진오일시장)
+    // 전통시장·5일장은 기본 피드에는 넣지 않고 검색할 때만 결과에 포함 ("강진" → 강진오일시장)
     final pool = q.isEmpty
-        ? _allItems
+        ? _allItems.where((it) => !it.isMarket).toList()
         : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
     final out = pool.where((it) {
       if (_savedOnly && !saved.contains(it.id)) return false;

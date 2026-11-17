@@ -117,7 +117,15 @@ ParsedSearchQuery parseSearchQuery(String raw) {
 }
 
 String _haystack(DiscoveryItem it) =>
-    '${it.title} ${it.province} ${it.regionLabel} ${it.address} ${it.subtitle} ${it.couponTitle}'.toLowerCase();
+    '${it.title} ${it.province} ${it.regionLabel} ${it.address} ${it.subtitle} ${it.couponTitle}${_marketWords(it)}'.toLowerCase();
+
+/// "곡성 장날", "남원 5일장", "전주 시장" 처럼 검색해도 시장이 걸리도록
+String _marketWords(DiscoveryItem it) {
+  if (!it.isMarket) return '';
+  final type = (it.raw['market_type'] ?? '').toString();
+  final hasDays = it.raw['days'] is List && (it.raw['days'] as List).isNotEmpty;
+  return ' 시장 전통시장 $type${hasDays ? ' 5일장 오일장 장날 장터' : ' 상설시장'}';
+}
 
 bool _isCityLevelMatch(DiscoveryItem it, String term) {
   final place = '${it.regionLabel} ${it.address}';

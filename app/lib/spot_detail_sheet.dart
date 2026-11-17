@@ -326,6 +326,15 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
     if (sub.isNotEmpty && sub != addr) {
       return sub.length > 110 ? '${sub.substring(0, 110)}…' : sub;
     }
+    if (item.isMarket) {
+      return pickLangText(
+        lang,
+        ko: '$reg 사람들의 장보기와 먹거리가 모이는 전통시장',
+        en: 'A traditional market in $reg where locals shop and eat.',
+        ja: '$reg の地元の人々が買い物と食事に集まる伝統市場。',
+        zh: '$reg 在地居民採買與品嚐美食的傳統市場。',
+      );
+    }
     return switch (item.category) {
       DiscoveryCategory.food => pickLangText(
           lang,
@@ -368,6 +377,16 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
       out.add(sub);
     }
     final reg = item.tRegionLabel(lang);
+    if (item.isMarket) {
+      out.add(pickLangText(
+        lang,
+        ko: '$reg 전통시장입니다. 장날·영업시간·판매 품목은 계절과 상인 사정에 따라 달라질 수 있으니, 방문 전 아래 장보기 안내와 지도에서 최신 정보를 함께 확인하세요.',
+        en: 'A traditional market in $reg. Market days, hours and goods can change by season, so check the details and map below before you go.',
+        ja: '$reg の伝統市場です。市日・営業時間・品揃えは季節により変わることがあるため、訪問前に下記の案内と地図をご確認ください。',
+        zh: '$reg 的傳統市場。開市日、營業時間與販售品項可能隨季節調整，出發前請確認下方資訊與地圖。',
+      ));
+      return out;
+    }
     switch (item.category) {
       case DiscoveryCategory.food:
         out.add(

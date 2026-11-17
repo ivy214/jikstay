@@ -84,6 +84,35 @@ function fallbackNaverMapUrl(listing) {
   return `https://map.naver.com/p/search/${encodeURIComponent(q)}`;
 }
 
+// 숙소 업종 → 사람들이 실제로 검색하는 말 (검색 제목용)
+const STAY_KIND_KO = {
+  "한옥체험업": "한옥스테이",
+  "외국인관광도시민박업": "게스트하우스",
+  "농어촌민박업": "펜션·민박",
+  "관광펜션업": "펜션",
+  "관광숙박업": "호텔",
+};
+
+/** 검색 제목용 지역 이름: "태안군 남면" → "태안", "서귀포시" → "서귀포", "해운대구" → "부산 해운대구" */
+function stayRegionShort(listing) {
+  const prov = shortProvince(listing.region_depth1);
+  const first = String(listing.region_depth2 || "").trim().split(/\s+/)[0] || "";
+  if (/^[가-힣]{2,}[시군]$/.test(first)) return first.slice(0, -1);
+  if (/^[가-힣]+구$/.test(first)) return prov ? `${prov} ${first}` : first;
+  return prov;
+}
+
+/** 한국어 숙소 검색 제목 괄호 안: "태안 펜션·민박" (지역·업종 중 아는 것만) */
+function stayTitleQualifierKo(listing) {
+  let kind = STAY_KIND_KO[String(listing.license_type || "").trim()] || "";
+  if (!kind) {
+    // 일반/생활숙박업은 펜션·모텔·호텔이 섞여 있어 상호에 든 말을 쓴다
+    const m = String(listing.title || "").match(/(풀빌라|펜션|리조트|호텔|모텔|레지던스|게스트하우스|글램핑|캠핑)/);
+    kind = m ? m[1] : "숙소";
+  }
+  return [stayRegionShort(listing), kind].filter(Boolean).join(" ");
+}
+
 function buildLocalizedMeta(listing, lang, tStay = null) {
   const docI18n = listing && typeof listing.i18n === "object" ? listing.i18n[lang] : null;
   // 숙소 문서의 i18n 제목은 한국어 상호 그대로인 경우가 많다('리코 하우스 2 (Seoul)').
@@ -124,17 +153,20 @@ function buildLocalizedMeta(listing, lang, tStay = null) {
     };
   }
 
-  const titleText = listing.title ? `${listing.title} | 직스테이` : "직스테이 로컬 - 공공데이터 숙소·로컬 여행 정보";
+  // "그림일기펜션 (태안 펜션·민박) | 직스테이" — 이름만으로는 "태안 펜션" 같은 검색에 걸리지 않으므로 지역·업종을 붙인다
+  const titleText = listing.title
+    ? `${listing.title} (${stayTitleQualifierKo(listing)}) | 직스테이`
+    : "직스테이 로컬 - 공공데이터 숙소·로컬 여행 정보";
   const descText =
     [region, listing.license_type || "", points].filter(Boolean).join(" | ") ||
     "공공데이터에 등록된 숙소와 주변 볼거리·먹거리·축제를 한 번에 찾아보세요.";
-  return { htmlLang: "ko", titleText, descText };
+  return { htmlLang: "ko", titleText, descText, heading: listing.title ? String(listing.title) : "" };
 }
 
 function buildOgHtml(template, listing, listingId, origin, rawLang = "ko", data = null) {
   const lang = normalizeLang(rawLang);
   const tStay = (lang !== "ko" && data && data.i18nCore && data.i18nCore.stays && data.i18nCore.stays[listingId]) || null;
-  const { htmlLang, titleText, descText } = buildLocalizedMeta(listing, lang, tStay);
+  const { htmlLang, titleText, descText, heading } = buildLocalizedMeta(listing, lang, tStay);
   const images = Array.isArray(listing.images) ? listing.images : [];
   const imageUrl = images.length > 0 && images[0].url ? String(images[0].url) : "";
   const encodedId = encodeURIComponent(listingId);
@@ -189,7 +221,8 @@ function buildOgHtml(template, listing, listingId, origin, rawLang = "ko", data 
   const L = seo.LABELS[lang] || seo.LABELS.ko;
   const prov = shortProvince(listing.region_depth1);
   const provLabel = provinceLabel(prov, lang);
-  const plainTitle = titleText.replace(/\s*\|[^|]*$/, "");
+  // 본문 제목(h1)·JSON-LD 이름은 상호만 (검색 제목의 지역·업종 괄호는 빼고)
+  const plainTitle = heading || titleText.replace(/\s*\|[^|]*$/, "");
   // 네이버 방문기는 한국어 원문이라 한국어 페이지에만 넣는다
   const reviews = lang === "ko" && Array.isArray(listing.naver_reviews) ? listing.naver_reviews.slice(0, 3) : [];
   const reviewHtml = reviews.length
@@ -251,6 +284,12 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko", data = 
   const overviewDesc = loc.overview ? seo.truncate(loc.overview, 155) : "";
 
   let titleText = isStory ? `${title} · ${spot.source_book || prov} | 직스테이 로컬 스토리` : `${title} (${prov}) | 직스테이 로컬`;
+  if (kind === "market" && !isStory) {
+    // "곡성기차마을전통시장 (곡성 5일장 · 장날) | 직스테이 로컬" — "곡성 5일장", "곡성 장날" 검색에 걸리도록
+    const city = String(spot.city || "").replace(/^([가-힣]{2,})[시군]$/, "$1") || prov;
+    const type = String(spot.market_type || "전통시장");
+    titleText = `${title} (${city} ${type}${Array.isArray(spot.days) && spot.days.length ? " · 장날" : ""}) | 직스테이 로컬`;
+  }
   let descText = spot.summary
     ? `${spot.summary} (${addr})`
     : overviewDesc || `${addr} · 주변 맛집·지자체 공식 관광지도·숙소 동선 안내`;
@@ -285,7 +324,7 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko", data = 
     `\n  <link rel="alternate" hreflang="x-default" href="${escapeHtml(`${origin}/?${queryKey}=${encodedId}`)}">`,
   ].join("");
 
-  const schemaType = kind === "event" ? "Festival" : kind === "food" ? "Restaurant" : "TouristAttraction";
+  const schemaType = kind === "event" ? "Festival" : kind === "food" ? "Restaurant" : kind === "market" ? "Store" : "TouristAttraction";
   const jsonLdObj = {
     "@context": "https://schema.org",
     "@type": schemaType,
@@ -472,6 +511,8 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko", data = nu
       { heading: `${provLabel} · ${L.attractions}`, html: seo.linkList(spotLinks(spots.filter((x) => x.kind === "attraction"), 30)) },
       { heading: `${provLabel} · ${L.food}`, html: seo.linkList(spotLinks(spots.filter((x) => x.kind === "food"), 30)) },
       { heading: `${provLabel} · ${L.stays}`, html: seo.linkList(stays) },
+      { heading: `${provLabel} · ${MARKET_LABEL[lang] || MARKET_LABEL.ko}`, html: seo.linkList(spotLinks(((data && data.markets) || []).filter(inProv), 40)) },
+      { heading: `${provLabel} · ${TOPIC_TEXT.festival[lang].byRegion}`, html: seo.linkList(regionTopicLinks(origin, province, lang, { ...hub, markets: (data && data.markets) || [] })) },
       { heading: L.regions, html: seo.linkList(otherRegions) },
     ],
   });
@@ -484,6 +525,254 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko", data = nu
     .replace(
       /<meta\s+property="og:description"\s+content="[^"]*">/,
       `<meta property="og:description" content="${escapedDesc}">${ogUrlTag}${hreflangTags}${jsonLdTag}`
+    )
+    .replace(/<\/body>/i, `  ${seoMain}\n</body>`);
+}
+
+// ---------------------------------------------------------------------------
+// 주제 페이지 (?topic=festival | market, 선택 &region=시·도)
+// "전국 지역축제", "전북 축제 일정", "5일장 장날" 같은 검색어로 들어오는 입구.
+// ---------------------------------------------------------------------------
+const TOPICS = new Set(["festival", "market"]);
+const MARKET_LABEL = { ko: "전통시장·5일장", en: "Traditional markets", ja: "伝統市場・五日市", zh: "傳統市場・五日市集" };
+
+const TOPIC_TEXT = {
+  festival: {
+    ko: {
+      title: (p, y) => (p ? `${p} 축제 일정 ${y} · 지역 축제·행사 모음` : `전국 지역축제 일정 ${y} · 지금 열리는 축제·행사 찾기`),
+      desc: (p, y) =>
+        p
+          ? `${y}년 ${p}에서 지금 열리고 있거나 곧 열리는 지역 축제와 행사를 날짜순으로 모았습니다. 한국관광공사 공식 정보와 주변 맛집·숙소까지 함께 확인하세요.`
+          : `${y}년 전국 17개 시·도의 지역 축제와 행사 일정을 한곳에 모았습니다. 이번 주 열리는 축제, 다가오는 행사, 시·도별 축제 일정을 한국관광공사 공식 정보로 확인하세요.`,
+      now: "지금 열리는 축제·행사", soon: "다가오는 축제·행사", byRegion: "시·도별 축제 일정", other: "5일장 장날 일정",
+    },
+    en: {
+      title: (p, y) => (p ? `${p} Festivals ${y}: Local Festivals & Events Calendar` : `Korea Festival Calendar ${y}: Local Festivals & Events`),
+      desc: (p, y) =>
+        p
+          ? `Festivals and events happening now and coming up in ${p}, Korea in ${y}, with official Korea Tourism Organization details, nearby food and stays.`
+          : `Calendar of local festivals and events across Korea's 17 provinces in ${y}: what's on this week, upcoming events, and festivals by region.`,
+      now: "Happening now", soon: "Coming up", byRegion: "Festivals by province", other: "Traditional 5-day market days",
+    },
+    ja: {
+      title: (p, y) => (p ? `${p}のお祭り・イベント日程 ${y}` : `韓国の地域祭り・イベント日程 ${y}`),
+      desc: (p, y) => (p ? `${y}年に${p}で開催中・開催予定の祭りとイベントを日付順に紹介。` : `${y}年 韓国全国17市道の地域祭り・イベント日程をまとめて確認。`),
+      now: "開催中の祭り・イベント", soon: "これから開催", byRegion: "地域別の祭り日程", other: "五日市（5日市場）の市日",
+    },
+    zh: {
+      title: (p, y) => (p ? `${p}慶典・活動日程 ${y}` : `韓國地方慶典・活動日程 ${y}`),
+      desc: (p, y) => (p ? `${y}年${p}正在舉行與即將舉行的慶典和活動，依日期整理。` : `${y}年韓國全國17市道地方慶典與活動日程一次看。`),
+      now: "正在舉行", soon: "即將舉行", byRegion: "各地區慶典日程", other: "五日市集開市日",
+    },
+  },
+  market: {
+    ko: {
+      title: (p) => (p ? `${p} 5일장 장날 일정 · 오일장·전통시장` : "전국 5일장 장날 일정 · 오일장·전통시장 찾기"),
+      desc: (p) =>
+        p
+          ? `${p} 5일장(오일장) 장날과 다음 장 서는 날, 대표 먹거리·특산물을 정리했습니다. 장 구경 전에 장날을 확인하세요.`
+          : "전국 5일장(오일장) 장날을 한눈에. 시장별로 매달 장이 서는 날짜와 다음 장날, 대표 먹거리·특산물을 정리했습니다.",
+      list: "5일장 장날", permanent: "상설 전통시장", byRegion: "시·도별 5일장", other: "지역축제 일정", every: "매월", next: "다음 장날", specialty: "대표 먹거리·특산물",
+    },
+    en: {
+      title: (p) => (p ? `${p} 5-Day Market Days: Traditional Market Schedule` : "Korea 5-Day Market Schedule: Traditional Market Days"),
+      desc: (p) => (p ? `Market days and the next opening date of traditional 5-day markets in ${p}, Korea, with local specialties.` : "When Korea's traditional 5-day markets open each month, the next market day, and what to eat and buy."),
+      list: "5-day market days", permanent: "Everyday traditional markets", byRegion: "Markets by province", other: "Festival calendar", every: "Every month on day", next: "Next market day", specialty: "Local specialties",
+    },
+    ja: {
+      title: (p) => (p ? `${p}の五日市 市日カレンダー` : "韓国の五日市（5日市場）市日カレンダー"),
+      desc: (p) => (p ? `${p}の五日市の市日と次回開催日、名物を紹介。` : "韓国各地の五日市が立つ日と次回の市日、名物グルメをまとめて紹介。"),
+      list: "五日市の市日", permanent: "常設の伝統市場", byRegion: "地域別の五日市", other: "地域祭りの日程", every: "毎月", next: "次の市日", specialty: "名物・特産品",
+    },
+    zh: {
+      title: (p) => (p ? `${p}五日市集開市日` : "韓國五日市集開市日一覽"),
+      desc: (p) => (p ? `${p}五日市集的開市日、下次開市日期與在地特產。` : "韓國各地傳統五日市集每月開市日期、下次開市日與特色美食。"),
+      list: "五日市集開市日", permanent: "常設傳統市場", byRegion: "各地區五日市集", other: "地方慶典日程", every: "每月", next: "下次開市", specialty: "特色美食・特產",
+    },
+  },
+};
+
+function kstTodayYmd() {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+function fmtMd(ymd) {
+  const s = String(ymd || "");
+  return /^\d{8}$/.test(s) ? `${s.slice(4, 6)}.${s.slice(6, 8)}` : "";
+}
+
+/** 5일장 장날: days [1, 6] → 매월 [1, 6, 11, 16, 21, 26] (31일에는 장이 서지 않는다) */
+function marketDaysOfMonth(days) {
+  const base = new Set((Array.isArray(days) ? days : []).map((d) => ((Number(d) % 5) + 5) % 5));
+  const out = [];
+  for (let d = 1; d <= 30; d++) if (base.has(d % 5)) out.push(d);
+  return out;
+}
+
+/** 오늘(포함) 이후 첫 장날 "YYYYMMDD" (없으면 "") */
+function nextMarketYmd(days, todayYmd) {
+  const list = marketDaysOfMonth(days);
+  if (!list.length) return "";
+  const y = Number(todayYmd.slice(0, 4));
+  const m = Number(todayYmd.slice(4, 6));
+  const d = Number(todayYmd.slice(6, 8));
+  for (let k = 0; k < 2; k++) {
+    const yy = m + k > 12 ? y + 1 : y;
+    const mm = ((m - 1 + k) % 12) + 1;
+    const lastDay = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+    for (const day of list) {
+      if (day > lastDay || (k === 0 && day < d)) continue;
+      return `${yy}${String(mm).padStart(2, "0")}${String(day).padStart(2, "0")}`;
+    }
+  }
+  return "";
+}
+
+function topicUrl(origin, topic, province, lang) {
+  const q = [`topic=${topic}`];
+  if (province) q.push(`region=${encodeURIComponent(province)}`);
+  if (lang && lang !== "ko") q.push(`lang=${encodeURIComponent(lang)}`);
+  return `${origin}/?${q.join("&")}`;
+}
+
+/** 현재·예정 축제 (종료일 지난 것 제외), 시작일 순 */
+function activeFestivals(hub, todayYmd) {
+  return (hub.festivals || [])
+    .filter((x) => x && x.id && x.title && (!x.end_date || String(x.end_date) >= todayYmd))
+    .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")));
+}
+
+/** 사이트맵·링크용: 내용이 있는 시·도만 */
+function topicProvinces(hub, topic, todayYmd) {
+  const src = topic === "festival"
+    ? activeFestivals(hub || {}, todayYmd)
+    : [...((hub && hub.traditional_markets) || []), ...((hub && hub.markets) || [])];
+  return PROVINCES_17.filter((p) => src.some((x) => x && x.province === p));
+}
+
+/** 지역·홈 페이지에서 주제 페이지로 가는 링크 (축제 일정 · 5일장 장날). hub 가 있으면 내용 있는 것만 */
+function regionTopicLinks(origin, province, lang, hub) {
+  const today = kstTodayYmd();
+  const year = today.slice(0, 4);
+  const label = province ? provinceLabel(province, lang) : "";
+  return ["festival", "market"]
+    .filter((t) => !province || !hub || topicProvinces(hub, t, today).includes(province))
+    .map((t) => ({ href: topicUrl(origin, t, province, lang), text: (TOPIC_TEXT[t][lang] || TOPIC_TEXT[t].ko).title(label, year) }));
+}
+
+function buildTopicOgHtml(template, topic, province, origin, rawLang = "ko", data = null) {
+  const lang = normalizeLang(rawLang);
+  const htmlLang = lang === "zh" ? "zh-Hant" : lang;
+  const T = TOPIC_TEXT[topic][lang] || TOPIC_TEXT[topic].ko;
+  const today = kstTodayYmd();
+  const year = today.slice(0, 4);
+  const provLabel = province ? provinceLabel(province, lang) : "";
+  const titleText = `${T.title(provLabel, year)} | ${lang === "ko" ? "직스테이 로컬" : "Jikstay Korea"}`;
+  const descText = T.desc(provLabel, year);
+  const canonicalUrl = topicUrl(origin, topic, province, lang);
+  const hub = (data && data.hub) || {};
+  const L = seo.LABELS[lang] || seo.LABELS.ko;
+  const inProv = (x) => !province || x.province === province;
+  const spotText = (x) => seo.localizedTitleOf(x.id, String(x.title), lang, data);
+
+  const sections = [];
+  const listItems = [];
+  if (topic === "festival") {
+    const fests = activeFestivals(hub, today).filter(inProv);
+    const line = (x) => {
+      const range = [fmtMd(x.start_date), fmtMd(x.end_date)].filter(Boolean).join("~");
+      const where = province ? String(x.region_label || "") : String(x.region_label || provinceLabel(x.province, lang));
+      return { href: seo.pageUrl(origin, "spot", x.id, lang), text: `${spotText(x)} (${[where, range].filter(Boolean).join(" · ")})` };
+    };
+    const now = fests.filter((x) => !x.start_date || String(x.start_date) <= today);
+    const soon = fests.filter((x) => x.start_date && String(x.start_date) > today);
+    sections.push({ heading: T.now, html: seo.linkList(now.slice(0, 60).map(line)) });
+    sections.push({ heading: T.soon, html: seo.linkList(soon.slice(0, 60).map(line)) });
+    for (const x of [...now, ...soon].slice(0, 30)) listItems.push({ name: spotText(x), url: seo.pageUrl(origin, "spot", x.id, lang) });
+  } else {
+    const markets = ((hub.traditional_markets || []).filter((x) => x && x.title && inProv(x)))
+      .sort((a, b) => nextMarketYmd(a.days, today).localeCompare(nextMarketYmd(b.days, today)));
+    const items = markets.map((x) => {
+      const days = marketDaysOfMonth(x.days).join("·");
+      const next = nextMarketYmd(x.days, today);
+      const parts = [
+        `${provinceLabel(x.province, lang)} ${x.city || ""}`.trim(),
+        days ? `${T.every} ${days}${lang === "ko" ? "일" : ""}` : "",
+        next ? `${T.next} ${fmtMd(next)}` : "",
+        x.specialty ? `${T.specialty}: ${x.specialty}` : "",
+      ].filter(Boolean);
+      const name = String(x.id || "").startsWith("spot_mk_")
+        ? `<a href="${escapeHtml(seo.pageUrl(origin, "spot", x.id, lang))}">${escapeHtml(spotText(x))}</a>`
+        : escapeHtml(String(x.title));
+      return `<li><strong>${name}</strong> — ${escapeHtml(parts.join(" · "))}</li>`;
+    });
+    sections.push({ heading: province ? `${provLabel} ${T.list}` : T.list, html: items.length ? `<ul>${items.join("")}</ul>` : "" });
+    for (const x of markets.slice(0, 30)) {
+      const isPage = String(x.id || "").startsWith("spot_mk_");
+      listItems.push({ name: isPage ? spotText(x) : String(x.title), url: isPage ? seo.pageUrl(origin, "spot", x.id, lang) : canonicalUrl });
+    }
+    // 장날 없는 상설 전통시장도 함께 (상세 페이지로 연결)
+    const permanent = ((data && data.markets) || []).filter((x) => x && x.id && x.title && inProv(x) && !(Array.isArray(x.days) && x.days.length));
+    sections.push({
+      heading: province ? `${provLabel} ${T.permanent}` : T.permanent,
+      html: seo.linkList(permanent.slice(0, province ? 120 : 200).map((x) => ({
+        href: seo.pageUrl(origin, "spot", x.id, lang),
+        text: `${spotText(x)} (${[x.region_label || provinceLabel(x.province, lang), x.specialty ? String(x.specialty).slice(0, 40) : ""].filter(Boolean).join(" · ")})`,
+      }))),
+    });
+  }
+
+  const provs = topicProvinces(hub, topic, today).filter((p) => p !== province);
+  sections.push({
+    heading: T.byRegion,
+    html: seo.linkList(provs.map((p) => ({ href: topicUrl(origin, topic, p, lang), text: T.title(provinceLabel(p, lang), year) }))),
+  });
+  const otherTopic = topic === "festival" ? "market" : "festival";
+  sections.push({
+    heading: T.other,
+    html: seo.linkList([
+      { href: topicUrl(origin, otherTopic, province && topicProvinces(hub, otherTopic, today).includes(province) ? province : "", lang),
+        text: TOPIC_TEXT[otherTopic][lang] ? TOPIC_TEXT[otherTopic][lang].title(
+          province && topicProvinces(hub, otherTopic, today).includes(province) ? provLabel : "", year) : "" },
+      ...(province ? [seo.regionLink(origin, province, `${provLabel} · ${L.more}`, lang)] : []),
+    ]),
+  });
+
+  const alt = (l) => topicUrl(origin, topic, province, l);
+  const hreflangTags = [
+    `\n  <link rel="canonical" href="${escapeHtml(canonicalUrl)}">`,
+    `\n  <link rel="alternate" hreflang="ko" href="${escapeHtml(alt("ko"))}">`,
+    `\n  <link rel="alternate" hreflang="en" href="${escapeHtml(alt("en"))}">`,
+    `\n  <link rel="alternate" hreflang="ja" href="${escapeHtml(alt("ja"))}">`,
+    `\n  <link rel="alternate" hreflang="zh-Hant" href="${escapeHtml(alt("zh"))}">`,
+    `\n  <link rel="alternate" hreflang="x-default" href="${escapeHtml(alt("ko"))}">`,
+  ].join("");
+  const jsonLdObj = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: titleText.replace(/\s*\|[^|]*$/, ""),
+    description: descText,
+    url: canonicalUrl,
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: listItems.map((x, i) => ({ "@type": "ListItem", position: i + 1, name: x.name, url: x.url })),
+    },
+  };
+  const jsonLdTag = `\n  <script type="application/ld+json">${JSON.stringify(jsonLdObj).replace(/</g, "\\u003c")}</script>`;
+  const crumbs = [{ href: lang === "ko" ? `${origin}/` : `${origin}/?lang=${lang}`, text: L.home }];
+  if (province) crumbs.push({ href: topicUrl(origin, topic, "", lang), text: T.title("", year) });
+  const seoMain = seo.renderSeoMain({ lang, title: titleText.replace(/\s*\|[^|]*$/, ""), lead: descText, breadcrumbs: crumbs, sections });
+  const escapedTitle = escapeHtml(titleText);
+  const escapedDesc = escapeHtml(descText);
+
+  return template
+    .replace(/<html>/i, `<html lang="${htmlLang}">`)
+    .replace(/<title>[\s\S]*?<\/title>/, `<title>${escapedTitle}</title>`)
+    .replace(/<meta\s+name="description"\s+content="[^"]*">/, `<meta name="description" content="${escapedDesc}">`)
+    .replace(/<meta\s+property="og:title"\s+content="[^"]*">/, `<meta property="og:title" content="${escapedTitle}">`)
+    .replace(
+      /<meta\s+property="og:description"\s+content="[^"]*">/,
+      `<meta property="og:description" content="${escapedDesc}">\n  <meta property="og:url" content="${escapeHtml(canonicalUrl)}">${hreflangTags}${jsonLdTag}`
     )
     .replace(/<\/body>/i, `  ${seoMain}\n</body>`);
 }
@@ -570,11 +859,26 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
     return;
   }
 
+  const rawTopic = typeof req.query.topic === "string" ? req.query.topic.trim() : "";
+  if (TOPICS.has(rawTopic)) {
+    const [seoData, marketsDoc] = await Promise.all([
+      seo.loadSeoData(origin, normalizeLang(rawLang), null),
+      seo.fetchJsonCached(`${origin}/data/hub/markets.json`),
+    ]);
+    seoData.markets = (marketsDoc && marketsDoc.markets) || [];
+    const html = buildTopicOgHtml(template, rawTopic, PROVINCES_17.includes(rawRegion) ? rawRegion : "", origin, rawLang, seoData);
+    res.set("Cache-Control", "public, max-age=600, s-maxage=1200");
+    res.status(200).send(html);
+    return;
+  }
+
   if (PROVINCES_17.includes(rawRegion)) {
-    const [seoData, staysIndex] = await Promise.all([
+    const [seoData, staysIndex, marketsDoc] = await Promise.all([
       seo.loadSeoData(origin, normalizeLang(rawLang), null),
       seo.fetchJsonCached(`${origin}/data/public_stays_index.json`),
+      seo.fetchJsonCached(`${origin}/data/hub/markets.json`),
     ]);
+    seoData.markets = (marketsDoc && marketsDoc.markets) || [];
     const html = buildRegionOgHtml(template, rawRegion, origin, rawLang, seoData, staysIndex);
     res.set("Cache-Control", "public, max-age=600, s-maxage=1200");
     res.status(200).send(html);
@@ -629,7 +933,10 @@ function buildHomeSeoMain(origin, lang, title, lead) {
     lang,
     title,
     lead,
-    sections: [{ heading: L.regions, html: seo.linkList(PROVINCES_17.map((p) => seo.regionLink(origin, p, provinceLabel(p, lang), lang))) }],
+    sections: [
+      { heading: L.festivals, html: seo.linkList(regionTopicLinks(origin, "", lang, null)) },
+      { heading: L.regions, html: seo.linkList(PROVINCES_17.map((p) => seo.regionLink(origin, p, provinceLabel(p, lang), lang))) },
+    ],
   });
 }
 
@@ -721,6 +1028,19 @@ exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res)
       const q = `region=${encodeURIComponent(prov)}`;
       urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>\n${buildAlternates(q)}\n  </url>`);
     }
+    // 주제 페이지(축제 일정·5일장 장날): 전국 + 내용이 있는 시·도. XML 안에서는 & 를 &amp; 로 쓴다
+    const [hubCore, marketsDoc] = await Promise.all([
+      seo.fetchJsonCached(`${origin}/data/hub/core.json`),
+      seo.fetchJsonCached(`${origin}/data/hub/markets.json`),
+    ]);
+    const hubForTopics = hubCore ? { ...hubCore, markets: (marketsDoc && marketsDoc.markets) || [] } : null;
+    for (const topic of TOPICS) {
+      const provs = hubForTopics ? topicProvinces(hubForTopics, topic, kstTodayYmd()) : [];
+      for (const prov of ["", ...provs]) {
+        const q = prov ? `topic=${topic}&amp;region=${encodeURIComponent(prov)}` : `topic=${topic}`;
+        urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>\n${buildAlternates(q)}\n  </url>`);
+      }
+    }
     // 종료일이 지난 행사는 제출하지 않는다 (주간 갱신은 허브에서만 빼고 Firestore 상태는 그대로 둔다)
     const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
     spotSnap.forEach((doc) => {
@@ -761,6 +1081,10 @@ exports.serveRobots = onRequest({ region: "asia-northeast3" }, (req, res) => {
 
 exports.buildOgHtml = buildOgHtml;
 exports.primaryDomainRedirectUrl = primaryDomainRedirectUrl;
+exports.stayTitleQualifierKo = stayTitleQualifierKo;
+exports.buildTopicOgHtml = buildTopicOgHtml;
+exports.marketDaysOfMonth = marketDaysOfMonth;
+exports.nextMarketYmd = nextMarketYmd;
 exports.buildSpotOgHtml = buildSpotOgHtml;
 exports.buildRegionOgHtml = buildRegionOgHtml;
 exports.escapeHtml = escapeHtml;

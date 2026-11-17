@@ -57,6 +57,7 @@ DiscoveryItem? parseSpotJson(Map<String, dynamic> m, {required DiscoveryCategory
     'food' => DiscoveryCategory.food,
     'ebook' => DiscoveryCategory.ebook,
     'stay' => DiscoveryCategory.stay,
+    'market' => DiscoveryCategory.food, // 전통시장·5일장: 먹거리 분류로 묶고 배지만 따로
     _ => fallbackCategory,
   };
   final lat = (m['lat'] as num?)?.toDouble();
