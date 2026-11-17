@@ -4,14 +4,14 @@ import 'package:material_ui/material_ui.dart';
 const kConsentVersion = '2026-11-17.1';
 
 // 전자상거래법상 사업자 정보 표시 (사이트 하단)
-const kBizName = '[상호]';
+const kBizName = 'jikstay';
 const kBizCeo = '[대표자명]';
 const kBizRegNo = '[사업자등록번호]';
 const kBizMailOrderNo = '[통신판매업 신고번호]';
 const kBizAddress = '[사업장 주소]';
 const kBizEmail = '[문의·삭제요청 이메일]';
 
-// 초안 (2026-11-17) — 법률 검토 전. [ ] 자리표시자와 시행일은 사업자 정보 확정 후 채운다.
+// 2026-11-17 시행 (법률 검토 전). 남은 [ ] 자리표시자(사업자번호·이메일 등)는 확정 후 채운다.
 // 문구를 바꾸면 kConsentVersion 을 올린다.
 const kPrivacyPolicy = '''개인정보처리방침 (버전 $kConsentVersion)
 
@@ -38,8 +38,8 @@ const kPrivacyPolicy = '''개인정보처리방침 (버전 $kConsentVersion)
 
 3. 보유 기간 및 파기
    - 후기와 익명 식별자: 게시물을 운영하는 동안 보관하고, 삭제 요청 또는 권리침해·허위·욕설 신고가 확인되면 지체 없이 삭제합니다.
-   - 서버 접속 기록: [30]일 보관 후 자동 삭제
-   - 이용 통계(Google Analytics): 사용자 단위 데이터 [2]개월 보관 후 자동 삭제
+   - 서버 접속 기록: 30일 보관 후 자동 삭제
+   - 이용 통계(Google Analytics): 사용자 단위 데이터 2개월 보관 후 자동 삭제
    - 전자적 파일은 복구할 수 없는 방법으로 삭제합니다.
 
 4. 개인정보의 제3자 제공: 하지 않습니다.
@@ -68,10 +68,10 @@ const kPrivacyPolicy = '''개인정보처리방침 (버전 $kConsentVersion)
    관리자 키 접근 통제, 자동화된 악성 요청 차단(App Check)
 
 9. 개인정보 보호책임자
-   성명: [성명] / 연락처: $kBizEmail
+   성명: 채동석 / 연락처: $kBizEmail
 
 10. 변경 고지
-   이 방침이 바뀌면 시행 7일 전부터 서비스 화면을 통해 알립니다. 시행일: [2026년 ○월 ○일]''';
+   이 방침이 바뀌면 시행 7일 전부터 서비스 화면을 통해 알립니다. 시행일: 2026년 11월 17일''';
 
 void showLegalDialog(BuildContext context, String title, String body) {
   showDialog(
