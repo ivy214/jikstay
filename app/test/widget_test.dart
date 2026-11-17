@@ -1010,4 +1010,20 @@ void main() {
     expect(isEndedEventJson({'end_date': ''}, now: now), isFalse);
     expect(isEndedEventJson({'title': '볼거리'}, now: now), isFalse);
   });
+
+  test('붙여 쓴 장날 검색어를 지역과 장날로 나누고 시장에 걸린다', () {
+    final q = parseSearchQuery('곡성장날');
+    expect(q.terms, containsAll(['곡성', '장날']));
+    expect(parseSearchQuery('남원5일장').terms, containsAll(['남원', '5일장']));
+    expect(parseSearchQuery('5일장').terms, ['5일장']);
+
+    final market = parseSpotJson({
+      'id': 'spot_mk_1', 'kind': 'market', 'market_type': '5일장', 'days': [3, 8],
+      'title': '곡성기차마을전통시장', 'province': '전남', 'region_label': '전남 곡성군 곡성읍', 'lat': 35.28, 'lng': 127.29,
+    }, fallbackCategory: DiscoveryCategory.food)!;
+    expect(market.isMarket, isTrue);
+    expect(searchRelevance(market, q), isNotNull);
+    expect(searchRelevance(market, parseSearchQuery('곡성 장날')), isNotNull);
+    expect(searchRelevance(market, parseSearchQuery('남원 장날')), isNull);
+  });
 }

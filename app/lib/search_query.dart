@@ -64,6 +64,9 @@ const List<String> _kNoiseWords = [
   '근처', '주변', '코스', '추천', '일정',
 ];
 
+// 시장 관련 말 — "곡성장날" "남원5일장" 처럼 붙여 써도 지역 이름과 따로 찾는다 (버리지 않고 낱말로 남김). 긴 말 먼저.
+const List<String> _kMarketWords = ['전통시장', '오일장', '5일장', '장날', '장터', '시장'];
+
 /// 낱말 끝에 붙은 여행·숙소 같은 말을 떼어 낸다. 남는 말이 두 글자 미만이면 떼지 않는다.
 (String, DiscoveryCategory?, bool) _splitSuffix(String token) {
   for (final w in _kNoiseWords) {
@@ -92,6 +95,14 @@ ParsedSearchQuery parseSearchQuery(String raw) {
   DiscoveryCategory? category;
 
   for (var token in tokens) {
+    // "곡성장날" → "곡성" + "장날"
+    for (final w in _kMarketWords) {
+      if (token.length - w.length >= 2 && token.endsWith(w)) {
+        terms.add(w);
+        token = token.substring(0, token.length - w.length);
+        break;
+      }
+    }
     // "남원여행맛집" 처럼 여러 개가 붙어도 떼어 낸다
     while (true) {
       final (rest, cat, changed) = _splitSuffix(token);
@@ -123,7 +134,8 @@ String _haystack(DiscoveryItem it) =>
 String _marketWords(DiscoveryItem it) {
   if (!it.isMarket) return '';
   final type = (it.raw['market_type'] ?? '').toString();
-  final hasDays = it.raw['days'] is List && (it.raw['days'] as List).isNotEmpty;
+  // mkt_… 는 손으로 정리한 대표 5일장 (항상 장날이 있다)
+  final hasDays = it.id.startsWith('mkt_') || (it.raw['days'] is List && (it.raw['days'] as List).isNotEmpty);
   return ' 시장 전통시장 $type${hasDays ? ' 5일장 오일장 장날 장터' : ' 상설시장'}';
 }
 
