@@ -1,7 +1,7 @@
 # 직스테이 로컬 (JikStay Local)
 
 > **하루 한 편, 떠나고 싶은 한국의 숨은 로컬 스토리 & 지자체 공식 관광지도·동선 연결 플랫폼**
-> - 실서비스 URL: <https://jikstay-lkxu1.web.app>
+> - 실서비스 URL: <https://jikstay.app>
 > - 마스터 전략서: [docs/JIKSTAY_MASTER_STRATEGY.md](docs/JIKSTAY_MASTER_STRATEGY.md)
 > - 상세 구현 노트: [NOTES.md](NOTES.md)
 

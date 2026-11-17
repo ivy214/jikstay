@@ -1,7 +1,7 @@
 # 직스테이 로컬 — 현재 구조 노트
 
 > 기준일 2026-11-15. 코드 기준으로 정리한 **현재** 구조다. 폐지된 기능을 포함한 지난 이력은 [docs/CHANGELOG.md](docs/CHANGELOG.md).
-> 서비스: <https://jikstay-lkxu1.web.app> · Firebase 프로젝트 `jikstay-lkxu1` (서울 `asia-northeast3`)
+> 서비스: <https://jikstay.app> (기본 주소 jikstay-lkxu1.web.app 은 301 이동) · Firebase 프로젝트 `jikstay-lkxu1` (서울 `asia-northeast3`)
 
 ## 1. 한 줄 요약
 

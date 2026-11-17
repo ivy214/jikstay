@@ -15,7 +15,7 @@ import requests
 
 ROOT = Path(__file__).resolve().parent.parent
 HUB_PATH = ROOT / "app" / "web" / "data" / "public_travel_hub.json"
-HOST = "jikstay-lkxu1.web.app"
+HOST = "jikstay.app"
 INDEXNOW_KEY = "jikstayindexnow20260000"
 KEY_LOCATION = f"https://{HOST}/{INDEXNOW_KEY}.txt"
 

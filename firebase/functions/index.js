@@ -488,7 +488,29 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko", data = nu
     .replace(/<\/body>/i, `  ${seoMain}\n</body>`);
 }
 
+// 대표 도메인. Firebase 기본 주소(*.web.app, *.firebaseapp.com)로 들어온 페이지 요청은 이쪽으로 301 이동시켜
+// 같은 내용이 두 주소로 색인되지 않게 한다. (정적 파일은 Hosting 이 직접 내보내므로 영향 없음)
+const PRIMARY_HOST = "jikstay.app";
+const DEFAULT_HOST_RE = /\.(web\.app|firebaseapp\.com)$/i;
+
+/** 기본 주소로 들어온 요청이면 대표 도메인으로 보낼 URL, 아니면 "" */
+function primaryDomainRedirectUrl(host, originalUrl) {
+  const h = String(host || "").split(":")[0].trim().toLowerCase();
+  if (!h || !DEFAULT_HOST_RE.test(h)) return "";
+  const path = String(originalUrl || "/").startsWith("/") ? String(originalUrl || "/") : "/";
+  return `https://${PRIMARY_HOST}${path}`;
+}
+
+function redirectToPrimaryDomain(req, res) {
+  const target = primaryDomainRedirectUrl(req.get("x-forwarded-host") || req.get("host"), req.originalUrl || req.url);
+  if (!target) return false;
+  res.set("Cache-Control", "public, max-age=3600");
+  res.redirect(301, target);
+  return true;
+}
+
 exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => {
+  if (redirectToPrimaryDomain(req, res)) return;
   const template = CACHED_TEMPLATE || fs.readFileSync(TEMPLATE_PATH, "utf8");
   const rawId = typeof req.query.id === "string" ? req.query.id.trim() : "";
   const rawStory = typeof req.query.story === "string" ? req.query.story.trim() : "";
@@ -496,7 +518,7 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   const rawRegion = typeof req.query.region === "string" ? req.query.region.trim() : "";
   const rawLang = typeof req.query.lang === "string" ? req.query.lang.trim() : "ko";
   const proto = req.get("x-forwarded-proto") || "https";
-  const host = req.get("x-forwarded-host") || req.get("host") || "jikstay-lkxu1.web.app";
+  const host = req.get("x-forwarded-host") || req.get("host") || PRIMARY_HOST;
   const origin = `${proto}://${host}`;
 
   if (LISTING_ID_RE.test(rawId)) {
@@ -669,8 +691,9 @@ function lastmodTag(doc) {
  * 상한 없음: 볼거리·축제는 매주 늘어난다. 사이트맵 한 파일은 50,000 URL 까지 가능하다.
  */
 exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res) => {
+  if (redirectToPrimaryDomain(req, res)) return;
   const proto = req.get("x-forwarded-proto") || "https";
-  const host = req.get("x-forwarded-host") || req.get("host") || "jikstay-lkxu1.web.app";
+  const host = req.get("x-forwarded-host") || req.get("host") || PRIMARY_HOST;
   const origin = `${proto}://${host}`;
 
   try {
@@ -728,14 +751,16 @@ exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res)
 });
 
 exports.serveRobots = onRequest({ region: "asia-northeast3" }, (req, res) => {
+  if (redirectToPrimaryDomain(req, res)) return;
   const proto = req.get("x-forwarded-proto") || "https";
-  const host = req.get("x-forwarded-host") || req.get("host") || "jikstay-lkxu1.web.app";
+  const host = req.get("x-forwarded-host") || req.get("host") || PRIMARY_HOST;
   res.set("Content-Type", "text/plain; charset=utf-8");
   res.set("Cache-Control", "public, max-age=3600");
   res.status(200).send(`User-agent: *\nAllow: /\nDisallow: /go\nSitemap: ${proto}://${host}/sitemap.xml\n`);
 });
 
 exports.buildOgHtml = buildOgHtml;
+exports.primaryDomainRedirectUrl = primaryDomainRedirectUrl;
 exports.buildSpotOgHtml = buildSpotOgHtml;
 exports.buildRegionOgHtml = buildRegionOgHtml;
 exports.escapeHtml = escapeHtml;

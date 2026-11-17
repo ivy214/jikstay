@@ -182,3 +182,13 @@ describe("숙소 외부 연결(/go) 이동 대상", () => {
     assert.equal(fn.directBookingUrl({}), "");
   });
 });
+
+describe("대표 도메인 이동", () => {
+  it("Firebase 기본 주소만 jikstay.app 으로 보내고 경로·쿼리는 유지", () => {
+    assert.equal(fn.primaryDomainRedirectUrl("jikstay-lkxu1.web.app", "/?spot=spot_at_1&lang=en"), "https://jikstay.app/?spot=spot_at_1&lang=en");
+    assert.equal(fn.primaryDomainRedirectUrl("jikstay-lkxu1.firebaseapp.com", "/sitemap.xml"), "https://jikstay.app/sitemap.xml");
+    assert.equal(fn.primaryDomainRedirectUrl("jikstay.app", "/"), "");
+    assert.equal(fn.primaryDomainRedirectUrl("www.jikstay.app", "/"), "");
+    assert.equal(fn.primaryDomainRedirectUrl("", "/"), "");
+  });
+});

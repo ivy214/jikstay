@@ -32,7 +32,7 @@ void trackPortalEvent(String eventName, [Map<String, Object?> params = const {}]
 
 String currentSiteOrigin() {
   final origin = _jikstayCurrentOrigin().toDart;
-  return origin.isEmpty ? 'https://jikstay-lkxu1.web.app' : origin;
+  return origin.isEmpty ? 'https://jikstay.app' : origin;
 }
 
 Future<Map<String, dynamic>?> fetchWebJson(String relativeUrl) async {

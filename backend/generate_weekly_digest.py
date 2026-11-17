@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 HUB_PATH = ROOT / "app" / "web" / "data" / "public_travel_hub.json"
 STAYS_PATH = ROOT / "app" / "web" / "data" / "public_stays_index.json"
 DOCS_DIR = ROOT / "docs"
-SITE = "https://jikstay-lkxu1.web.app"
+SITE = "https://jikstay.app"
 
 
 def _parse_ymd(val: Any) -> dt.date | None:
