@@ -629,7 +629,8 @@ class _HomePageState extends State<HomePage> {
     if (mounted) setState(() {});
   }
 
-  List<DiscoveryItem> _filteredItems() {
+  /// [includeMarkets]: 지도는 겹치는 핀을 숨기고 화면당 핀 수가 정해져 있어 전통시장을 항상 함께 보여 준다.
+  List<DiscoveryItem> _filteredItems({bool includeMarkets = false}) {
     // "전북 남원" "남원여행" "남원 숙소" 처럼 입력해도 낱말·시도·분류로 나눠 찾는다 (search_query.dart)
     final q = parseSearchQuery(_query);
     final saved = SavedPlaces.ids.value.toSet();
@@ -637,7 +638,7 @@ class _HomePageState extends State<HomePage> {
     final relevance = <String, int>{};
     // 전통시장·5일장은 기본 피드에는 넣지 않고 검색할 때만 결과에 포함 ("강진" → 강진오일시장)
     final pool = q.isEmpty
-        ? _allItems.where((it) => !it.isMarket).toList()
+        ? (includeMarkets ? _allItems : _allItems.where((it) => !it.isMarket).toList())
         : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
     final out = pool.where((it) {
       if (_savedOnly && !saved.contains(it.id)) return false;
@@ -1279,7 +1280,7 @@ class _HomePageState extends State<HomePage> {
                       onOpenExternalUrl: _openExternalUrl,
                     ),
                   HomeViewMode.map => NaverLocalMapView(
-                      items: feedItems,
+                      items: _filteredItems(includeMarkets: true),
                       selectedProvince: _selectedProvince,
                       selectedCategory: _category,
                       query: _query,

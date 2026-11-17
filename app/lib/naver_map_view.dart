@@ -762,7 +762,8 @@ class _MapPinPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = selected ? const Color(0xFF0F172A) : item.category.color;
+    // 전통시장은 먹거리(주황)와 구분되게 갈색 🧺 핀
+    final bgColor = selected ? const Color(0xFF0F172A) : (item.isMarket ? const Color(0xFF92400E) : item.category.color);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
