@@ -23,6 +23,9 @@ jobs:
       NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
       NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # 번역: Azure Translator 무료(F0) 우선, 한도·오류 시 Gemini
+      AZURE_TRANSLATOR_KEY: ${{ secrets.AZURE_TRANSLATOR_KEY }}
+      AZURE_TRANSLATOR_REGION: ${{ secrets.AZURE_TRANSLATOR_REGION }}
       # 행안부 인허가 API 주소(비밀 아님). 농어촌민박업은 license_check.py 기본값 사용
       LICENSE_API_LODGING: https://apis.data.go.kr/1741000/lodgings
       LICENSE_API_HANOK: https://apis.data.go.kr/1741000/hanok_experience
@@ -101,7 +104,7 @@ jobs:
 
       - name: Incremental translations (EN/JA/ZH)
         id: translate
-        if: env.GEMINI_API_KEY != ''
+        if: env.GEMINI_API_KEY != '' || env.AZURE_TRANSLATOR_KEY != ''
         continue-on-error: true
         run: python backend/translate_hub.py --gemini
 
