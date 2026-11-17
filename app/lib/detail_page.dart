@@ -465,6 +465,12 @@ Future<void> goDirectBooking(
       ? explicitUrl
       : 'https://map.naver.com/p/search/${Uri.encodeComponent('${data['region_depth2'] ?? ''} ${data['title'] ?? ''}'.trim())}';
   final channel = bookingChannelName(rawUrl);
+  trackPortalEvent('click_booking', {
+    'listing_id': docId,
+    'channel': channel,
+    'direct': explicitUrl.isNotEmpty,
+    'province': (data['province'] ?? '').toString(),
+  });
   final inquiryText = buildBookingInquiryTemplate(
     data,
     dateRange: dateRange,

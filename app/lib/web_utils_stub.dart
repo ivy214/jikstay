@@ -2,6 +2,8 @@ void syncListingUrl(String? listingId) {}
 
 void syncPortalParams({String? region, String? spotId, String? storyId}) {}
 
+void resetHomeUrl({String? region}) {}
+
 void trackPortalEvent(String eventName, [Map<String, Object?> params = const {}]) {}
 
 String currentSiteOrigin() => 'https://jikstay.app';

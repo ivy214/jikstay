@@ -2,6 +2,7 @@
 // - 첫 화면: 지도 없이 가볍고 몰입감 있는 '오늘의 계절·테마 로컬 스토리' 히어로 + 계절 스토리 모음 + 연동 로컬 피드
 // - 배너 클릭 시: 지자체 공식 책자(PDF) 원문·사진·필수 탐방정보 박스를 담은 매거진형 스토리 상세 페이지 이동
 // - ?id=stay_xxx / ?story=spot_story_xxx / ?spot=... / ?region=... 딥링크 호환
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -216,6 +217,7 @@ class DirectStayApp extends StatelessWidget {
     return MaterialApp(
       title: '직스테이 로컬 · 오늘 떠나고 싶은 한국의 로컬 스토리',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [homeUrlSyncObserver],
       theme: ThemeData(
         colorSchemeSeed: const Color(0xFF0F172A),
         useMaterial3: true,
@@ -234,6 +236,20 @@ class DirectStayApp extends StatelessWidget {
     );
   }
 }
+
+/// 상세 화면을 닫고 홈으로 돌아오면 주소창의 ?spot= ?story= ?id= ?plan= ?topic= 를 지운다.
+/// (브라우저 뒤로가기·앱 안 뒤로가기 모두. 남겨 두면 새로고침·주소 공유 때 닫은 상세가 다시 열린다)
+class HomeUrlSyncObserver extends NavigatorObserver {
+  /// 홈 화면이 지금 지역으로 주소를 다시 맞추는 함수 (HomePage 가 등록)
+  static VoidCallback? onReturnHome;
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (previousRoute != null && previousRoute.isFirst) onReturnHome?.call();
+  }
+}
+
+final homeUrlSyncObserver = HomeUrlSyncObserver();
 
 class HomePage extends StatefulWidget {
   final bool initialDemoMode;
@@ -293,6 +309,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     SavedPlaces.ids.addListener(_onSavedChanged);
+    HomeUrlSyncObserver.onReturnHome = _resetHomeUrl;
     onAppLangSelected = (next) => TranslationStore.ensureLoaded(next);
     if (appLangNotifier.value != AppLang.ko) {
       TranslationStore.ensureLoaded(appLangNotifier.value);
@@ -309,6 +326,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     SavedPlaces.ids.removeListener(_onSavedChanged);
+    _searchTrackTimer?.cancel();
+    if (HomeUrlSyncObserver.onReturnHome == _resetHomeUrl) HomeUrlSyncObserver.onReturnHome = null;
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -623,6 +642,31 @@ class _HomePageState extends State<HomePage> {
         return;
       }
     }
+  }
+
+  /// 검색어 측정 (GA4 'search' + 결과 0건이면 'search_no_results'). 입력이 1.5초 멈추면 한 번만 보낸다.
+  Timer? _searchTrackTimer;
+  void _scheduleSearchTrack() {
+    _searchTrackTimer?.cancel();
+    _searchTrackTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      final term = _query.trim();
+      if (term.length < 2) return;
+      final results = _filteredItems().length;
+      final params = {
+        'search_term': term,
+        'results': results,
+        'province': _selectedProvince,
+        'category': _category.name,
+      };
+      trackPortalEvent('search', params);
+      if (results == 0) trackPortalEvent('search_no_results', params);
+    });
+  }
+
+  void _resetHomeUrl() {
+    if (!mounted) return;
+    resetHomeUrl(region: _selectedProvince);
   }
 
   void _onSavedChanged() {
@@ -957,10 +1001,13 @@ class _HomePageState extends State<HomePage> {
                         child: TextField(
                           key: const Key('top_search_input'),
                           controller: _searchCtrl,
-                          onChanged: (v) => setState(() {
-                            _query = v;
-                            _feedVisibleCount = _feedPageSize;
-                          }),
+                          onChanged: (v) {
+                            setState(() {
+                              _query = v;
+                              _feedVisibleCount = _feedPageSize;
+                            });
+                            _scheduleSearchTrack();
+                          },
                           decoration: InputDecoration(
                             hintText: trUi('search_hint', lang),
                             hintStyle: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
@@ -1252,10 +1299,13 @@ class _HomePageState extends State<HomePage> {
                     height: 36,
                     child: TextField(
                       controller: _searchCtrl,
-                      onChanged: (v) => setState(() {
-                        _query = v;
-                        _feedVisibleCount = _feedPageSize;
-                      }),
+                      onChanged: (v) {
+                        setState(() {
+                          _query = v;
+                          _feedVisibleCount = _feedPageSize;
+                        });
+                        _scheduleSearchTrack();
+                      },
                       decoration: InputDecoration(
                         hintText: trUi('search_hint', lang),
                         hintStyle: const TextStyle(fontSize: 12),

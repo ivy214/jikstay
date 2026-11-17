@@ -7,6 +7,9 @@ external void _jikstaySyncUrl(JSString? listingId);
 @JS('jikstaySyncPortalParams')
 external void _jikstaySyncPortalParams(JSString? region, JSString? spotId, JSString? storyId);
 
+@JS('jikstayResetHomeUrl')
+external void _jikstayResetHomeUrl(JSString? region);
+
 @JS('jikstayTrackEvent')
 external void _jikstayTrackEvent(JSString eventName, JSString payloadJson);
 
@@ -22,6 +25,13 @@ void syncListingUrl(String? listingId) {
 
 void syncPortalParams({String? region, String? spotId, String? storyId}) {
   _jikstaySyncPortalParams(region?.toJS, spotId?.toJS, storyId?.toJS);
+}
+
+/// 홈으로 돌아왔을 때 주소를 홈 상태로 (상세·여행코스·주제 파라미터 제거, 지역·언어는 유지)
+void resetHomeUrl({String? region}) {
+  try {
+    _jikstayResetHomeUrl(region?.toJS);
+  } catch (_) {}
 }
 
 void trackPortalEvent(String eventName, [Map<String, Object?> params = const {}]) {
