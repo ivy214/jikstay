@@ -39,6 +39,16 @@ String inferProvinceFromRaw(Map<String, dynamic> m) {
   return '서울';
 }
 
+/// 종료일(end_date, YYYYMMDD)이 오늘(기기 날짜)보다 이전인 행사인지. 종료일이 없거나 형식이 다르면 false.
+/// 주간 갱신(월요일) 사이에 끝난 축제를 목록에서 바로 숨기는 데 쓴다.
+bool isEndedEventJson(Map m, {DateTime? now}) {
+  final ed = (m['end_date'] ?? '').toString().trim();
+  if (ed.length != 8 || int.tryParse(ed) == null) return false;
+  final n = now ?? DateTime.now();
+  final today = '${n.year.toString().padLeft(4, '0')}${n.month.toString().padLeft(2, '0')}${n.day.toString().padLeft(2, '0')}';
+  return ed.compareTo(today) < 0;
+}
+
 DiscoveryItem? parseSpotJson(Map<String, dynamic> m, {required DiscoveryCategory fallbackCategory}) {
   final kind = (m['kind'] ?? '').toString();
   final cat = switch (kind) {

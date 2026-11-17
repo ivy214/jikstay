@@ -358,13 +358,13 @@ class _HomePageState extends State<HomePage> {
         }
       }
       for (final raw in (hubJson['festivals'] as List? ?? const [])) {
-        if (raw is Map) {
+        if (raw is Map && !isEndedEventJson(raw)) {
           final parsed = parseSpotJson(Map<String, dynamic>.from(raw), fallbackCategory: DiscoveryCategory.event);
           if (parsed != null) itemsById[parsed.id] = parsed;
         }
       }
       for (final raw in (hubJson['spots'] as List? ?? const [])) {
-        if (raw is Map) {
+        if (raw is Map && !isEndedEventJson(raw)) {
           final parsed = parseSpotJson(Map<String, dynamic>.from(raw), fallbackCategory: DiscoveryCategory.attraction);
           if (parsed != null) itemsById[parsed.id] = parsed;
         }

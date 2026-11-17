@@ -698,9 +698,13 @@ exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res)
       const q = `region=${encodeURIComponent(prov)}`;
       urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>\n${buildAlternates(q)}\n  </url>`);
     }
+    // 종료일이 지난 행사는 제출하지 않는다 (주간 갱신은 허브에서만 빼고 Firestore 상태는 그대로 둔다)
+    const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
     spotSnap.forEach((doc) => {
       if (!SPOT_ID_RE.test(doc.id)) return;
       const d = doc.data() || {};
+      const endYmd = String(d.end_date || "").trim();
+      if (/^\d{8}$/.test(endYmd) && endYmd < todayKst) return;
       const paramKey = d.is_story === true ? "story" : "spot";
       const q = `${paramKey}=${encodeURIComponent(doc.id)}`;
       urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>${lastmodTag(doc)}\n${buildAlternates(q)}\n  </url>`);

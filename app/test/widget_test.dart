@@ -1001,4 +1001,13 @@ void main() {
     expect(TranslationStore.stringList(AppLang.en, 'items', 'spot_a', 'paragraphs', const []), ['First', 'Second']);
     TranslationStore.clearForTest();
   });
+
+  test('종료일이 지난 행사만 마감으로 판정 (종료일 당일은 진행 중)', () {
+    final now = DateTime(2026, 11, 17);
+    expect(isEndedEventJson({'end_date': '20261116'}, now: now), isTrue);
+    expect(isEndedEventJson({'end_date': '20261117'}, now: now), isFalse);
+    expect(isEndedEventJson({'end_date': '20261231'}, now: now), isFalse);
+    expect(isEndedEventJson({'end_date': ''}, now: now), isFalse);
+    expect(isEndedEventJson({'title': '볼거리'}, now: now), isFalse);
+  });
 }

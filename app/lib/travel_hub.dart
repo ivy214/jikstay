@@ -176,7 +176,7 @@ class _PublicTravelHubViewState extends State<PublicTravelHubView> {
     final lang = widget.lang;
     final benefits = (_hub?['global_benefits'] as List?)?.whereType<Map>().toList() ?? _kFallbackBenefits;
     final halfRegions = (_hub?['half_price_regions'] as List?)?.whereType<Map>().toList() ?? _kFallbackHalfPriceRegions;
-    final allFestivals = (_hub?['festivals'] as List?)?.whereType<Map>().toList() ?? const [];
+    final allFestivals = (_hub?['festivals'] as List?)?.whereType<Map>().where((f) => !isEndedEventJson(f)).toList() ?? const [];
     final allCourses = (_hub?['courses'] as List?)?.whereType<Map>().toList() ?? const [];
     final subsidyGuides = (_hub?['subsidy_guides'] as List?)?.whereType<Map>().toList() ?? const [];
 
