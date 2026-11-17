@@ -160,6 +160,16 @@ def build_story_payload(st: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_item_payload(it: dict[str, Any]) -> dict[str, Any]:
+    if it.get("kind") == "culture":
+        # 공연·전시(매주 수백 건씩 바뀜): 제목·지역·요약·관람 정보만
+        return {
+            "title": it.get("title", ""),
+            "region_label": it.get("region_label", ""),
+            "overview": it.get("overview", ""),
+            "pull_quote": it.get("pull_quote", ""),
+            "practical_header": it.get("practical_header", ""),
+            "practical_info": it.get("practical_info", []),
+        }
     if it.get("kind") == "market":
         # 전통시장(약 800곳)은 핵심 정보만: 긴 본문까지 번역하면 무료 번역 한도(월 200만 자)를 거의 다 쓴다.
         # 상세 화면에서 번역이 없는 본문은 한국어 원문으로 보인다.
@@ -418,7 +428,7 @@ def main() -> None:
 
     story_records = [(st["id"], build_story_payload(st)) for st in hub.get("daily_stories", []) if st.get("id")]
     item_records = []
-    for it in hub.get("festivals", []) + hub.get("spots", []) + hub.get("markets", []):
+    for it in hub.get("festivals", []) + hub.get("spots", []) + hub.get("markets", []) + hub.get("culture", []):
         if it.get("id"):
             item_records.append((str(it["id"]), build_item_payload(it)))
     market_records = [(mk["id"], build_market_payload(mk)) for mk in hub.get("traditional_markets", []) if mk.get("id")]

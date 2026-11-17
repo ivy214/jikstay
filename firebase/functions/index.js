@@ -284,6 +284,11 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko", data = 
   const overviewDesc = loc.overview ? seo.truncate(loc.overview, 155) : "";
 
   let titleText = isStory ? `${title} · ${spot.source_book || prov} | 직스테이 로컬 스토리` : `${title} (${prov}) | 직스테이 로컬`;
+  if (kind === "culture" && !isStory) {
+    // "개방 수장고 개편 (청주 전시) | 직스테이 로컬" — "청주 전시", "대학로 연극" 검색에 걸리도록
+    const city = String(spot.city || "").replace(/^([가-힣]{2,})[시군]$/, "$1") || prov;
+    titleText = `${title} (${city} ${String(spot.culture_type || "공연")}) | 직스테이 로컬`;
+  }
   if (kind === "market" && !isStory) {
     // "곡성기차마을전통시장 (곡성 5일장 · 장날) | 직스테이 로컬" — "곡성 5일장", "곡성 장날" 검색에 걸리도록
     const city = String(spot.city || "").replace(/^([가-힣]{2,})[시군]$/, "$1") || prov;
@@ -344,6 +349,26 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko", data = 
     const ed = fmtYmdIso(spot.end_date);
     if (sd) jsonLdObj.startDate = sd;
     if (ed) jsonLdObj.endDate = ed;
+  }
+  if (kind === "culture") {
+    // 공연·전시: schema.org Event (Google 이벤트 검색 결과 조건 — 이름·시작일·장소)
+    const realm = String(spot.realm || "");
+    jsonLdObj["@type"] = spot.culture_type === "전시" ? "ExhibitionEvent"
+      : /음악|콘서트/.test(realm) ? "MusicEvent"
+      : /연극|뮤지컬|오페라/.test(realm) ? "TheaterEvent"
+      : /무용|발레/.test(realm) ? "DanceEvent" : "Event";
+    const sd = fmtYmdIso(spot.start_date);
+    const ed = fmtYmdIso(spot.end_date);
+    if (sd) jsonLdObj.startDate = sd;
+    if (ed) jsonLdObj.endDate = ed;
+    jsonLdObj.eventStatus = "https://schema.org/EventScheduled";
+    jsonLdObj.eventAttendanceMode = "https://schema.org/OfflineEventAttendanceMode";
+    jsonLdObj.location = { "@type": "Place", name: String(spot.place || title), address: jsonLdObj.address };
+    if (jsonLdObj.geo) jsonLdObj.location.geo = jsonLdObj.geo;
+    delete jsonLdObj.address;
+    delete jsonLdObj.geo;
+    delete jsonLdObj.telephone;
+    if (spot.url) jsonLdObj.offers = { "@type": "Offer", url: String(spot.url) };
   }
   const reviewCount = Number(spot.review_count) || 0;
   const scoreSum = Number(spot.score_sum) || 0;
@@ -441,16 +466,16 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko", data = nu
   const provEn = PROVINCE_EN[province] || province;
   const provLabel = provinceLabel(province, lang);
   // 외국인은 장소 이름보다 '지역 + 할 것·맛집·숙소'로 검색한다 → 제목을 그 검색어에 맞춘다
-  let titleText = `${province} 여행 가볼만한 곳·축제·맛집·숙소 총정리 | 직스테이 로컬`;
-  let descText = `${province} 가볼만한 곳, 진행 중인 축제·오일장, 로컬 맛집, 지자체 공식 가이드북(PDF/E-book)과 공공데이터 등록 숙소를 한눈에 확인하세요.`;
+  let titleText = `${province} 가볼만한 곳·축제·공연·전시·맛집·숙소 총정리 | 직스테이 로컬`;
+  let descText = `${province} 가볼만한 곳, 진행 중인 축제·공연·전시회·5일장, 로컬 맛집, 지자체 공식 가이드북(PDF/E-book)과 공공데이터 등록 숙소를 한눈에 확인하세요.`;
   if (lang === "en") {
-    titleText = `Things to Do in ${provEn}, Korea: Festivals, Local Food & Stays | Jikstay Korea`;
+    titleText = `Things to Do in ${provEn}, Korea: Festivals, Shows, Exhibitions, Local Food & Stays | Jikstay Korea`;
     descText = `Things to do in ${provEn}, Korea: attractions, festivals happening now, local food and places to stay, plus free official municipal tourist maps (PDF).`;
   } else if (lang === "ja") {
-    titleText = `${provLabel}観光 おすすめスポット・祭り・グルメ・宿泊 | Jikstay Korea`;
+    titleText = `${provLabel}観光 おすすめスポット・祭り・公演・展示・グルメ・宿泊 | Jikstay Korea`;
     descText = `${provLabel}のおすすめ観光スポット、開催中の祭り、地元グルメ、宿泊施設と自治体公式観光ガイドブックPDFをまとめて紹介。`;
   } else if (lang === "zh") {
-    titleText = `${provLabel}旅遊 必去景點・慶典・美食・住宿 | Jikstay 韓國`;
+    titleText = `${provLabel}旅遊 必去景點・慶典・演出・展覽・美食・住宿 | Jikstay 韓國`;
     descText = `${provLabel}必去景點、正在舉行的慶典、在地美食與住宿，以及地方政府官方旅遊指南PDF一次看。`;
   }
 
@@ -512,7 +537,8 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko", data = nu
       { heading: `${provLabel} · ${L.food}`, html: seo.linkList(spotLinks(spots.filter((x) => x.kind === "food"), 30)) },
       { heading: `${provLabel} · ${L.stays}`, html: seo.linkList(stays) },
       { heading: `${provLabel} · ${MARKET_LABEL[lang] || MARKET_LABEL.ko}`, html: seo.linkList(spotLinks(((data && data.markets) || []).filter(inProv), 40)) },
-      { heading: `${provLabel} · ${TOPIC_TEXT.festival[lang].byRegion}`, html: seo.linkList(regionTopicLinks(origin, province, lang, { ...hub, markets: (data && data.markets) || [] })) },
+      { heading: `${provLabel} · ${(TOPIC_TEXT.culture[lang] || TOPIC_TEXT.culture.ko).exhibitions}`, html: seo.linkList(spotLinks(activeCulture({ culture: (data && data.culture) || [] }, today).filter(inProv), 30)) },
+      { heading: `${provLabel} · ${TOPIC_TEXT.festival[lang].byRegion}`, html: seo.linkList(regionTopicLinks(origin, province, lang, { ...hub, markets: (data && data.markets) || [], culture: (data && data.culture) || [] })) },
       { heading: L.regions, html: seo.linkList(otherRegions) },
     ],
   });
@@ -533,7 +559,7 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko", data = nu
 // 주제 페이지 (?topic=festival | market, 선택 &region=시·도)
 // "전국 지역축제", "전북 축제 일정", "5일장 장날" 같은 검색어로 들어오는 입구.
 // ---------------------------------------------------------------------------
-const TOPICS = new Set(["festival", "market"]);
+const TOPICS = new Set(["festival", "market", "culture"]);
 const MARKET_LABEL = { ko: "전통시장·5일장", en: "Traditional markets", ja: "伝統市場・五日市", zh: "傳統市場・五日市集" };
 
 const TOPIC_TEXT = {
@@ -563,6 +589,31 @@ const TOPIC_TEXT = {
       title: (p, y) => (p ? `${p}慶典・活動日程 ${y}` : `韓國地方慶典・活動日程 ${y}`),
       desc: (p, y) => (p ? `${y}年${p}正在舉行與即將舉行的慶典和活動，依日期整理。` : `${y}年韓國全國17市道地方慶典與活動日程一次看。`),
       now: "正在舉行", soon: "即將舉行", byRegion: "各地區慶典日程", other: "五日市集開市日",
+    },
+  },
+  culture: {
+    ko: {
+      title: (p, y) => (p ? `${p} 전시회·공연 일정 ${y} · 지금 볼 수 있는 전시·공연` : `전국 전시회·공연 일정 ${y} · 이번 주 볼 만한 전시·공연`),
+      desc: (p, y) =>
+        p
+          ? `${y}년 ${p}에서 지금 볼 수 있는 전시회와 이번 주·다가오는 공연(연극·뮤지컬·콘서트·국악)을 기간·장소·요금과 함께 모았습니다.`
+          : `${y}년 전국 미술관·박물관 전시회와 연극·뮤지컬·콘서트·국악 공연 일정을 지역별로 모았습니다. 기간·장소·요금과 예매 링크까지 확인하세요.`,
+      exhibitions: "지금 볼 수 있는 전시", thisWeek: "이번 주 공연", soon: "다가오는 공연", byRegion: "시·도별 전시·공연 일정", other: "함께 볼 일정",
+    },
+    en: {
+      title: (p, y) => (p ? `${p} Exhibitions & Shows ${y}` : `Korea Exhibitions & Shows ${y}: What's On This Week`),
+      desc: (p, y) => (p ? `Exhibitions on now and upcoming theater, musicals, concerts and gugak in ${p}, Korea in ${y}, with dates, venues and prices.` : `Museum and gallery exhibitions plus theater, musical, concert and gugak performances across Korea in ${y}, by region.`),
+      exhibitions: "Exhibitions on now", thisWeek: "Performances this week", soon: "Upcoming performances", byRegion: "Exhibitions & shows by province", other: "More calendars",
+    },
+    ja: {
+      title: (p, y) => (p ? `${p}の展示・公演スケジュール ${y}` : `韓国の展示・公演スケジュール ${y}`),
+      desc: (p, y) => (p ? `${y}年に${p}で開催中の展示と今週・今後の公演を紹介。` : `${y}年 韓国各地の美術館・博物館の展示と演劇・ミュージカル・コンサートの公演日程。`),
+      exhibitions: "開催中の展示", thisWeek: "今週の公演", soon: "今後の公演", byRegion: "地域別の展示・公演", other: "そのほかの日程",
+    },
+    zh: {
+      title: (p, y) => (p ? `${p}展覽・演出日程 ${y}` : `韓國展覽・演出日程 ${y}`),
+      desc: (p, y) => (p ? `${y}年${p}正在展出的展覽與本週、即將上演的演出。` : `${y}年韓國各地美術館・博物館展覽與戲劇・音樂劇・音樂會演出日程。`),
+      exhibitions: "正在展出", thisWeek: "本週演出", soon: "即將上演", byRegion: "各地區展覽・演出", other: "其他日程",
     },
   },
   market: {
@@ -642,11 +693,20 @@ function activeFestivals(hub, todayYmd) {
     .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")));
 }
 
+/** 진행 중·예정 공연·전시 (종료일 지난 것 제외), 시작일 순 */
+function activeCulture(hub, todayYmd) {
+  return ((hub && hub.culture) || [])
+    .filter((x) => x && x.id && x.title && (!x.end_date || String(x.end_date) >= todayYmd))
+    .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")));
+}
+
 /** 사이트맵·링크용: 내용이 있는 시·도만 */
 function topicProvinces(hub, topic, todayYmd) {
   const src = topic === "festival"
     ? activeFestivals(hub || {}, todayYmd)
-    : [...((hub && hub.traditional_markets) || []), ...((hub && hub.markets) || [])];
+    : topic === "culture"
+      ? activeCulture(hub || {}, todayYmd)
+      : [...((hub && hub.traditional_markets) || []), ...((hub && hub.markets) || [])];
   return PROVINCES_17.filter((p) => src.some((x) => x && x.province === p));
 }
 
@@ -655,7 +715,7 @@ function regionTopicLinks(origin, province, lang, hub) {
   const today = kstTodayYmd();
   const year = today.slice(0, 4);
   const label = province ? provinceLabel(province, lang) : "";
-  return ["festival", "market"]
+  return ["festival", "market", "culture"]
     .filter((t) => !province || !hub || topicProvinces(hub, t, today).includes(province))
     .map((t) => ({ href: topicUrl(origin, t, province, lang), text: (TOPIC_TEXT[t][lang] || TOPIC_TEXT[t].ko).title(label, year) }));
 }
@@ -670,14 +730,31 @@ function buildTopicOgHtml(template, topic, province, origin, rawLang = "ko", dat
   const titleText = `${T.title(provLabel, year)} | ${lang === "ko" ? "직스테이 로컬" : "Jikstay Korea"}`;
   const descText = T.desc(provLabel, year);
   const canonicalUrl = topicUrl(origin, topic, province, lang);
-  const hub = (data && data.hub) || {};
+  const hub = { ...((data && data.hub) || {}), markets: (data && data.markets) || [], culture: (data && data.culture) || [] };
   const L = seo.LABELS[lang] || seo.LABELS.ko;
   const inProv = (x) => !province || x.province === province;
   const spotText = (x) => seo.localizedTitleOf(x.id, String(x.title), lang, data);
 
   const sections = [];
   const listItems = [];
-  if (topic === "festival") {
+  if (topic === "culture") {
+    const items = activeCulture(hub, today).filter(inProv);
+    const week = (() => { const d = new Date(Date.now() + 9 * 3600 * 1000 + 7 * 86400000); return d.toISOString().slice(0, 10).replace(/-/g, ""); })();
+    const line = (x) => {
+      const range = [fmtMd(x.start_date), fmtMd(x.end_date)].filter(Boolean).join("~");
+      const where = [province ? "" : provinceLabel(x.province, lang), x.place || ""].filter(Boolean).join(" ");
+      return { href: seo.pageUrl(origin, "spot", x.id, lang), text: `${spotText(x)} (${[where, range, x.price_text ? String(x.price_text).slice(0, 24) : ""].filter(Boolean).join(" · ")})` };
+    };
+    const exhibitions = items.filter((x) => x.culture_type === "전시" && (!x.start_date || String(x.start_date) <= week));
+    const shows = items.filter((x) => x.culture_type !== "전시");
+    const thisWeek = shows.filter((x) => !x.start_date || String(x.start_date) <= week);
+    const soon = shows.filter((x) => x.start_date && String(x.start_date) > week);
+    const cap = province ? 80 : 120;
+    sections.push({ heading: province ? `${provLabel} ${T.exhibitions}` : T.exhibitions, html: seo.linkList(exhibitions.slice(0, cap).map(line)) });
+    sections.push({ heading: province ? `${provLabel} ${T.thisWeek}` : T.thisWeek, html: seo.linkList(thisWeek.slice(0, cap).map(line)) });
+    sections.push({ heading: province ? `${provLabel} ${T.soon}` : T.soon, html: seo.linkList(soon.slice(0, cap).map(line)) });
+    for (const x of [...exhibitions, ...thisWeek].slice(0, 30)) listItems.push({ name: spotText(x), url: seo.pageUrl(origin, "spot", x.id, lang) });
+  } else if (topic === "festival") {
     const fests = activeFestivals(hub, today).filter(inProv);
     const line = (x) => {
       const range = [fmtMd(x.start_date), fmtMd(x.end_date)].filter(Boolean).join("~");
@@ -727,15 +804,13 @@ function buildTopicOgHtml(template, topic, province, origin, rawLang = "ko", dat
     heading: T.byRegion,
     html: seo.linkList(provs.map((p) => ({ href: topicUrl(origin, topic, p, lang), text: T.title(provinceLabel(p, lang), year) }))),
   });
-  const otherTopic = topic === "festival" ? "market" : "festival";
+  const otherLinks = [...TOPICS].filter((t) => t !== topic).map((t) => {
+    const p = province && topicProvinces(hub, t, today).includes(province) ? province : "";
+    return { href: topicUrl(origin, t, p, lang), text: (TOPIC_TEXT[t][lang] || TOPIC_TEXT[t].ko).title(p ? provLabel : "", year) };
+  });
   sections.push({
     heading: T.other,
-    html: seo.linkList([
-      { href: topicUrl(origin, otherTopic, province && topicProvinces(hub, otherTopic, today).includes(province) ? province : "", lang),
-        text: TOPIC_TEXT[otherTopic][lang] ? TOPIC_TEXT[otherTopic][lang].title(
-          province && topicProvinces(hub, otherTopic, today).includes(province) ? provLabel : "", year) : "" },
-      ...(province ? [seo.regionLink(origin, province, `${provLabel} · ${L.more}`, lang)] : []),
-    ]),
+    html: seo.linkList([...otherLinks, ...(province ? [seo.regionLink(origin, province, `${provLabel} · ${L.more}`, lang)] : [])]),
   });
 
   const alt = (l) => topicUrl(origin, topic, province, l);
@@ -775,6 +850,67 @@ function buildTopicOgHtml(template, topic, province, origin, rawLang = "ko", dat
       `<meta property="og:description" content="${escapedDesc}">\n  <meta property="og:url" content="${escapeHtml(canonicalUrl)}">${hreflangTags}${jsonLdTag}`
     )
     .replace(/<\/body>/i, `  ${seoMain}\n</body>`);
+}
+
+/** 종료일이 지났거나(KST 기준 오늘보다 이전) 정리 작업이 ended 로 바꾼 축제·공연·전시 */
+function isEndedSpot(spot) {
+  if (!spot) return false;
+  if (spot.status === "ended") return true;
+  const ed = String(spot.end_date || "").trim();
+  return /^\d{8}$/.test(ed) && ed < kstTodayYmd();
+}
+
+const ENDED_TEXT = {
+  ko: { tag: "종료", lead: (k, d, p) => `이 ${k}${/[가-힣]$/.test(k) && (k.charCodeAt(k.length - 1) - 0xac00) % 28 ? "은" : "는"} ${d}에 종료되었습니다. 지금 ${p}에서 열리는 공연·전시·축제를 확인해 보세요.`,
+        now: (p) => `지금 ${p}에서 열리는 공연·전시·축제`, kind: { culture: "공연·전시", event: "축제·행사" } },
+  en: { tag: "Ended", lead: (k, d, p) => `This ${k} ended on ${d}. See what's on now in ${p}.`,
+        now: (p) => `On now in ${p}`, kind: { culture: "show or exhibition", event: "festival" } },
+  ja: { tag: "終了", lead: (k, d, p) => `この${k}は${d}に終了しました。${p}で開催中の公演・展示・祭りをご覧ください。`,
+        now: (p) => `${p}で開催中`, kind: { culture: "公演・展示", event: "祭り・イベント" } },
+  zh: { tag: "已結束", lead: (k, d, p) => `此${k}已於${d}結束。看看${p}正在舉行的演出、展覽與慶典。`,
+        now: (p) => `${p}正在舉行`, kind: { culture: "演出・展覽", event: "慶典活動" } },
+};
+
+function buildEndedSpotHtml(template, spot, spotId, origin, rawLang = "ko", data = null) {
+  const lang = normalizeLang(rawLang);
+  const htmlLang = lang === "zh" ? "zh-Hant" : lang;
+  const T = ENDED_TEXT[lang] || ENDED_TEXT.ko;
+  const prov = String(spot.province || "");
+  const provLabel = provinceLabel(prov, lang) || prov;
+  const title = seo.localizedTitleOf(spotId, String(spot.title || ""), lang, data);
+  const ed = String(spot.end_date || "");
+  const endText = /^\d{8}$/.test(ed) ? `${ed.slice(0, 4)}.${ed.slice(4, 6)}.${ed.slice(6, 8)}` : "";
+  const kindLabel = T.kind[spot.kind === "culture" ? "culture" : "event"];
+  const titleText = `${title} (${T.tag}) | ${lang === "ko" ? "직스테이 로컬" : "Jikstay Korea"}`;
+  const descText = T.lead(kindLabel, endText, provLabel);
+  const today = kstTodayYmd();
+  const hub = { ...((data && data.hub) || {}), culture: (data && data.culture) || [] };
+  const inProv = (x) => x && x.id && x.title && x.province === prov && x.id !== spotId;
+  const nowItems = [...activeFestivals(hub, today).filter(inProv), ...activeCulture(hub, today).filter(inProv)]
+    .filter((x) => !x.start_date || String(x.start_date) <= today)
+    .slice(0, 20)
+    .map((x) => ({ href: seo.pageUrl(origin, "spot", x.id, lang), text: seo.localizedTitleOf(x.id, String(x.title), lang, data) }));
+  const seoMain = seo.renderSeoMain({
+    lang,
+    title: `${title} (${T.tag})`,
+    lead: descText,
+    breadcrumbs: [{ href: lang === "ko" ? `${origin}/` : `${origin}/?lang=${lang}`, text: (seo.LABELS[lang] || seo.LABELS.ko).home }],
+    sections: [
+      { heading: T.now(provLabel), html: seo.linkList(nowItems) },
+      { heading: provLabel, html: seo.linkList(regionTopicLinks(origin, prov, lang, null)) },
+    ],
+  });
+  const t = escapeHtml(titleText);
+  const d = escapeHtml(descText);
+  return template
+    .replace(/<html>/i, `<html lang="${htmlLang}">`)
+    .replace(/<title>[\s\S]*?<\/title>/, `<title>${t}</title>`)
+    .replace(/<meta\s+name="description"\s+content="[^"]*">/, `<meta name="description" content="${d}">
+  <meta name="robots" content="noindex,follow">`)
+    .replace(/<meta\s+property="og:title"\s+content="[^"]*">/, `<meta property="og:title" content="${t}">`)
+    .replace(/<meta\s+property="og:description"\s+content="[^"]*">/, `<meta property="og:description" content="${d}">`)
+    .replace(/<\/body>/i, `  ${seoMain}
+</body>`);
 }
 
 // 대표 도메인. Firebase 기본 주소(*.web.app, *.firebaseapp.com)로 들어온 페이지 요청은 이쪽으로 301 이동시켜
@@ -839,6 +975,18 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
     try {
       const snap = await getFirestore().collection("spots").doc(rawSpot).get();
       const data = snap.exists ? snap.data() : null;
+      if (data && (data.status === "active" || data.status === "ended") && isEndedSpot(data)) {
+        // 끝난 축제·공연·전시: '종료' 안내 + 같은 지역의 진행 중인 일정으로 연결, 검색 결과에서는 빠지게(noindex)
+        const [seoData, cultureDoc] = await Promise.all([
+          seo.loadSeoData(origin, normalizeLang(rawLang), null),
+          seo.fetchJsonCached(`${origin}/data/hub/culture.json`),
+        ]);
+        seoData.culture = (cultureDoc && cultureDoc.culture) || [];
+        const html = buildEndedSpotHtml(template, data, rawSpot, origin, rawLang, seoData);
+        res.set("Cache-Control", "public, max-age=600, s-maxage=3600");
+        res.status(200).send(html);
+        return;
+      }
       if (data && data.status === "active") {
         const seoData = await seo.loadSeoData(origin, normalizeLang(rawLang), seo.provinceCode(String(data.province || "")));
         const html = buildSpotOgHtml(template, data, rawSpot, origin, rawLang, seoData);
@@ -861,11 +1009,13 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
 
   const rawTopic = typeof req.query.topic === "string" ? req.query.topic.trim() : "";
   if (TOPICS.has(rawTopic)) {
-    const [seoData, marketsDoc] = await Promise.all([
+    const [seoData, marketsDoc, cultureDoc] = await Promise.all([
       seo.loadSeoData(origin, normalizeLang(rawLang), null),
       seo.fetchJsonCached(`${origin}/data/hub/markets.json`),
+      seo.fetchJsonCached(`${origin}/data/hub/culture.json`),
     ]);
     seoData.markets = (marketsDoc && marketsDoc.markets) || [];
+    seoData.culture = (cultureDoc && cultureDoc.culture) || [];
     const html = buildTopicOgHtml(template, rawTopic, PROVINCES_17.includes(rawRegion) ? rawRegion : "", origin, rawLang, seoData);
     res.set("Cache-Control", "public, max-age=600, s-maxage=1200");
     res.status(200).send(html);
@@ -873,12 +1023,14 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   }
 
   if (PROVINCES_17.includes(rawRegion)) {
-    const [seoData, staysIndex, marketsDoc] = await Promise.all([
+    const [seoData, staysIndex, marketsDoc, cultureDoc] = await Promise.all([
       seo.loadSeoData(origin, normalizeLang(rawLang), null),
       seo.fetchJsonCached(`${origin}/data/public_stays_index.json`),
       seo.fetchJsonCached(`${origin}/data/hub/markets.json`),
+      seo.fetchJsonCached(`${origin}/data/hub/culture.json`),
     ]);
     seoData.markets = (marketsDoc && marketsDoc.markets) || [];
+    seoData.culture = (cultureDoc && cultureDoc.culture) || [];
     const html = buildRegionOgHtml(template, rawRegion, origin, rawLang, seoData, staysIndex);
     res.set("Cache-Control", "public, max-age=600, s-maxage=1200");
     res.status(200).send(html);
@@ -889,14 +1041,14 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   if (lang !== "ko") {
     const htmlLang = lang === "zh" ? "zh-Hant" : lang;
     const homeTitles = {
-      en: "Jikstay Korea — Local Stories, Stays & 17-Province Travel Guides",
-      ja: "Jikstay Korea — ローカル旅行ストーリー・宿・17市道公式ガイド",
-      zh: "Jikstay 韓國 — 在地旅遊故事・住宿・17市道官方旅遊指南",
+      en: "Jikstay Korea — Festivals, Shows, Exhibitions, Markets & Stays Across Korea",
+      ja: "Jikstay Korea — 韓国各地の祭り・公演・展示・市場・宿泊ガイド",
+      zh: "Jikstay 韓國 — 全韓慶典・演出・展覽・傳統市場與住宿指南",
     };
     const homeDescs = {
-      en: "Find stays listed in Korean public tourism data and explore festivals, local food & official municipal travel guides across 17 provinces.",
-      ja: "韓国の公共観光データに登録された宿泊施設と、全国17市道の祭り・グルメ・公式ガイドを一覧。",
-      zh: "查看登錄於韓國公共旅遊資料的住宿，一次瀏覽全國17市道慶典、在地美食與官方旅遊指南。",
+      en: "Festivals, theater, musicals, concerts and museum exhibitions happening now across Korea's 17 provinces, plus traditional 5-day markets, local food and stays listed in public tourism data.",
+      ja: "韓国全国17市道で開催中の祭り・演劇・ミュージカル・コンサート・展示、五日市、グルメと公共データ登録の宿泊施設を一覧。",
+      zh: "一次瀏覽韓國全國17市道正在舉行的慶典、戲劇・音樂劇・音樂會、展覽、五日市集、在地美食與公共資料登錄住宿。",
     };
     const t = escapeHtml(homeTitles[lang] || homeTitles.en);
     const d = escapeHtml(homeDescs[lang] || homeDescs.en);
@@ -920,7 +1072,7 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   res.status(200).send(
     template.replace(
       /<\/body>/i,
-      `  ${buildHomeSeoMain(origin, "ko", "직스테이 로컬 — 전국 17개 시·도 여행 정보", "공공데이터에 등록된 숙소와 전국 17개 시·도의 볼거리·먹거리·축제, 지자체 공식 관광 가이드북을 한 곳에서 찾아보세요.")}
+      `  ${buildHomeSeoMain(origin, "ko", "직스테이 로컬 — 전국 지역축제·공연·전시회·5일장 일정과 여행 정보", "전국 17개 시·도의 지역축제, 연극·뮤지컬·콘서트 공연, 미술관·박물관 전시회, 5일장 장날과 볼거리·먹거리, 공공데이터에 등록된 숙소를 한 곳에서 찾아보세요.")}
 </body>`
     )
   );
@@ -1029,11 +1181,14 @@ exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res)
       urls.push(`  <url>\n    <loc>${origin}/?${q}</loc>\n${buildAlternates(q)}\n  </url>`);
     }
     // 주제 페이지(축제 일정·5일장 장날): 전국 + 내용이 있는 시·도. XML 안에서는 & 를 &amp; 로 쓴다
-    const [hubCore, marketsDoc] = await Promise.all([
+    const [hubCore, marketsDoc, cultureDoc] = await Promise.all([
       seo.fetchJsonCached(`${origin}/data/hub/core.json`),
       seo.fetchJsonCached(`${origin}/data/hub/markets.json`),
+      seo.fetchJsonCached(`${origin}/data/hub/culture.json`),
     ]);
-    const hubForTopics = hubCore ? { ...hubCore, markets: (marketsDoc && marketsDoc.markets) || [] } : null;
+    const hubForTopics = hubCore
+      ? { ...hubCore, markets: (marketsDoc && marketsDoc.markets) || [], culture: (cultureDoc && cultureDoc.culture) || [] }
+      : null;
     for (const topic of TOPICS) {
       const provs = hubForTopics ? topicProvinces(hubForTopics, topic, kstTodayYmd()) : [];
       for (const prov of ["", ...provs]) {
@@ -1083,6 +1238,8 @@ exports.buildOgHtml = buildOgHtml;
 exports.primaryDomainRedirectUrl = primaryDomainRedirectUrl;
 exports.stayTitleQualifierKo = stayTitleQualifierKo;
 exports.buildTopicOgHtml = buildTopicOgHtml;
+exports.buildEndedSpotHtml = buildEndedSpotHtml;
+exports.isEndedSpot = isEndedSpot;
 exports.marketDaysOfMonth = marketDaysOfMonth;
 exports.nextMarketYmd = nextMarketYmd;
 exports.buildSpotOgHtml = buildSpotOgHtml;

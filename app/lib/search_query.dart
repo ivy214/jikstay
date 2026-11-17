@@ -53,6 +53,9 @@ const Map<String, DiscoveryCategory> _kCategoryWords = {
   '식당': DiscoveryCategory.food,
   '축제': DiscoveryCategory.event,
   '행사': DiscoveryCategory.event,
+  '공연': DiscoveryCategory.culture,
+  '전시': DiscoveryCategory.culture,
+  '전시회': DiscoveryCategory.culture,
   '볼거리': DiscoveryCategory.attraction,
   '명소': DiscoveryCategory.attraction,
   '관광지': DiscoveryCategory.attraction,
@@ -132,6 +135,10 @@ String _haystack(DiscoveryItem it) =>
 
 /// "곡성 장날", "남원 5일장", "전주 시장" 처럼 검색해도 시장이 걸리도록
 String _marketWords(DiscoveryItem it) {
+  if (it.category == DiscoveryCategory.culture) {
+    // "대학로 연극", "서울 뮤지컬", "청주 미술관 전시" 처럼 분야·장소로도 찾게
+    return ' ${it.raw['realm'] ?? ''} ${it.raw['place'] ?? ''} ${it.raw['culture_type'] ?? ''}';
+  }
   if (!it.isMarket) return '';
   final type = (it.raw['market_type'] ?? '').toString();
   // mkt_… 는 손으로 정리한 대표 5일장 (항상 장날이 있다)

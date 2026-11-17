@@ -329,6 +329,11 @@ String itemSourceLabel(DiscoveryItem it, AppLang lang) {
   if (it.category == DiscoveryCategory.ebook) {
     return pickLangText(lang, ko: '지자체 공식 자료', en: 'Official municipal source', ja: '自治体公式資料', zh: '地方政府官方資料');
   }
+  if (it.category == DiscoveryCategory.culture) {
+    return raw['source'] == 'kopis'
+        ? pickLangText(lang, ko: 'KOPIS 공연예술통합전산망', en: 'KOPIS (Korea Performing Arts Box Office)', ja: 'KOPIS 公演芸術統合電算網', zh: 'KOPIS 表演藝術整合網')
+        : pickLangText(lang, ko: '한국문화정보원 문화정보', en: 'Korea Culture Information Service', ja: '韓国文化情報院', zh: '韓國文化資訊院');
+  }
   return pickLangText(lang, ko: '한국관광공사 TourAPI', en: 'Korea Tourism Organization', ja: '韓国観光公社', zh: '韓國觀光公社');
 }
 

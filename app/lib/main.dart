@@ -426,6 +426,22 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
+    // 공연·전시 (한국문화정보원, 약 900건). 끝난 것은 종료일로 바로 뺀다.
+    final cultureJson = await fetchWebJson('data/hub/culture.json');
+    if (cultureJson != null && cultureJson['culture'] is List) {
+      for (final raw in (cultureJson['culture'] as List)) {
+        if (raw is Map && !isEndedEventJson(raw)) {
+          final parsed = parseSpotJson(Map<String, dynamic>.from(raw), fallbackCategory: DiscoveryCategory.culture);
+          if (parsed != null) itemsById[parsed.id] = parsed;
+        }
+      }
+      if (mounted) {
+        setState(() => _allItems = itemsById.values.toList());
+        _openPendingMarketDeepLink();
+      }
+    }
+    _noticeEndedDeepLink();
+
     final staysJson = await fetchWebJson('data/public_stays_index.json');
     if (staysJson != null && staysJson['items'] is List) {
       for (final raw in (staysJson['items'] as List)) {
@@ -631,13 +647,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 시장 상세 링크(?spot=spot_mk_…)는 시장 목록을 2단계에서 받은 뒤에야 열 수 있다.
+  /// 시장·공연·전시 상세 링크(?spot=spot_mk_… / spot_cu_…)는 2단계에서 목록을 받은 뒤에야 열 수 있다.
   void _openPendingMarketDeepLink() {
     final id = (widget.initialSpotId ?? '').trim();
-    if (!id.startsWith('spot_mk_') || _marketDeepLinkHandled) return;
-    _marketDeepLinkHandled = true;
+    if (!(id.startsWith('spot_mk_') || id.startsWith('spot_cu_')) || _marketDeepLinkHandled) return;
     for (final it in _allItems) {
       if (it.id == id) {
+        _marketDeepLinkHandled = true;
         _openItemSheet(it);
         return;
       }
@@ -669,6 +685,23 @@ class _HomePageState extends State<HomePage> {
     resetHomeUrl(region: _selectedProvince);
   }
 
+  /// 끝난 축제·공연·전시 링크로 들어온 경우 (목록에서 이미 빠짐) 안내만 띄운다.
+  void _noticeEndedDeepLink() {
+    final id = (widget.initialSpotId ?? '').trim();
+    if (!mounted || id.isEmpty || !(id.startsWith('spot_ev_') || id.startsWith('spot_cu_'))) return;
+    if (_allItems.any((it) => it.id == id)) return;
+    final lang = appLangNotifier.value;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Text(pickLangText(lang,
+          ko: '이미 끝난 축제·공연·전시입니다. 지금 열리는 일정을 확인해 보세요.',
+          en: 'This event has ended. Check what is on now.',
+          ja: 'このイベントは終了しました。開催中の日程をご覧ください。',
+          zh: '此活動已結束，看看正在舉行的活動吧。')),
+    ));
+    trackPortalEvent('open_ended_link', {'item_id': id});
+  }
+
   void _onSavedChanged() {
     if (mounted) setState(() {});
   }
@@ -682,9 +715,13 @@ class _HomePageState extends State<HomePage> {
     final relevance = <String, int>{};
     // 전통시장·5일장은 기본 피드에는 넣지 않고 검색할 때만 결과에 포함 ("강진" → 강진오일시장)
     final pool = q.isEmpty
-        ? (includeMarkets || _category == DiscoveryCategory.market
+        ? (includeMarkets
             ? _allItems
-            : _allItems.where((it) => !it.isMarket).toList())
+            : _allItems
+                .where((it) =>
+                    (!it.isMarket || _category == DiscoveryCategory.market) &&
+                    (it.category != DiscoveryCategory.culture || _category == DiscoveryCategory.culture))
+                .toList())
         : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
     final out = pool.where((it) {
       if (_savedOnly && !saved.contains(it.id)) return false;

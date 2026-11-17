@@ -253,3 +253,44 @@ describe("전통시장 상세 페이지", () => {
     assert.match(html, /"@type":"Store"/);
   });
 });
+
+describe("공연·전시", () => {
+  const culture = [
+    { id: "spot_cu_1", kind: "culture", culture_type: "전시", realm: "전시", title: "개방 수장고", province: "충북", city: "청주시", place: "국립현대미술관 청주관", start_date: "20201203", end_date: "20991231", price_text: "무료" },
+    { id: "spot_cu_2", kind: "culture", culture_type: "공연", realm: "연극", title: "오백에 삼십", province: "서울", city: "종로구", place: "JTN아트홀", start_date: "20200101", end_date: "20991231" },
+    { id: "spot_cu_3", kind: "culture", culture_type: "공연", realm: "연극", title: "끝난공연", province: "서울", start_date: "20200101", end_date: "20200102" },
+  ];
+
+  it("전국 전시·공연 페이지: 전시·공연을 나눠 보여 주고 끝난 것은 뺀다", () => {
+    const html = fn.buildTopicOgHtml(SAMPLE_TPL, "culture", "", "https://jikstay.app", "ko", { hub: {}, culture });
+    assert.match(html, /<title>전국 전시회·공연 일정 \d{4}/);
+    assert.match(html, /지금 볼 수 있는 전시/);
+    assert.match(html, /개방 수장고 \(충북 국립현대미술관 청주관/);
+    assert.match(html, /오백에 삼십/);
+    assert.doesNotMatch(html, /끝난공연/);
+  });
+
+  it("상세: 검색 제목에 시·군과 종류, 구조화 데이터는 Event + 장소", () => {
+    const spot = { ...culture[0], region_label: "충북 청주시", status: "active", url: "https://www.mmca.go.kr/x" };
+    const html = fn.buildSpotOgHtml(SAMPLE_TPL, spot, "spot_cu_1", "https://jikstay.app", "ko", null);
+    assert.match(html, /<title>개방 수장고 \(청주 전시\) \| 직스테이 로컬<\/title>/);
+    assert.match(html, /"@type":"ExhibitionEvent"/);
+    assert.match(html, /"location":\{"@type":"Place","name":"국립현대미술관 청주관"/);
+    assert.match(html, /"startDate":"2020-12-03"/);
+  });
+});
+
+describe("끝난 축제·공연·전시", () => {
+  it("종료일이 지나면 종료 안내 + noindex, 같은 지역 진행 중 일정으로 연결", () => {
+    const spot = { title: "지난 연극", kind: "culture", province: "부산", end_date: "20200102", status: "active" };
+    assert.equal(fn.isEndedSpot(spot), true);
+    assert.equal(fn.isEndedSpot({ ...spot, end_date: "20991231" }), false);
+    assert.equal(fn.isEndedSpot({ ...spot, end_date: "20991231", status: "ended" }), true);
+    const data = { hub: { festivals: [{ id: "spot_ev_9", title: "부산 진행축제", province: "부산", start_date: "20200101", end_date: "20991231" }] }, culture: [] };
+    const html = fn.buildEndedSpotHtml(SAMPLE_TPL, spot, "spot_cu_x", "https://jikstay.app", "ko", data);
+    assert.match(html, /<title>지난 연극 \(종료\) \| 직스테이 로컬<\/title>/);
+    assert.match(html, /<meta name="robots" content="noindex,follow">/);
+    assert.match(html, /2020\.01\.02에 종료되었습니다/);
+    assert.match(html, /부산 진행축제/);
+  });
+});

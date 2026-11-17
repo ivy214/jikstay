@@ -17,6 +17,7 @@ enum DiscoveryCategory {
   attraction('cat_attraction', Icons.landscape_rounded, Color(0xFF059669)),
   food('cat_food', Icons.restaurant_rounded, Color(0xFFD97706)),
   market('cat_market', Icons.storefront_rounded, Color(0xFF92400E)),
+  culture('cat_culture', Icons.theater_comedy_rounded, Color(0xFFDB2777)),
   stay('cat_stay', Icons.cottage_rounded, Color(0xFFE11D48)),
   ebook('cat_ebook', Icons.menu_book_rounded, Color(0xFF2563EB));
 
@@ -593,7 +594,7 @@ class DiscoveryItem {
   String? dynamicFreshnessBadge(AppLang lang, {DateTime? now}) {
     final todayDate = now ?? DateTime.now();
     final today = DateTime(todayDate.year, todayDate.month, todayDate.day);
-    if (category == DiscoveryCategory.event) {
+    if (category == DiscoveryCategory.event || category == DiscoveryCategory.culture) {
       final sd = _parseYmd(startDate);
       final ed = _parseYmd(endDate);
       if (ed != null) {
@@ -659,6 +660,7 @@ class DiscoveryItem {
     DiscoveryCategory.attraction => '🏞️',
     DiscoveryCategory.food => '🍲',
     DiscoveryCategory.market => '🧺',
+    DiscoveryCategory.culture => '🎭',
     DiscoveryCategory.stay => '🏡',
     DiscoveryCategory.ebook => '📖',
     DiscoveryCategory.all => '✨',
@@ -671,6 +673,9 @@ class DiscoveryItem {
     DiscoveryCategory.attraction => pickLangText(lang, ko: '볼거리', en: 'Sight', ja: '観光名所', zh: '必訪景點'),
     DiscoveryCategory.food => pickLangText(lang, ko: '먹거리', en: 'Food', ja: 'グルメ', zh: '在地美食'),
     DiscoveryCategory.market => pickLangText(lang, ko: '전통시장', en: 'Market', ja: '伝統市場', zh: '傳統市場'),
+    DiscoveryCategory.culture => raw['culture_type'] == '전시'
+        ? pickLangText(lang, ko: '전시', en: 'Exhibition', ja: '展示', zh: '展覽')
+        : pickLangText(lang, ko: '공연', en: 'Performance', ja: '公演', zh: '演出'),
     DiscoveryCategory.stay => pickLangText(lang, ko: '숙소', en: 'Stay', ja: '宿泊', zh: '住宿'),
     DiscoveryCategory.ebook => pickLangText(lang, ko: '공식 관광지도', en: 'Guide PDF', ja: '公式ガイド', zh: '官方指南'),
     DiscoveryCategory.all => pickLangText(lang, ko: '전체', en: 'All', ja: 'すべて', zh: '全部'),

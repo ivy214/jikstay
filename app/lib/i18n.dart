@@ -167,6 +167,12 @@ String trUi(String key, AppLang lang) {
       AppLang.ja: '🧺 地域の市場',
       AppLang.zh: '🧺 在地市場',
     },
+    'cat_culture': {
+      AppLang.ko: '🎭 공연·전시',
+      AppLang.en: '🎭 Shows & Exhibitions',
+      AppLang.ja: '🎭 公演・展示',
+      AppLang.zh: '🎭 演出・展覽',
+    },
     'cat_stay': {
       AppLang.ko: '🏡 숙소',
       AppLang.en: '🏡 Legal Stays',

@@ -38,9 +38,9 @@ PROVINCE_CODES = {
 }
 OTHER_CODE = "etc"
 
-SPLIT_SECTIONS = ("spots", "festivals", "markets")
-# 전통시장(약 800곳)은 첫 화면에 필요 없어 core 에서 빼고 hub/markets.json 으로 따로 둔다 (앱이 2단계에서 받음)
-SEPARATE_SECTIONS = ("markets",)
+SPLIT_SECTIONS = ("spots", "festivals", "markets", "culture")
+# 전통시장(약 800곳)·공연·전시(약 900건)는 첫 화면에 필요 없어 core 에서 빼고 hub/markets.json 으로 따로 둔다 (앱이 2단계에서 받음)
+SEPARATE_SECTIONS = ("markets", "culture")
 # 상세 화면(spot_detail_sheet·story_detail_page, hydrateDiscoveryItem 으로 합침)에서만 쓰는 필드.
 # 첫 화면 데이터는 볼거리 수에 비례해 커지므로(상한 없음) 카드·검색·지도·일정 짜기에 안 쓰는 필드는 모두 여기로.
 # tel(자동 생성 스토리)·url(이벤트 배너)은 목록 단계에서도 쓰므로 core 에 둔다.

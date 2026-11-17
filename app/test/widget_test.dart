@@ -1026,4 +1026,25 @@ void main() {
     expect(searchRelevance(market, parseSearchQuery('곡성 장날')), isNotNull);
     expect(searchRelevance(market, parseSearchQuery('남원 장날')), isNull);
   });
+
+  test('공연·전시: 분류·배지·검색 ("서울 전시회", "대학로 연극")', () {
+    final ex = parseSpotJson({
+      'id': 'spot_cu_1', 'kind': 'culture', 'culture_type': '전시', 'realm': '전시', 'place': '서울시립미술관',
+      'title': '어떤 개인전', 'province': '서울', 'region_label': '서울 중구', 'lat': 37.56, 'lng': 126.97,
+      'start_date': '20261101', 'end_date': '20261231',
+    }, fallbackCategory: DiscoveryCategory.culture)!;
+    final play = parseSpotJson({
+      'id': 'spot_cu_2', 'kind': 'culture', 'culture_type': '공연', 'realm': '연극', 'place': '대학로 JTN아트홀',
+      'title': '오백에 삼십', 'province': '서울', 'region_label': '서울 종로구', 'lat': 37.57, 'lng': 127.0,
+      'start_date': '20261101', 'end_date': '20261231',
+    }, fallbackCategory: DiscoveryCategory.culture)!;
+    expect(ex.category, DiscoveryCategory.culture);
+    expect(ex.categoryBadgeText(AppLang.ko), '전시');
+    expect(play.categoryBadgeText(AppLang.ko), '공연');
+    expect(ex.categoryEmoji, '🎭');
+    expect(parseSearchQuery('서울 전시회').category, DiscoveryCategory.culture);
+    expect(searchRelevance(ex, parseSearchQuery('서울 전시회')), isNotNull);
+    expect(searchRelevance(play, parseSearchQuery('대학로 연극')), isNotNull);
+    expect(searchRelevance(play, parseSearchQuery('부산 공연')), isNull);
+  });
 }
