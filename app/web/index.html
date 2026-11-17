@@ -24,13 +24,14 @@
   <!-- GA4: 측정 ID(G-…)를 넣으면 방문·이벤트 측정이 켜진다. 비어 있으면 아무것도 불러오지 않는다.
        앱 이벤트(검색어·0건 검색·예약 클릭·길찾기·공유 등)는 window.jikstayTrackEvent → gtag 로 전달된다. -->
   <script>
-    window.JIKSTAY_GA_ID = "";
+    window.JIKSTAY_GA_ID = "G-9PDEPWX3D7";
     (function (id) {
       if (!id) return;
       window.dataLayer = window.dataLayer || [];
       window.gtag = function () { window.dataLayer.push(arguments); };
       window.gtag("js", new Date());
-      window.gtag("config", id);
+      // 최소 수집: 광고용 Google 신호·광고 개인화 끔 (개인정보처리방침 2항 라목과 일치)
+      window.gtag("config", id, { allow_google_signals: false, allow_ad_personalization_signals: false });
       var s = document.createElement("script");
       s.async = true;
       s.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id);
