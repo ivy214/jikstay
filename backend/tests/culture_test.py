@@ -43,4 +43,24 @@ assert should_end("", today) is False
 exp = expire_at_for("20261231")
 assert exp is not None and exp.date() == dt.date(2027, 7, 3)
 
+# KOPIS 중복 제외: 출처마다 지역 태그 위치가 달라도 같은 공연으로 본다 ("[인제] 아는 노래" / "아는 노래 [인제]")
+from refresh_culture import kopis_selected  # noqa: E402
+
+ku_today = dt.date(2026, 11, 18)
+ku_known = [{"title": "[인제] 아는 노래", "culture_type": "공연", "start_date": "20261121", "end_date": "20261121", "province": "강원"},
+            {"title": "[부산] 호두까기인형", "culture_type": "공연", "start_date": "20261201", "end_date": "20261201", "province": "부산"}]
+
+
+def ku_row(title, area, sd="2026.11.21", ed="2026.11.21", pid="PF1"):
+    return {"mt20id": pid, "prfnm": title, "area": area, "fcltynm": "공연장", "prfpdfrom": sd, "prfpdto": ed}
+
+
+assert kopis_selected([ku_row("아는 노래 [인제]", "강원특별자치도")], ku_today, ku_known) == []
+assert kopis_selected([ku_row("아는 노래", "강원특별자치도")], ku_today, ku_known) == []
+# 같은 제목이라도 다른 시·도 공연은 남긴다 (태그를 빼고 비교해도 오탐하지 않게)
+assert len(kopis_selected([ku_row("호두까기인형 [대구]", "대구광역시", "2026.11.20", "2026.11.20")], ku_today,
+                          [{**ku_known[1], "start_date": "20261120", "end_date": "20261120"}])) == 1
+# 기간이 겹치지 않으면 다른 공연
+assert len(kopis_selected([ku_row("아는 노래 [인제]", "강원특별자치도", "2026.11.19", "2026.11.19")], ku_today, ku_known)) == 1
+
 print("culture_test OK")

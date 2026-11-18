@@ -237,11 +237,23 @@ def _norm_title(s: str) -> str:
     return re.sub(r"[\s\[\]()<>〈〉《》「」'\"“”‘’:：\-·,.!?~]", "", clean_text(s)).lower()
 
 
+def _title_keys(s: str) -> set[str]:
+    """중복 판정용 제목 형태들: 전체, 그리고 [인제]·(앵콜) 같은 괄호 태그를 뺀 본제목.
+    출처마다 지역 태그 위치가 달라("[인제] 아는 노래" / "아는 노래 [인제]") 전체 형태만으로는 못 잡는다."""
+    keys = {_norm_title(s), _norm_title(re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", clean_text(s)))}
+    return {k for k in keys if len(k) >= 4}
+
+
+def _same_title(a: set[str], b: set[str]) -> bool:
+    return any(x in y or y in x for x in a for y in b)
+
+
 def kopis_selected(rows: list[dict[str, str]], today: dt.date, culture_docs: list[dict[str, Any]]) -> list[dict[str, str]]:
     """절충안 기준으로 넣을 공연만 고른다."""
     week = (today + dt.timedelta(days=KOPIS_WEEK_DAYS - 1)).strftime("%Y%m%d")
     long_ = (today + dt.timedelta(days=KOPIS_LONG_DAYS - 1)).strftime("%Y%m%d")
-    known = [(_norm_title(d["title"]), d.get("start_date", ""), d.get("end_date", "")) for d in culture_docs if d.get("culture_type") == "공연"]
+    known = [(_title_keys(d["title"]), d.get("start_date", ""), d.get("end_date", ""), d.get("province", ""))
+             for d in culture_docs if d.get("culture_type") == "공연"]
     out = []
     for r in rows:
         sd, ed = r.get("prfpdfrom", "").replace(".", ""), r.get("prfpdto", "").replace(".", "")
@@ -251,8 +263,10 @@ def kopis_selected(rows: list[dict[str, str]], today: dt.date, culture_docs: lis
             continue
         if not (sd <= week or (sd != ed and sd <= long_)):
             continue
-        t = _norm_title(r.get("prfnm", ""))
-        if any(len(t) >= 4 and (t in a or a in t) and not (ce < sd or cs > ed) for a, cs, ce in known):
+        t = _title_keys(r.get("prfnm", ""))
+        rp = normalize_province_short(r.get("area", "")) if r.get("area") else ""
+        # 제목·기간이 겹치고 같은 시·도면 같은 공연 (괄호 태그를 빼고 비교하므로 다른 도시 동명 공연은 시·도로 가른다)
+        if any(_same_title(t, a) and not (ce < sd or cs > ed) and (not rp or not cp or rp == cp) for a, cs, ce, cp in known):
             continue  # 문화정보원에 이미 있는 공연
         out.append(r)
     return out
