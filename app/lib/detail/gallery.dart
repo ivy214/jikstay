@@ -353,7 +353,9 @@ class StorageImage extends StatelessWidget {
       fit: fit,
       width: width,
       cacheWidth: cacheWidth,
-      webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+      // 공공 이미지 서버(tong.visitkorea.or.kr 등)는 CORS 헤더를 주지 않아 캔버스용 fetch 가 늘 실패한 뒤 <img> 로 다시 받는다.
+      // 처음부터 <img> 를 쓰면 헛요청이 사라지고, 스플래시가 이미 받은 이미지는 브라우저 캐시로 바로 뜬다.
+      webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
       loadingBuilder: (_, child, progress) =>
           progress == null ? child : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
       errorBuilder: (_, _, _) => _broken(),
