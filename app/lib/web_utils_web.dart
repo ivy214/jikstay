@@ -105,3 +105,24 @@ Future<(double, double)?> currentPosition() async {
     return null;
   }
 }
+
+extension type _TodayStoryHint._(JSObject _) implements JSObject {
+  external JSString? get id;
+  external JSString? get badge;
+}
+
+@JS('jikstayTodayStory')
+external _TodayStoryHint? get _jikstayTodayStory;
+
+/// 서버(serveApp)가 홈 HTML 에 넣어 둔 오늘의 스토리 (id, 배지). 홈이 아니거나 예전 템플릿이면 null.
+/// 스플래시와 앱 첫 화면이 같은 스토리를 보여 주게 한다 (firebase/functions/today_story.js).
+(String, String)? todayStoryHint() {
+  try {
+    final h = _jikstayTodayStory;
+    final id = h?.id?.toDart ?? '';
+    if (id.isEmpty) return null;
+    return (id, h!.badge?.toDart ?? '');
+  } catch (_) {
+    return null;
+  }
+}

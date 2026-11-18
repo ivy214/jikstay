@@ -5,6 +5,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 
 const seo = require("./seo_content");
+const todayStory = require("./today_story");
 
 initializeApp();
 
@@ -1037,6 +1038,8 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
     return;
   }
 
+  // 홈: 오늘의 스토리를 스플래시에 넣는다 (앱도 같은 스토리를 쓴다 → today_story.js). 실패하면 기본 템플릿 그대로
+  const homeTemplate = await withTodayStory(template, origin);
   const lang = normalizeLang(rawLang);
   if (lang !== "ko") {
     const htmlLang = lang === "zh" ? "zh-Hant" : lang;
@@ -1053,7 +1056,7 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
     const t = escapeHtml(homeTitles[lang] || homeTitles.en);
     const d = escapeHtml(homeDescs[lang] || homeDescs.en);
     const canon = `${origin}/?lang=${encodeURIComponent(lang)}`;
-    const html = template
+    const html = homeTemplate
       .replace(/<html\b[^>]*>/i, `<html lang="${htmlLang}">`)
       .replace(/<title>[^<]*<\/title>/i, `<title>${t}</title>`)
       .replace(/<meta name="description" content="[^"]*"\s*\/?>/i, `<meta name="description" content="${d}" />`)
@@ -1070,13 +1073,24 @@ exports.serveApp = onRequest({ region: "asia-northeast3" }, async (req, res) => 
   // 기본 홈(/)은 브라우저 재검증(max-age=0) + 글로벌 CDN 엣지 캐시(s-maxage=300)로 콜드스타트 없이 즉시 응답
   res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=3600");
   res.status(200).send(
-    template.replace(
+    homeTemplate.replace(
       /<\/body>/i,
       `  ${buildHomeSeoMain(origin, "ko", "직스테이 로컬 — 전국 지역축제·공연·전시회·5일장 일정과 여행 정보", "전국 17개 시·도의 지역축제, 연극·뮤지컬·콘서트 공연, 미술관·박물관 전시회, 5일장 장날과 볼거리·먹거리, 공공데이터에 등록된 숙소를 한 곳에서 찾아보세요.")}
 </body>`
     )
   );
 });
+
+async function withTodayStory(template, origin) {
+  try {
+    const hub = await seo.fetchJsonCached(`${origin}/data/hub/core.json`);
+    const today = kstTodayYmd();
+    return todayStory.injectTodayStory(template, todayStory.pickTodayStory(hub, today), today);
+  } catch (err) {
+    console.error("Today story injection failed:", err);
+    return template;
+  }
+}
 
 /** 홈: 17개 시·도 여행 정보 페이지로 가는 링크 (검색엔진이 지역 페이지를 찾아가는 입구) */
 function buildHomeSeoMain(origin, lang, title, lead) {

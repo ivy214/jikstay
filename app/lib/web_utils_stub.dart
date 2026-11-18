@@ -22,3 +22,6 @@ Future<bool> nativeShare(String title, String url) async => false;
 
 /// 현재 위치(위도, 경도). 권한 거부·미지원이면 null.
 Future<(double, double)?> currentPosition() async => null;
+
+/// 서버(serveApp)가 홈 HTML 에 넣어 둔 오늘의 스토리 (id, 배지). 웹이 아니면 없음.
+(String, String)? todayStoryHint() => null;

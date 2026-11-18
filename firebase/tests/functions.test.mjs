@@ -294,3 +294,59 @@ describe("끝난 축제·공연·전시", () => {
     assert.match(html, /부산 진행축제/);
   });
 });
+
+describe("홈 오늘의 스토리 (스플래시 = 앱 첫 화면)", () => {
+  const ts = require("../functions/today_story.js");
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const story = (id, months = []) => ({ id, title: `스토리 ${id}`, months, images: [`https://img/${id}.jpg`], province: "전북", city: "장수군",
+    season_badge: "🍂 가을", source_book: "장수여행", subtitle: "장수군 주소", pull_quote: "" , paragraphs: ["첫 문단"] });
+  const fest = (id, start, extra = {}) => ({ id, kind: "event", title: `축제 ${id}`, province: "부산", region_label: "부산 해운대구",
+    image_url: `https://img/${id}.png`, start_date: start, end_date: "20261231", addr: "부산 해운대구 BEXCO", overview: "개요", ...extra });
+
+  it("개막 0~7일 축제를 가까운 순으로 앞에 두고, 이번 달 스토리와 함께 날짜로 순환한다", () => {
+    const hub = {
+      daily_stories: [story("a", [11]), story("b", [6]), story("c")],
+      festivals: [fest("far", "20261130"), fest("d2", "20261120"), fest("d0", "20261118"), fest("noimg", "20261119", { image_url: "" }),
+        fest("ended", "20261101", { end_date: "20261117" })],
+      municipal_ebooks: [{ id: "ebook_busan", province: "부산", title: "부산 관광 e북" }],
+    };
+    // 15~18일 모두 pool = [d0, d2, a, c] (far 는 D-7 밖, noimg·ended 제외, b 는 6월 전용) → 2026-11-15 부터 하루씩 순환
+    const ids = ["20261115", "20261116", "20261117", "20261118"].map((d) => ts.pickTodayStory(hub, d).id);
+    assert.deepEqual(ids, ["d0", "d2", "a", "c"]);
+    const on15 = ts.pickTodayStory(hub, "20261115"); // 그날 기준 d0 개막 D-3
+    assert.equal(on15.id, "d0");
+    assert.equal(on15.badge, "⏳ 개막 D-3 · 임박 축제");
+    assert.equal(on15.region, "부산 해운대구");
+    assert.equal(on15.sourceBook, "부산 관광 e북");
+    assert.equal(on15.summary, "개요");
+    assert.equal(on15.addressLine, "부산 해운대구 BEXCO");
+    assert.equal(ts.pickTodayStory(hub, "20261116").id, "d2");
+    assert.ok(!ids.includes("noimg") && !ids.includes("ended") && !ids.includes("b"));
+    assert.equal(ts.pickTodayStory({ daily_stories: [] }, "20261118"), null);
+  });
+
+  it("스토리 요약은 pull_quote → 첫 문단 → subtitle 순 (빈 pull_quote 는 건너뜀)", () => {
+    const s = ts.storyFromJson(story("x"));
+    assert.equal(s.summary, "첫 문단");
+    assert.equal(s.region, "전북 장수군");
+    assert.equal(s.image, "https://img/x.jpg");
+  });
+
+  it("실제 템플릿의 스플래시를 채우고 앱용 힌트를 심는다", () => {
+    const tpl = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "../functions/index.html"), "utf8");
+    const st = ts.pickTodayStory({ daily_stories: [story("z<1>")], festivals: [] }, "20261119");
+    const html = ts.injectTodayStory(tpl, st, "20261119");
+    assert.match(html, /<span class="js-badge-dark">📖 11월 19일 오늘의 로컬 스토리<\/span>/);
+    assert.match(html, /<p class="js-story-title">스토리 z&lt;1&gt;<\/p>/);
+    assert.match(html, /<img src="https:\/\/img\/z&lt;1&gt;\.jpg" alt="스토리 z&lt;1&gt;"/);
+    assert.match(html, /<span class="js-story-addr">📍 장수군 주소<\/span>/);
+    // id 의 < 는 \u003c 로 이스케이프되어 </script> 를 끊지 못한다
+    assert.ok(html.includes(String.raw`<script>window.jikstayTodayStory = {"id":"z\u003c1>","badge":"🍂 가을","date":"20261119"};</script>`));
+    assert.ok(html.indexOf("window.jikstayTodayStory") < html.indexOf("</head>"));
+    assert.match(html, /<link rel="preload" as="image" href="https:\/\/img\/z&lt;1&gt;\.jpg" fetchpriority="high">/);
+    assert.equal(ts.injectTodayStory(tpl, null, "20261119"), tpl);
+    const noImg = ts.injectTodayStory(tpl, { ...st, image: "" }, "20261119");
+    assert.match(noImg, /<div class="js-story-img-wrap" style="display:none">/);
+  });
+});

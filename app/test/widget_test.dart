@@ -1068,4 +1068,18 @@ void main() {
         ['m0', 'm1', 'm2', 'm3', 'm4', 'ending', 'm5', 'm6', 'm7', 'm8', 'm9', 'soon', 'm10', 'm11', 'long']);
     expect(interleaveEvery(main, const []), same(main));
   });
+  test('홈 오늘의 스토리: 서버가 고른 id 로 스토리·축제를 찾고, 없으면 null', () {
+    final story = parseDailyStoryFromJson({'id': 'spot_story_a', 'title': '스토리 A', 'images': ['https://img/a.jpg']})!;
+    final fest = DiscoveryItem(
+        id: 'spot_ev_1', category: DiscoveryCategory.event, title: '게임문화축제', province: '부산', regionLabel: '부산 해운대구',
+        address: '부산 해운대구 BEXCO', lat: 35, lng: 129, imageUrl: 'https://img/f.png', startDate: '20261119');
+    expect(storyFromServerHint('spot_story_a', '', [story], [fest])?.title, '스토리 A');
+    final s = storyFromServerHint('spot_ev_1', '⏳ 개막 D-1 · 임박 축제', [story], [fest])!;
+    expect(s.title, '게임문화축제');
+    expect(s.seasonBadge, '⏳ 개막 D-1 · 임박 축제');
+    expect(s.heroImage, 'https://img/f.png');
+    expect(storyFromServerHint('missing', '', [story], [fest]), isNull);
+    // 데이터를 받기 전(빈 목록)에는 null → 앱이 직접 고른다
+    expect(storyFromServerHint('spot_ev_1', '', const [], const []), isNull);
+  });
 }

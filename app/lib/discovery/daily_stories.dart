@@ -297,6 +297,20 @@ List<DailyStoryItem> _pickImminentEventStories(
   }).toList();
 }
 
+/// 서버가 고른 오늘의 스토리([id], 축제면 [badge] 문구)를 찾는다. 데이터가 아직 없거나 못 찾으면 null.
+/// 홈 첫 화면이 HTML 스플래시(서버가 같은 스토리로 채움)와 같은 스토리를 보여 주게 한다.
+DailyStoryItem? storyFromServerHint(String id, String badge, List<DailyStoryItem> stories, List<DiscoveryItem> allItems) {
+  for (final s in stories) {
+    if (s.id == id) return s;
+  }
+  for (final it in allItems) {
+    if (it.id == id && it.category == DiscoveryCategory.event) {
+      return _storyFromSpot(it, it.province, allItems, badgeOverride: badge.isEmpty ? null : badge);
+    }
+  }
+  return null;
+}
+
 DailyStoryItem pickTodayMunicipalStory({
   required List<DailyStoryItem> stories,
   required List<DiscoveryItem> allItems,

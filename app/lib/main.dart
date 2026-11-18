@@ -993,11 +993,15 @@ class _HomePageState extends State<HomePage> {
         final searchedProvince = _query.trim().isEmpty
             ? null
             : (parseSearchQuery(_query).province ?? dominantProvince(feedItems));
-        final todayStory = pickTodayMunicipalStory(
-          stories: _dailyStories,
-          allItems: _allItems,
-          selectedProvince: _selectedProvince != '전체' ? _selectedProvince : (searchedProvince ?? '전체'),
-        );
+        final storyProvince = _selectedProvince != '전체' ? _selectedProvince : (searchedProvince ?? '전체');
+        // 홈(전국·검색 없음)은 서버가 스플래시에 넣은 스토리를 그대로 쓴다 → 스플래시와 첫 화면이 같다
+        final hint = storyProvince == '전체' ? todayStoryHint() : null;
+        final todayStory = (hint == null ? null : storyFromServerHint(hint.$1, hint.$2, _dailyStories, _allItems)) ??
+            pickTodayMunicipalStory(
+              stories: _dailyStories,
+              allItems: _allItems,
+              selectedProvince: storyProvince,
+            );
         final moreStories = (_query.trim().isEmpty && _category == DiscoveryCategory.all)
             ? _dailyStories.where((s) => s.id != todayStory.id).take(4).toList()
             : const <DailyStoryItem>[];
