@@ -168,6 +168,19 @@ def _decode_naver_thumb(raw_url: str) -> str:
     return _https(raw_url)
 
 
+# 주소 맨 앞의 시·도 이름 (있으면 그 시·도가 확실하다)
+_PROVINCE_PREFIX = re.compile(r"^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충청|충북|충남|전라|전북|전남|경상|경북|경남|제주)")
+
+
+def naver_result_in_province(prov: str, addr: str, norm_prov: str) -> bool:
+    """'{시·도} 축제' 네이버 검색 결과가 그 시·도 행사인지.
+    세종 행사는 주소를 '조치원읍 …'처럼 시·도 없이 쓰는 경우가 많아(해석하면 엉뚱한 시·도) 그런 주소는 받아 주되,
+    주소가 다른 시·도 이름으로 시작하면 세종이라도 뺀다 ('세종 축제' 검색에 섞여 나오는 부산 BEXCO 행사 등)."""
+    if norm_prov == prov:
+        return True
+    return prov == "세종" and not _PROVINCE_PREFIX.match(addr.strip())
+
+
 def fetch_naver_province_festivals() -> list[dict[str, Any]]:
     today = dt.date.today()
     today_ymd = today.strftime("%Y%m%d")
@@ -229,7 +242,7 @@ def fetch_naver_province_festivals() -> list[dict[str, Any]]:
 
                 d1, d2 = parse_korean_address(addr)
                 norm_prov = normalize_province_short(d1, d2) or prov
-                if norm_prov != prov and prov != "세종":
+                if not naver_result_in_province(prov, addr, norm_prov):
                     continue
 
                 imgs = re.findall(r'(?:src|data-lazysrc)="(https://[^"]+)"', pre + block)

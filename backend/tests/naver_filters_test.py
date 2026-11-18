@@ -42,4 +42,14 @@ assert category_ok("food", "한식>감자탕")
 assert is_facility_of("동백공원", "동백공원산정화장실")
 assert not is_facility_of("동백공원", "동백공원")
 print("[OK] 네이버 지역 검색 매칭 규칙")
+# '{시·도} 축제' 네이버 검색 결과: 세종 검색에 섞여 나온 다른 시·도 행사는 빼고, 시·도 없이 쓴 세종 주소는 받는다
+from weekly_hub_refresh import naver_result_in_province  # noqa: E402
+
+assert naver_result_in_province("세종", "세종특별자치시 조치원읍 새내로 1", "세종")
+assert naver_result_in_province("세종", "조치원읍 새내로", "서울")          # 시·도 없는 세종 주소 → 해석은 서울이지만 받는다
+assert not naver_result_in_province("세종", "부산광역시 해운대구 BEXCO", "부산")
+assert not naver_result_in_province("세종", "경기도 파주시 운정호수공원", "경기")
+assert naver_result_in_province("부산", "부산광역시 해운대구 BEXCO", "부산")
+assert not naver_result_in_province("부산", "조치원읍 새내로", "서울")      # 세종이 아니면 예외 없음
+print("[OK] 네이버 시·도 축제 검색 결과 지역 판정")
 print("ALL OK")
