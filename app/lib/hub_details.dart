@@ -13,12 +13,13 @@ const Map<String, String> kProvinceDetailCodes = {
 };
 
 /// 첫 화면용 허브 JSON. 분할 파일이 없으면(로컬 개발 등) 원본 전체 파일로 대체한다.
-Future<Map<String, dynamic>?> fetchHubCore({String cacheBust = ''}) async {
-  final q = cacheBust.isEmpty ? '' : '?v=$cacheBust';
-  var hub = await fetchWebJson('data/hub/core.json$q');
+/// 버전 쿼리를 붙이지 않는다: index.html 선발주와 같은 URL 이어야 중복 요청이 없고,
+/// 호스팅 max-age=300 + ETag 재검증으로 재방문 시 304 로 끝난다.
+Future<Map<String, dynamic>?> fetchHubCore() async {
+  var hub = await fetchWebJson('data/hub/core.json');
   if (hub == null) {
     HubDetailStore.splitAvailable = false;
-    hub = await fetchWebJson('data/public_travel_hub.json$q');
+    hub = await fetchWebJson('data/public_travel_hub.json');
   }
   final updated = hub?['updated_at'];
   if (updated is num) HubDetailStore.updatedAtMs = updated.toInt();

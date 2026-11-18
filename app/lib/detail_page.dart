@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'amenities.dart';
 import 'demo_data.dart';
+import 'firebase_boot.dart';
 import 'i18n.dart';
 import 'legal.dart';
 import 'naver_place_info.dart';
@@ -644,6 +645,7 @@ Future<void> goDirectBooking(
     targetUri = Uri.parse('${currentSiteOrigin()}/go?id=${Uri.encodeComponent(docId)}');
   } else if (!docId.startsWith('stay_demo_')) {
     try {
+      await firebaseReady();
       await FirebaseFirestore.instance
           .collection('listings')
           .doc(docId)

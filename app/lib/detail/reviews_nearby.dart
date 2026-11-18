@@ -272,6 +272,7 @@ class _UserReviewsSectionState extends State<UserReviewsSection> {
   Future<void> _fetchRemoteReviews() async {
     setState(() => _loadingRemote = true);
     try {
+      await firebaseReady();
       final snap = await FirebaseFirestore.instance
           .collection('listings')
           .doc(widget.listingId)

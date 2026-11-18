@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'detail_page.dart' show ListingDetailPage, StorageImage, validateUserReviewInput;
 import 'discovery_models.dart';
+import 'firebase_boot.dart';
 import 'hub_details.dart';
 import 'i18n.dart';
 import 'naver_place_info.dart';
@@ -21,6 +22,7 @@ Future<void> recordOutboundVisitClick(DiscoveryItem item, {bool offlineMode = fa
   if (offlineMode || !item.hasFirestoreDoc) return;
   final colName = item.category == DiscoveryCategory.stay ? 'listings' : 'spots';
   try {
+    await firebaseReady();
     await FirebaseFirestore.instance
         .collection(colName)
         .doc(item.id)
@@ -164,6 +166,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
     if (widget.offlineMode || !_current.hasFirestoreDoc) return;
     final colName = _current.category == DiscoveryCategory.stay ? 'listings' : 'spots';
     try {
+      await firebaseReady();
       final snap = await FirebaseFirestore.instance
           .collection(colName)
           .doc(_current.id)

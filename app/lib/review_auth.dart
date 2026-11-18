@@ -3,8 +3,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'firebase_boot.dart';
+
 /// 현재 익명 사용자 uid를 반환한다. 로그인 전이면 익명 로그인을 1회 수행한다.
 Future<String> ensureReviewerUid() async {
+  await firebaseReady();
   final auth = FirebaseAuth.instance;
   final current = auth.currentUser;
   if (current != null) return current.uid;

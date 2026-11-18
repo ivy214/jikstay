@@ -6,8 +6,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -16,7 +16,7 @@ import 'demo_data.dart';
 import 'detail_page.dart';
 import 'discovery_models.dart';
 import 'event_banner.dart';
-import 'firebase_options.dart';
+import 'firebase_boot.dart';
 import 'hub_details.dart';
 import 'i18n.dart';
 import 'legal.dart';
@@ -37,17 +37,13 @@ part 'home/feed_cards.dart';
 
 enum HomeViewMode { feed, calendar, map }
 
-/// reCAPTCHA Enterprise 사이트 키: flutter build web --dart-define=RECAPTCHA_SITE_KEY=...
-const kRecaptchaSiteKey = String.fromEnvironment('RECAPTCHA_SITE_KEY');
-
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  if (kRecaptchaSiteKey.isNotEmpty) {
-    await FirebaseAppCheck.instance.activate(providerWeb: ReCaptchaEnterpriseProvider(kRecaptchaSiteKey));
-  } else {
-    debugPrint('경고: RECAPTCHA_SITE_KEY 미설정 — App Check 비활성');
-  }
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(['Noto Color Emoji'], await rootBundle.loadString('assets/fonts/OFL.txt'));
+  });
+  // 첫 화면은 정적 JSON만 쓰므로 Firebase(SDK·reCAPTCHA 다운로드)를 기다리지 않고 바로 그린다.
+  unawaited(firebaseReady().catchError((Object e) => debugPrint('Firebase 초기화 실패: $e')));
   runApp(const DirectStayApp());
 }
 
@@ -222,6 +218,8 @@ class DirectStayApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF0F172A),
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
+        // 내장 이모지 서브셋을 먼저 쓰게 해 gstatic 이모지 폰트 다운로드를 없앤다
+        fontFamilyFallback: const ['AppEmoji'],
       ),
       home: (linkedId != null && RegExp(r'^stay_[a-zA-Z0-9_-]{4,32}$').hasMatch(linkedId))
           ? ListingDetailPage(listingId: linkedId, homeBuilder: homeBuilder)
@@ -338,8 +336,7 @@ class _HomePageState extends State<HomePage> {
     // 1단계 (초고속 즉시 반영): preload 된 가벼운 스토리·축제·E-book 허브 JSON 먼저 파싱·렌더링
     final parsedStories = <DailyStoryItem>[];
     final parsedMarkets = <TraditionalMarketInfo>[];
-    final cacheBust = DateTime.now().millisecondsSinceEpoch ~/ 60000;
-    final hubJson = await fetchHubCore(cacheBust: '$cacheBust');
+    final hubJson = await fetchHubCore();
     if (hubJson != null) {
       for (final raw in (hubJson['traditional_markets'] as List? ?? const [])) {
         if (raw is Map) {
@@ -474,6 +471,7 @@ class _HomePageState extends State<HomePage> {
     // 3단계 (백그라운드 병렬 오버레이): 평점 보유 항목만 비차단 병렬 조회
     if (!widget.initialDemoMode && !_offlineSeedMode) {
       try {
+        await firebaseReady().timeout(const Duration(seconds: 10));
         final results = await Future.wait([
           FirebaseFirestore.instance
               .collection('listings')

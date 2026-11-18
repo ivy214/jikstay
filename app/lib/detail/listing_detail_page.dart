@@ -45,6 +45,7 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
     // 한 번 더 시도하고, 그래도 안 되면 정적 숙소 색인의 기본 정보로라도 페이지를 보여 준다.
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
+        await firebaseReady().timeout(const Duration(seconds: 12));
         final snap = await FirebaseFirestore.instance
             .collection('listings')
             .doc(widget.listingId)

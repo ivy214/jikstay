@@ -23,3 +23,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/fonts/OFL.txt
+  # 앱에서 쓰는 이모지만 담은 Noto Color Emoji 서브셋 (tool/build_emoji_font.py 로 생성).
+  # 없으면 CanvasKit 이 gstatic 에서 이모지 폰트 조각(최대 약 2MB)을 런타임에 받는다.
+  fonts:
+    - family: AppEmoji
+      fonts:
+        - asset: assets/fonts/AppEmoji.ttf

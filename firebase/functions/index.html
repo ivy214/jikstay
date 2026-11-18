@@ -202,8 +202,8 @@
       }
       return __jikstayPrefetch[url];
     }
-    // 앱(fetchHubCore)과 같은 분 단위 버전 쿼리를 붙여 같은 요청을 두 번 보내지 않는다
-    __prefetchUrl("data/hub/core.json?v=" + Math.floor(Date.now() / 60000));
+    // 앱(fetchHubCore)과 같은 URL 이어야 같은 요청을 두 번 보내지 않는다 (버전 쿼리 없음: max-age=300 + ETag 재검증)
+    __prefetchUrl("data/hub/core.json");
 
     // 공유 링크(?id= ?spot= ?story=)로 들어오면 서버가 넣어 둔 OG 정보로 그 장소를 먼저 보여 준다
     (function () {
