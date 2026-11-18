@@ -42,6 +42,9 @@
   <!-- 핵심 리소스 병렬 선발주 (초기 체감 로딩 단축) -->
   <link rel="preconnect" href="https://tong.visitkorea.or.kr" crossorigin>
   <link rel="preload" href="main.dart.js" as="script">
+  <!-- 앱 내장 폰트: 엔진이 첫 프레임 전에 받으므로 main.dart.js 와 동시에 미리 받는다 (엔진의 fetch 와 같은 cors 모드) -->
+  <link rel="preload" href="assets/assets/fonts/AppKR.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/AppEmoji.ttf" as="fetch" crossorigin>
 
   <style>
     html, body {

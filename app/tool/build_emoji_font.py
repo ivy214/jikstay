@@ -10,7 +10,7 @@ lib/ 에 새 이모지를 넣었으면 다시 실행한다 (없는 이모지는 
     python tool/build_emoji_font.py            # 생성
     python tool/build_emoji_font.py --check    # lib/ 이모지가 모두 폰트에 있는지 확인 (없으면 exit 1)
 
-폰트: Noto Color Emoji (SIL Open Font License 1.1, assets/fonts/OFL.txt). Google Fonts 의 text= 서브셋 API 사용.
+폰트: Noto Color Emoji (SIL Open Font License 1.1, assets/fonts/OFL-NotoColorEmoji.txt). Google Fonts 의 text= 서브셋 API 사용.
 """
 import io
 import re

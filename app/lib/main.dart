@@ -40,7 +40,8 @@ enum HomeViewMode { feed, calendar, map }
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
-    yield LicenseEntryWithLineBreaks(['Noto Color Emoji'], await rootBundle.loadString('assets/fonts/OFL.txt'));
+    yield LicenseEntryWithLineBreaks(['Noto Color Emoji'], await rootBundle.loadString('assets/fonts/OFL-NotoColorEmoji.txt'));
+    yield LicenseEntryWithLineBreaks(['Noto Sans KR'], await rootBundle.loadString('assets/fonts/OFL-NotoSansKR.txt'));
   });
   // 첫 화면은 정적 JSON만 쓰므로 Firebase(SDK·reCAPTCHA 다운로드)를 기다리지 않고 바로 그린다.
   unawaited(firebaseReady().catchError((Object e) => debugPrint('Firebase 초기화 실패: $e')));
@@ -218,8 +219,9 @@ class DirectStayApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF0F172A),
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
-        // 내장 이모지 서브셋을 먼저 쓰게 해 gstatic 이모지 폰트 다운로드를 없앤다
-        fontFamilyFallback: const ['AppEmoji'],
+        // 내장 한글·이모지 서브셋을 먼저 쓰게 해 gstatic 폰트 조각 다운로드를 없앤다.
+        // 라틴 문자는 기본 Roboto 그대로, 한글은 AppKR, 이모지는 AppEmoji (AppKR 에는 이모지 글자를 넣지 않는다)
+        fontFamilyFallback: const ['AppKR', 'AppEmoji'],
       ),
       home: (linkedId != null && RegExp(r'^stay_[a-zA-Z0-9_-]{4,32}$').hasMatch(linkedId))
           ? ListingDetailPage(listingId: linkedId, homeBuilder: homeBuilder)
