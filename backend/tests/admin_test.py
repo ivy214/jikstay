@@ -137,7 +137,9 @@ print("[OK] 사용자 입력(숙소명·후기 닉네임) HTML 이스케이프 �
 assert client.get("/application/app_1").status_code == 404
 assert client.get("/notifications").status_code == 404
 assert client.post("/listing/stay_0000abcd/credit", data={"csrf": admin_app.CSRF}).status_code == 404
-assert "CPC" not in html and "cpc_balance" not in html
+# CSRF 토큰은 무작위 문자열이라 우연히 "CPC"를 포함할 수 있다 → 토큰을 빼고 검사
+html_wo_token = html.replace(admin_app.CSRF, "")
+assert "CPC" not in html_wo_token and "cpc_balance" not in html_wo_token
 print("[OK] 폐지된 호스트 신청서·알림 기록·CPC 크레딧 라우트 제거 확인")
 
 # CSRF 차단
