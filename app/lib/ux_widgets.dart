@@ -1,5 +1,6 @@
 // 사용자 편의 공통 UI: 찜(기기 저장) · 공유 · 상세 하단 고정 행동 바 · 핵심 정보 칩 · 출처/갱신일 표기
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
@@ -363,6 +364,52 @@ class SourceLine extends StatelessWidget {
       '$label: ${itemSourceLabel(item, lang)}$when',
       key: const Key('source_line'),
       style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+    );
+  }
+}
+
+/// 상세 화면(스토리·장소)의 흰 카드 본문. 화면에 보이는 만큼만 배치한다 (SliverList).
+/// SingleChildScrollView + Column 이면 화면 밖 긴 본문(한글 줄바꿈 계산 포함)까지 한꺼번에 배치해
+/// 상세를 여는 탭이 수백 ms 걸렸다 (INP). 배치는 예전과 같다: 최대 760px 가운데, 항목은 왼쪽 정렬.
+class DetailCardScrollView extends StatelessWidget {
+  final ScrollController? controller;
+  final bool isWide;
+  final List<Widget> children;
+
+  const DetailCardScrollView({super.key, this.controller, required this.isWide, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final screenW = MediaQuery.sizeOf(context).width;
+    final outer = isWide ? 28.0 : 16.0;
+    final side = math.max(outer, (screenW - 760) / 2);
+    final vertical = isWide ? 28.0 : 18.0;
+    return CustomScrollView(
+      controller: controller,
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(side, vertical, side, vertical),
+          sliver: DecoratedSliver(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x0A0F172A), blurRadius: 24, offset: Offset(0, 8)),
+              ],
+            ),
+            sliver: SliverPadding(
+              padding: EdgeInsets.all(isWide ? 34 : 20),
+              sliver: SliverList.list(
+                children: [
+                  // Column(crossAxisAlignment: start) 와 같은 배치: 너비는 최대, 자식은 왼쪽 정렬
+                  for (final c in children) Align(alignment: AlignmentDirectional.topStart, child: c),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

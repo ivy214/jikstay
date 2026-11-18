@@ -587,24 +587,9 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
               officialUrl: _officialUrl,
               onOfficial: () => _openExternal(_officialUrl, eventTag: 'open_official_site'),
             ),
-      body: SingleChildScrollView(
-        controller: _scrollCtrl,
-        padding: EdgeInsets.symmetric(horizontal: isWide ? 28 : 16, vertical: isWide ? 28 : 18),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: Container(
-              padding: EdgeInsets.all(isWide ? 34 : 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x0A0F172A), blurRadius: 24, offset: Offset(0, 8)),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: DetailCardScrollView(
+                controller: _scrollCtrl,
+                isWide: isWide,
                 children: [
                   // 1. 카테고리·선도·방문혜택·평점 태그 & 지역 출처 표기 (StoryDetailPage 상단 동일 포맷)
                   Wrap(
@@ -1468,10 +1453,6 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                     ],
                   ],
                 ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

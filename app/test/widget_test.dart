@@ -545,13 +545,20 @@ void main() {
       await tester.tap(find.byKey(const Key('open_daily_story_btn')));
       await tester.pumpAndSettle();
       expect(find.textContaining(today.title), findsWidgets);
+      // 상세 본문은 화면에 보이는 만큼만 배치하므로(SliverList) 사용자처럼 아래로 내려가며 확인한다
+      final storyScroll = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down).first;
+      Future<void> scrollTo(Finder f) => tester.scrollUntilVisible(f, 300, scrollable: storyScroll);
       if (today.paragraphs.isNotEmpty) {
         final head = today.paragraphs.first;
-        expect(find.textContaining(head.substring(0, head.length < 12 ? head.length : 12)), findsWidgets);
+        final headFinder = find.textContaining(head.substring(0, head.length < 12 ? head.length : 12));
+        await scrollTo(headFinder);
+        expect(headFinder, findsWidgets);
       }
       if (today.practicalInfo.isNotEmpty) {
+        await scrollTo(find.byKey(const Key('story_practical_box')));
         expect(find.byKey(const Key('story_practical_box')), findsOneWidget);
       }
+      await scrollTo(find.byKey(const Key('story_kakao_route_btn')));
       expect(find.byKey(const Key('story_kakao_route_btn')), findsOneWidget);
 
       // 지도로 복귀
@@ -581,16 +588,18 @@ void main() {
 
       expect(find.byType(BottomSheet), findsNothing);
       expect(find.byType(SpotDetailSheet), findsOneWidget);
-      expect(find.byKey(const Key('spot_practical_box')), findsOneWidget);
-      expect(find.byKey(const Key('spot_place_search_box')), findsOneWidget);
-      expect(find.byKey(const Key('spot_kakao_place_btn')), findsOneWidget);
-      expect(find.byKey(const Key('spot_naver_place_btn')), findsOneWidget);
-      expect(find.byKey(const Key('spot_naver_search_btn')), findsOneWidget);
 
+      // 상세 본문은 화면에 보이는 만큼만 배치하므로(SliverList) 아래로 내려가며 확인한다
       final sheetScrollable = find.descendant(
         of: find.byType(SpotDetailSheet),
         matching: find.byType(Scrollable),
       ).first;
+      for (final key in ['spot_practical_box', 'spot_place_search_box', 'spot_kakao_place_btn', 'spot_naver_place_btn', 'spot_naver_search_btn']) {
+        await tester.scrollUntilVisible(find.byKey(Key(key)), 180, scrollable: sheetScrollable);
+        expect(find.byKey(Key(key)), findsOneWidget);
+      }
+      await tester.drag(sheetScrollable, const Offset(0, 5000)); // 맨 위로 되돌린 뒤 이어서 확인
+      await tester.pumpAndSettle();
 
       // 4-1. 방문 혜택 쿠폰 버튼 클릭 → 팝업 다이얼로그 없이 페이지 내 인라인 바우처 오픈 확인
       final couponBtn = find.byKey(const Key('sheet_coupon_btn'));
