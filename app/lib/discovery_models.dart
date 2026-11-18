@@ -388,6 +388,35 @@ bool isOpenDuring(DiscoveryItem it, DateTime from, DateTime to) {
   return !start.isAfter(to) && !end.isBefore(from);
 }
 
+/// 기본 피드에 끼워 넣을 공연·전시: 오늘부터 7일 안에 볼 수 있는 것만, 곧 시작하거나 곧 끝나는 순.
+/// (이번 주 것만 해도 수백 건이라 그대로 섞으면 피드를 뒤덮는다 → [interleaveEvery] 칸마다 1개)
+List<DiscoveryItem> thisWeekCulture(Iterable<DiscoveryItem> items, DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  final weekEnd = today.add(const Duration(days: 6));
+  final out = items
+      .where((it) => it.category == DiscoveryCategory.culture && isOpenDuring(it, today, weekEnd))
+      .toList();
+  DateTime key(DiscoveryItem it) {
+    final start = parseYmdDate(it.startDate)!; // isOpenDuring 을 통과했으면 시작일이 있다
+    return start.isAfter(today) ? start : (parseYmdDate(it.endDate) ?? start);
+  }
+  out.sort((a, b) => key(a).compareTo(key(b)));
+  return out;
+}
+
+/// [main] 목록 [every]칸마다 [extra] 를 1개씩 끼운다. [main] 이 먼저 끝나면 남은 [extra] 는 뒤에 붙인다.
+List<DiscoveryItem> interleaveEvery(List<DiscoveryItem> main, List<DiscoveryItem> extra, {int every = 5}) {
+  if (extra.isEmpty) return main;
+  final out = <DiscoveryItem>[];
+  var e = 0;
+  for (var i = 0; i < main.length; i++) {
+    out.add(main[i]);
+    if ((i + 1) % every == 0 && e < extra.length) out.add(extra[e++]);
+  }
+  out.addAll(extra.skip(e));
+  return out;
+}
+
 class DiscoveryItem {
   final String id;
   final DiscoveryCategory category;

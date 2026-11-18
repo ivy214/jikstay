@@ -723,7 +723,7 @@ class _HomePageState extends State<HomePage> {
                     (it.category != DiscoveryCategory.culture || _category == DiscoveryCategory.culture))
                 .toList())
         : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
-    final out = pool.where((it) {
+    bool keep(DiscoveryItem it) {
       if (_savedOnly && !saved.contains(it.id)) return false;
       if (_weekendOnly && !isOpenDuring(it, weekend.$1, weekend.$2)) return false;
       if (_category != DiscoveryCategory.all && it.category != _category) return false;
@@ -733,13 +733,20 @@ class _HomePageState extends State<HomePage> {
       if (score == null) return false;
       relevance[it.id] = score;
       return true;
-    }).toList();
+    }
+
+    final out = pool.where(keep).toList();
+    // 기본 피드(검색·분류 선택 없음)에는 이번 주 공연·전시를 5칸마다 1개씩 끼운다 (지역·찜·주말 필터는 똑같이 적용)
+    final culture = (q.isEmpty && !includeMarkets && _category == DiscoveryCategory.all)
+        ? thisWeekCulture(_allItems.where(keep), DateTime.now())
+        : <DiscoveryItem>[];
 
     final pos = _userPos;
     if (pos != null) {
       // 내 주변: 거리순 (근사 좌표 숙소는 실제 위치를 몰라 뒤로)
       double d(DiscoveryItem it) => haversineKm(pos.$1, pos.$2, it.lat, it.lng) + (it.hasApproxLocation ? 1000 : 0);
       out.sort((a, b) => d(a).compareTo(d(b)));
+      culture.sort((a, b) => d(a).compareTo(d(b)));
     } else {
       // 검색 중이면 관련도(시·군 이름 일치 > 제목 > 그 밖) 먼저, 같으면 기존 우선순위
       out.sort((a, b) {
@@ -748,7 +755,7 @@ class _HomePageState extends State<HomePage> {
         return b.priorityScore.compareTo(a.priorityScore);
       });
     }
-    return out;
+    return interleaveEvery(out, culture);
   }
 
   Future<void> _toggleNearMe(AppLang lang) async {

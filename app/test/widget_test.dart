@@ -1047,4 +1047,25 @@ void main() {
     expect(searchRelevance(play, parseSearchQuery('대학로 연극')), isNotNull);
     expect(searchRelevance(play, parseSearchQuery('부산 공연')), isNull);
   });
+  test('기본 피드: 이번 주 공연·전시만 곧 시작·곧 끝나는 순으로 5칸마다 끼운다', () {
+    DiscoveryItem it(String id, DiscoveryCategory c, [String sd = '', String ed = '']) => DiscoveryItem(
+        id: id, category: c, title: id, province: '전북', regionLabel: '전북', address: '', lat: 35, lng: 127,
+        startDate: sd, endDate: ed);
+    final now = DateTime(2026, 11, 18);
+    final pool = [
+      it('long', DiscoveryCategory.culture, '20260901', '20261231'), // 진행 중, 끝은 멀다
+      it('soon', DiscoveryCategory.culture, '20261120', '20261120'), // 이틀 뒤 시작
+      it('ending', DiscoveryCategory.culture, '20261101', '20261119'), // 내일 끝
+      it('later', DiscoveryCategory.culture, '20261201', '20261201'), // 이번 주 밖
+      it('ended', DiscoveryCategory.culture, '20261101', '20261110'),
+      it('spot', DiscoveryCategory.attraction),
+    ];
+    expect(thisWeekCulture(pool, now).map((e) => e.id), ['ending', 'soon', 'long']);
+
+    final main = List.generate(12, (i) => it('m$i', DiscoveryCategory.attraction));
+    final mixed = interleaveEvery(main, thisWeekCulture(pool, now));
+    expect(mixed.map((e) => e.id).toList(),
+        ['m0', 'm1', 'm2', 'm3', 'm4', 'ending', 'm5', 'm6', 'm7', 'm8', 'm9', 'soon', 'm10', 'm11', 'long']);
+    expect(interleaveEvery(main, const []), same(main));
+  });
 }
