@@ -1,18 +1,14 @@
 // 법적 고지 및 개인정보처리방침 요약 (공공데이터 기반 숙소 정보 제공 + 방문자 별점·후기 운영 모델)
 import 'package:material_ui/material_ui.dart';
 
-const kConsentVersion = '2026-11-17.1';
+const kConsentVersion = '2026-11-21.1';
 
-// 전자상거래법상 사업자 정보 표시 (사이트 하단)
-const kBizName = 'jikstay';
-const kBizCeo = '[대표자명]';
-const kBizRegNo = '[사업자등록번호]';
-const kBizMailOrderNo = '[통신판매업 신고번호]';
-const kBizAddress = '[사업장 주소]';
-const kBizEmail = '[문의·삭제요청 이메일]';
+// 개인정보 보호책임자(문의·삭제 요청 창구).
+// 현재 비영리 방문정보 제공 목적이라 사업자·통신판매업 정보는 표시하지 않는다.
+const kPrivacyOfficer = '채동석';
+const kPrivacyEmail = 'dongchae@gmail.com';
 
-// 2026-11-17 시행 (법률 검토 전). 남은 [ ] 자리표시자(사업자번호·이메일 등)는 확정 후 채운다.
-// 문구를 바꾸면 kConsentVersion 을 올린다.
+// 2026-11-17 시행 (법률 검토 전). 문구를 바꾸면 kConsentVersion 을 올린다.
 const kPrivacyPolicy = '''개인정보처리방침 (버전 $kConsentVersion)
 
 직스테이 로컬(이하 "서비스")은 회원가입 없이 이용하는 여행 정보 서비스로, 개인정보를 최소한으로만 처리합니다.
@@ -55,7 +51,7 @@ const kPrivacyPolicy = '''개인정보처리방침 (버전 $kConsentVersion)
    다만 보안 확인(reCAPTCHA)은 서비스 제공에 필요하여 거부할 경우 일부 기능(후기 작성 등)을 이용할 수 없습니다.
 
 6. 정보주체의 권리와 행사 방법
-   자신이 작성한 후기의 열람·정정·삭제와 처리 정지를 $kBizEmail 로 요청할 수 있습니다.
+   자신이 작성한 후기의 열람·정정·삭제와 처리 정지를 $kPrivacyEmail 로 요청할 수 있습니다.
    익명 식별자만으로는 작성자를 확인하기 어려우므로, 요청 시 해당 장소와 작성 일시·닉네임을 알려 주세요.
 
 7. 개인정보 자동 수집 장치(쿠키 등)의 설치·운영 및 거부
@@ -68,7 +64,7 @@ const kPrivacyPolicy = '''개인정보처리방침 (버전 $kConsentVersion)
    관리자 키 접근 통제, 자동화된 악성 요청 차단(App Check)
 
 9. 개인정보 보호책임자
-   성명: 채동석 / 연락처: $kBizEmail
+   담당자: $kPrivacyOfficer / 이메일: $kPrivacyEmail
 
 10. 변경 고지
    이 방침이 바뀌면 시행 7일 전부터 서비스 화면을 통해 알립니다. 시행일: 2026년 11월 17일''';
@@ -92,29 +88,14 @@ class LegalFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(color: Colors.white70, fontSize: 12, height: 1.6);
     return Container(
       width: double.infinity,
       color: const Color(0xFF222222),
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1120),
           child: Column(children: [
-            const Text(
-              '본 서비스는 행정안전부·한국관광공사 공공데이터에 등록된 숙소 정보제공 채널이며 통신판매의 당사자가 아닙니다. '
-              '예약·결제·환불의 의무와 책임은 각 숙소 운영자에게 있습니다.',
-              style: style,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '$kBizName · 대표 $kBizCeo · 사업자등록번호 $kBizRegNo · 통신판매업 신고 $kBizMailOrderNo\n'
-              '$kBizAddress · 정보 정정/게시물 삭제 요청 $kBizEmail',
-              style: style,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
             TextButton(
               onPressed: () => showLegalDialog(context, '개인정보처리방침', kPrivacyPolicy),
               child: const Text('개인정보처리방침',
