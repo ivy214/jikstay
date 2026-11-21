@@ -27,6 +27,15 @@
     window.JIKSTAY_GA_ID = "G-9PDEPWX3D7";
     (function (id) {
       if (!id) return;
+      // 봇·자동화 브라우저는 GA 를 아예 켜지 않는다 (GA 기본 봇 목록에 없는 크롤러·미리보기 서버·헤드리스 브라우저).
+      // gtag 가 없으면 jikstayTrackEvent 도 아무것도 보내지 않는다.
+      try {
+        var ua = navigator.userAgent || "";
+        if (navigator.webdriver ||
+            /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|pingdom|uptime|monitor|preview|scanner|python|curl|wget|java\/|go-http|axios|node-fetch|phantomjs|puppeteer|playwright|selenium/i.test(ua)) {
+          return;
+        }
+      } catch (e) {}
       window.dataLayer = window.dataLayer || [];
       window.gtag = function () { window.dataLayer.push(arguments); };
       window.gtag("js", new Date());
