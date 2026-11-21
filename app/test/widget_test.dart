@@ -801,6 +801,36 @@ void main() {
       expect(pickedBusan.id, 'ev_imminent_test');
     });
 
+    test('여행코스: 그날 열리는 공연·전시를 하루 1곳씩 넣고 URL로 복원된다', () {
+      DiscoveryItem show(String id, String start, String end) => DiscoveryItem(
+            id: id,
+            category: DiscoveryCategory.culture,
+            title: '테스트 공연 $id',
+            province: '서울',
+            regionLabel: '서울 종로구',
+            address: '서울특별시 종로구',
+            lat: 37.57,
+            lng: 126.98,
+            imageUrl: '',
+            startDate: start,
+            endDate: end,
+          );
+      // 2026-11-18(수) 기준 1박2일 = 11/21(토)~11/22(일)
+      final items = [
+        ...kBuiltInSeedDiscoveryItems,
+        show('cu_sat', '20261121', '20261121'),
+        show('cu_sun', '20261122', '20261122'),
+        show('cu_past', '20261101', '20261119'),
+      ];
+      final plan = generateTripPlan(allItems: items, province: '서울', days: 2, now: DateTime(2026, 11, 18));
+      final culture = plan.stops.where((s) => s.slotKey == 'culture').toList();
+      expect(culture.map((s) => '${s.day}:${s.item.id}'), ['1:cu_sat', '2:cu_sun']);
+      expect(plan.stops.any((s) => s.item.id == 'cu_past'), isFalse);
+
+      final decoded = decodeTripPlanParam(encodeTripPlanParam(plan), items)!;
+      expect(decoded.stops.where((s) => s.slotKey == 'culture').map((s) => s.item.id), ['cu_sat', 'cu_sun']);
+    });
+
     testWidgets('주말 1박2일·외국인 3·5일 여행코스 자동 생성 및 URL 인코딩/디코딩 검증', (tester) async {
       appLangNotifier.value = AppLang.ko;
       final plan = generateTripPlan(

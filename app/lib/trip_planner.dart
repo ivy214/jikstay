@@ -6,11 +6,11 @@ import 'discovery_models.dart';
 import 'i18n.dart';
 import 'web_utils.dart';
 
-enum TripTheme { all, festival, food, hanok }
+enum TripTheme { all, festival, food, hanok, culture }
 
 class TripStop {
   final int day;
-  final String slotKey; // 'morning' | 'lunch' | 'afternoon' | 'stay'
+  final String slotKey; // 'morning' | 'lunch' | 'afternoon' | 'culture' | 'stay'
   final DiscoveryItem item;
 
   const TripStop({
@@ -113,7 +113,11 @@ int _daysUntilStart(DiscoveryItem it) {
   return diff < 0 ? 0 : diff;
 }
 
-/// 선택한 지역(시/도 · 시/군/구)·일수·테마에 맞춰 근거리 동선으로 명소·맛집·축제·합법 숙소를 자동 조합한다.
+/// 여행 첫날: 1박2일은 이번 주말(토), 3·5일은 오늘.
+DateTime tripStartDate(int days, DateTime now) =>
+    days == 2 ? upcomingWeekend(now).$1 : DateTime(now.year, now.month, now.day);
+
+/// 선택한 지역(시/도 · 시/군/구)·일수·테마에 맞춰 근거리 동선으로 명소·맛집·축제·공연·전시·합법 숙소를 자동 조합한다.
 TripPlan generateTripPlan({
   required List<DiscoveryItem> allItems,
   String province = '전체',
@@ -122,6 +126,7 @@ TripPlan generateTripPlan({
   TripTheme theme = TripTheme.all,
   bool foreignerOnly = false,
   int seedOffset = 0,
+  DateTime? now,
 }) {
   final prov = province.trim().isEmpty ? '전체' : province.trim();
   final sub = subRegion.trim().isEmpty ? '전체' : subRegion.trim();
@@ -151,7 +156,11 @@ TripPlan generateTripPlan({
     if (theme == TripTheme.food || theme == TripTheme.hanok) ...eventAnchors else ...spotAnchors,
   ];
   if (anchors.isEmpty) {
-    anchors.addAll(anchorPool.where((it) => it.category != DiscoveryCategory.ebook && it.category != DiscoveryCategory.stay));
+    // 공연·전시는 날짜를 따져 별도 슬롯에서 고르므로 앵커(날짜 무관 오전 코스)로 쓰지 않는다
+    anchors.addAll(anchorPool.where((it) =>
+        it.category != DiscoveryCategory.ebook &&
+        it.category != DiscoveryCategory.stay &&
+        it.category != DiscoveryCategory.culture));
   }
 
   final usedIds = <String>{};
@@ -164,10 +173,15 @@ TripPlan generateTripPlan({
     bool stayFilter = false,
     bool excludeNight = false,
     bool excludeMorning = false,
+    DateTime? openOn,
   }) {
+    // 공연·전시는 그날 실제로 열리는 것만 (다른 분류는 날짜 무관)
+    bool openOk(DiscoveryItem it) =>
+        openOn == null || it.category != DiscoveryCategory.culture || isOpenDuring(it, openOn, openOn);
     var candidates = nearbyPool.where((it) {
       if (usedIds.contains(it.id)) return false;
       if (!categories.contains(it.category)) return false;
+      if (!openOk(it)) return false;
       if (stayFilter && foreignerOnly && !_isForeignerEligibleStay(it)) return false;
       if (excludeNight && _isNightItem(it)) return false;
       if (excludeMorning && _isMorningItem(it)) return false;
@@ -178,6 +192,7 @@ TripPlan generateTripPlan({
       candidates = nearbyPool.where((it) {
         if (usedIds.contains(it.id)) return false;
         if (!categories.contains(it.category)) return false;
+        if (!openOk(it)) return false;
         if (stayFilter && foreignerOnly && !_isForeignerEligibleStay(it)) return false;
         return true;
       }).toList();
@@ -219,8 +234,10 @@ TripPlan generateTripPlan({
   final stops = <TripStop>[];
   final clampedDays = days.clamp(1, 5);
   DiscoveryItem? prevStay;
+  final firstDay = tripStartDate(clampedDays, now ?? DateTime.now());
 
   for (int d = 1; d <= clampedDays; d++) {
+    final date = firstDay.add(Duration(days: d - 1));
     // 첫날 앵커는 seedOffset 적용, 둘째 날부터는 전날 숙소/전날 앵커 기준 근거리 또는 다음 앵커 사용
     DiscoveryItem? dayAnchor = prevStay;
     if (dayAnchor == null && anchors.isNotEmpty) {
@@ -246,10 +263,17 @@ TripPlan generateTripPlan({
     final lunch = pickNearest(anchorForDay, [DiscoveryCategory.food]);
     if (lunch != null) stops.add(TripStop(day: d, slotKey: 'lunch', item: lunch));
 
-    final afternoon = theme == TripTheme.food
-        ? pickNearest(anchorForDay, [DiscoveryCategory.food, DiscoveryCategory.event, DiscoveryCategory.attraction], excludeMorning: true)
-        : pickNearest(anchorForDay, [DiscoveryCategory.event, DiscoveryCategory.attraction], excludeMorning: true);
+    final afternoon = switch (theme) {
+      TripTheme.food => pickNearest(anchorForDay, [DiscoveryCategory.food, DiscoveryCategory.event, DiscoveryCategory.attraction], excludeMorning: true),
+      TripTheme.culture => pickNearest(anchorForDay, [DiscoveryCategory.culture, DiscoveryCategory.event, DiscoveryCategory.attraction],
+          excludeMorning: true, openOn: date),
+      _ => pickNearest(anchorForDay, [DiscoveryCategory.event, DiscoveryCategory.attraction], excludeMorning: true),
+    };
     if (afternoon != null) stops.add(TripStop(day: d, slotKey: 'afternoon', item: afternoon));
+
+    // 공연·전시: 그날 열리는 것 중 동선에서 가장 가까운 1곳 (없으면 생략)
+    final culture = pickNearest(anchorForDay, [DiscoveryCategory.culture], openOn: date);
+    if (culture != null) stops.add(TripStop(day: d, slotKey: 'culture', item: culture));
 
     if (d < clampedDays) {
       final stay = pickNearest(
@@ -311,6 +335,7 @@ TripPlan? decodeTripPlanParam(String raw, List<DiscoveryItem> allItems) {
       'm' => 'morning',
       'l' => 'lunch',
       'a' => 'afternoon',
+      'c' => 'culture',
       's' => 'stay',
       _ => 'morning',
     };
@@ -397,7 +422,10 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
         'lunch' => pickLangText(lang, ko: '로컬 미식', en: 'Local Food', ja: 'ご当地グルメ', zh: '当地美食'),
         'afternoon' => _isNightItem(stop.item)
             ? pickLangText(lang, ko: '오후 · 야간', en: 'Afternoon / Night', ja: '午後・夜間', zh: '下午・夜间')
-            : pickLangText(lang, ko: '오후 · 축제', en: 'Afternoon / Event', ja: '午後・祭り', zh: '下午・庆典'),
+            : stop.item.category == DiscoveryCategory.culture
+                ? '${pickLangText(lang, ko: '오후', en: 'Afternoon', ja: '午後', zh: '下午')} · ${stop.item.categoryBadgeText(lang)}'
+                : pickLangText(lang, ko: '오후 · 축제', en: 'Afternoon / Event', ja: '午後・祭り', zh: '下午・庆典'),
+        'culture' => '${pickLangText(lang, ko: '저녁', en: 'Evening', ja: '夕方', zh: '傍晚')} · ${stop.item.categoryBadgeText(lang)}',
         'stay' => pickLangText(lang, ko: '수수료 0원 숙박', en: '0% Fee Stay', ja: '手数料0円宿', zh: '0手续费住宿'),
         _ => stop.slotKey,
       };
@@ -407,6 +435,7 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
         TripTheme.festival => pickLangText(lang, ko: '축제·행사', en: 'Festivals', ja: '祭り・イベント', zh: '庆典活动'),
         TripTheme.food => pickLangText(lang, ko: '로컬 미식', en: 'Foodie', ja: 'グルメ', zh: '美食之旅'),
         TripTheme.hanok => pickLangText(lang, ko: '한옥·힐링', en: 'Hanok & Calm', ja: '韓屋・癒し', zh: '韩屋慢游'),
+        TripTheme.culture => pickLangText(lang, ko: '공연·전시', en: 'Shows & Exhibits', ja: '公演・展示', zh: '演出展览'),
       };
 
   Future<void> _copyShareUrl(AppLang lang) async {
