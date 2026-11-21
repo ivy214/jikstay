@@ -45,6 +45,11 @@ void main() {
   });
   // 첫 화면은 정적 JSON만 쓰므로 Firebase(SDK·reCAPTCHA 다운로드)를 기다리지 않고 바로 그린다.
   unawaited(firebaseReady().catchError((Object e) => debugPrint('Firebase 초기화 실패: $e')));
+  appLangNotifier.value = resolveStartLang(
+    urlLang: Uri.base.queryParameters['lang'],
+    storedLang: storeGet(kLangStoreKey),
+    browserLangs: browserLanguages(),
+  );
   runApp(const DirectStayApp());
 }
 
@@ -197,9 +202,6 @@ class DirectStayApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final params = Uri.base.queryParameters;
-    if (params.containsKey('lang')) {
-      appLangNotifier.value = parseAppLang(params['lang']);
-    }
 
     final linkedId = params['id'];
     final initialRegion = params['region'];
@@ -310,7 +312,10 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     SavedPlaces.ids.addListener(_onSavedChanged);
     HomeUrlSyncObserver.onReturnHome = _resetHomeUrl;
-    onAppLangSelected = (next) => TranslationStore.ensureLoaded(next);
+    onAppLangSelected = (next) {
+      storeSet(kLangStoreKey, next.code); // 직접 고른 언어는 다음 방문에도 유지
+      TranslationStore.ensureLoaded(next);
+    };
     if (appLangNotifier.value != AppLang.ko) {
       TranslationStore.ensureLoaded(appLangNotifier.value);
     }

@@ -23,6 +23,25 @@ void selectAppLang(AppLang next) {
   onAppLangSelected?.call(next);
 }
 
+/// 사용자가 고른 언어를 이 기기에 기억하는 저장소 키.
+const kLangStoreKey = 'jikstay_lang';
+
+/// 시작 언어: 링크의 ?lang= > 전에 직접 고른 언어 > 브라우저 언어.
+/// 브라우저 언어 목록에서 지원 언어(ko·en·ja·zh)를 앞에서부터 찾고, 하나도 없으면(프랑스어 등) 영어,
+/// 목록 자체가 없으면 한국어.
+AppLang resolveStartLang({String? urlLang, String? storedLang, List<String> browserLangs = const []}) {
+  if (urlLang != null && urlLang.trim().isNotEmpty) return parseAppLang(urlLang);
+  if (storedLang != null && storedLang.trim().isNotEmpty) return parseAppLang(storedLang);
+  final tags = browserLangs.map((t) => t.trim().toLowerCase()).where((t) => t.isNotEmpty).toList();
+  if (tags.isEmpty) return AppLang.ko;
+  for (final t in tags) {
+    for (final l in AppLang.values) {
+      if (t == l.code || t.startsWith('${l.code}-')) return l;
+    }
+  }
+  return AppLang.en;
+}
+
 String pickLangText(
   AppLang lang, {
   required String ko,

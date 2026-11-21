@@ -62,6 +62,18 @@ external JSString? _jikstayStoreGet(JSString key);
 @JS('jikstayStoreSet')
 external void _jikstayStoreSet(JSString key, JSString value);
 
+@JS('jikstayBrowserLangs')
+external JSString _jikstayBrowserLangs();
+
+/// 브라우저 언어 목록 (navigator.languages, 선호 순).
+List<String> browserLanguages() {
+  try {
+    return _jikstayBrowserLangs().toDart.split(',').where((s) => s.isNotEmpty).toList();
+  } catch (_) {
+    return const [];
+  }
+}
+
 @JS('jikstayShare')
 external JSPromise<JSBoolean> _jikstayShare(JSString title, JSString url);
 

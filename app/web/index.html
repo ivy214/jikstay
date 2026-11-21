@@ -301,6 +301,13 @@
       return __prefetchUrl(url);
     };
     // 찜 목록 등 기기 내 저장 (사생활 보호 모드에서 막혀도 앱은 계속 동작)
+    // 브라우저 언어 목록 (선호 순, 쉼표 구분) — 첫 방문 시 언어 자동 선택용
+    window.jikstayBrowserLangs = function () {
+      try {
+        var l = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+        return Array.prototype.join.call(l, ",");
+      } catch (_) { return ""; }
+    };
     window.jikstayStoreGet = function (key) {
       try { return window.localStorage.getItem(key); } catch (_) { return null; }
     };

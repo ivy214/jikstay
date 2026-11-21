@@ -17,6 +17,9 @@ String? storeGet(String key) => _memStore[key];
 
 void storeSet(String key, String value) => _memStore[key] = value;
 
+/// 브라우저 언어 목록 (navigator.languages). 웹이 아니면 빈 목록.
+List<String> browserLanguages() => const [];
+
 /// 기기의 공유 시트(Web Share API). 지원하지 않으면 false → 호출 측이 링크 복사로 대체한다.
 Future<bool> nativeShare(String title, String url) async => false;
 

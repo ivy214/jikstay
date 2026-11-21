@@ -801,6 +801,19 @@ void main() {
       expect(pickedBusan.id, 'ev_imminent_test');
     });
 
+    test('시작 언어: 링크 > 직접 고른 언어 > 브라우저 언어 (지원 안 하면 영어)', () {
+      expect(resolveStartLang(), AppLang.ko);
+      expect(resolveStartLang(browserLangs: ['ko-KR', 'en-US']), AppLang.ko);
+      expect(resolveStartLang(browserLangs: ['en-US', 'ko']), AppLang.en);
+      expect(resolveStartLang(browserLangs: ['ja']), AppLang.ja);
+      expect(resolveStartLang(browserLangs: ['zh-TW']), AppLang.zh);
+      expect(resolveStartLang(browserLangs: ['zh-CN']), AppLang.zh);
+      expect(resolveStartLang(browserLangs: ['fr-FR', 'de']), AppLang.en);
+      expect(resolveStartLang(browserLangs: ['fr-FR', 'ko-KR']), AppLang.ko);
+      expect(resolveStartLang(storedLang: 'ko', browserLangs: ['en-US']), AppLang.ko);
+      expect(resolveStartLang(urlLang: 'ja', storedLang: 'ko', browserLangs: ['en-US']), AppLang.ja);
+    });
+
     test('여행코스: 그날 열리는 공연·전시를 하루 1곳씩 넣고 URL로 복원된다', () {
       DiscoveryItem show(String id, String start, String end) => DiscoveryItem(
             id: id,
