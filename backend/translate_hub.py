@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import datetime
 import hashlib
 import json
 import os
@@ -56,10 +57,36 @@ AZURE_MAX_TEXTS = 100        # 요청당 문장 수 (서비스 한도 1,000)
 AZURE_MAX_CHARS = 5000       # 요청당 원문 글자 수
 # 무료(F0) 등급은 분당 처리량 제한이 있어(넘으면 429) 요청 간격을 둔다. 과금·한도는 원문 글자 수 × 번역 언어 수.
 AZURE_BILLED_CHARS_PER_MIN = 30000
-AZURE_KINDS = ("item", "market", "stay")  # 스토리(긴 매거진 글)는 문맥 번역이 나은 Gemini 로
-_AZURE = {"enabled": False, "chars": 0, "lock": threading.Lock()}
+AZURE_KINDS = ("item", "market", "stay", "camp")  # 스토리(긴 매거진 글)는 문맥 번역이 나은 Gemini 로
+# 월 무료 한도(원문 글자 수 × 번역 언어 수). 5% 여유를 두고 그 안에서만 Azure 를 쓴다.
+# 이번 달 사용량은 translation_cache.json 의 AZURE_USAGE_KEY 에 (KST 기준 월과 함께) 기록되고, 달이 바뀌면 0부터 다시 센다.
+AZURE_MONTHLY_FREE_CHARS = int(os.environ.get("AZURE_MONTHLY_FREE_CHARS") or 2_000_000)
+AZURE_MONTHLY_BUDGET = int(AZURE_MONTHLY_FREE_CHARS * 0.95)
+AZURE_USAGE_KEY = "__azure_usage__"
+# 유료 번역(Gemini)으로 넘기지 않고 무료 한도 안에서만, 남으면 다음 달로 미루는 섹션 (캠핑장·휴양림 약 2,400곳)
+FREE_ONLY_KINDS = ("camp",)
+_AZURE = {"enabled": False, "chars": 0, "budget_left": 0, "month": "", "used_before": 0, "lock": threading.Lock()}
 HANGUL_RE = re.compile(r"[가-힣]")
 GEMINI_MIN_INTERVAL_SEC = 0.0  # gemini-3.5-flash-lite: 4K RPM / 150K RPD
+
+
+def _kst_month() -> str:
+    return (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)).strftime("%Y-%m")
+
+
+def init_azure_budget(cache: dict[str, Any]) -> None:
+    """이번 달(KST) Azure 사용량을 캐시에서 읽어 남은 한도를 정한다. 달이 바뀌었으면 0부터."""
+    month = _kst_month()
+    usage = cache.get(AZURE_USAGE_KEY)
+    used = int(usage.get("billed") or 0) if isinstance(usage, dict) and usage.get("month") == month else 0
+    _AZURE.update(month=month, used_before=used, budget_left=max(0, AZURE_MONTHLY_BUDGET - used))
+    print(f"[azure] {month} 사용 {used:,}자 / 한도 {AZURE_MONTHLY_BUDGET:,}자 (무료 {AZURE_MONTHLY_FREE_CHARS:,}자의 95%) "
+          f"→ 이번 실행에서 쓸 수 있는 양 {_AZURE['budget_left']:,}자", flush=True)
+
+
+def record_azure_usage(cache: dict[str, Any]) -> None:
+    with _CACHE_LOCK:
+        cache[AZURE_USAGE_KEY] = {"month": _AZURE["month"], "billed": AZURE_MONTHLY_BUDGET - _AZURE["budget_left"]}
 
 
 def load_env() -> None:
@@ -313,6 +340,9 @@ def _azure_request(texts: list[str]) -> list[dict[str, str]] | None:
                 continue
             print(f"[azure] HTTP {e.code} — 이번 실행은 Azure 를 끄고 Gemini 로 넘김", file=sys.stderr)
             _AZURE["enabled"] = False
+            if e.code == 403:  # 월 무료 한도 소진 (우리 기록보다 먼저 닿은 경우) → 이번 달은 더 쓰지 않는다
+                with _AZURE["lock"]:
+                    _AZURE["budget_left"] = 0
             return None
         except Exception as exc:  # 네트워크 일시 오류
             if attempt < 3:
@@ -347,7 +377,18 @@ def azure_translate_records(kind: str, pending: list[tuple[str, dict[str, Any]]]
             n_chars += size
             i += 1
         flat = [t for _, _, ts in group for t in ts]
+        billed = sum(len(t) for t in flat) * len(LANGS)
+        if billed > _AZURE["budget_left"]:
+            # 이번 달 한도에 닿음 → 여기서 멈추고 남은 항목은 다음 달 같은 순서로 이어서
+            print(f"  [azure] 이번 달 한도에 닿아 멈춤 (남은 {_AZURE['budget_left']:,}자 < 다음 묶음 {billed:,}자)", flush=True)
+            _AZURE["enabled"] = False
+            left.extend((item_id, payload) for item_id, payload, _ in group)
+            left.extend(pending[i:])
+            break
         res = _azure_request(flat) if flat else []
+        if res is not None and flat:
+            with _AZURE["lock"]:
+                _AZURE["budget_left"] = max(0, _AZURE["budget_left"] - billed)
         if res is None or len(res) != len(flat):
             left.extend((item_id, payload) for item_id, payload, _ in group)
             continue
@@ -382,8 +423,12 @@ def process_section(
     if pending and kind in AZURE_KINDS and _AZURE["enabled"]:
         before = len(pending)
         pending = azure_translate_records(kind, pending, cache)
+        record_azure_usage(cache)
         save_cache(cache)
-        print(f"  [{kind}] Azure 번역 {before - len(pending)}건 · 남은 {len(pending)}건 → Gemini", flush=True)
+        print(f"  [{kind}] Azure 번역 {before - len(pending)}건 · 남은 {len(pending)}건", flush=True)
+    if pending and kind in FREE_ONLY_KINDS:
+        print(f"  [{kind}] 무료 한도 밖 {len(pending)}건은 다음 달로 (유료 번역 안 씀)", flush=True)
+        pending = []
     if pending and openai_client is None and gemini_client is None:
         print(f"  [{kind}] LLM 키가 없어 {len(pending)}건은 다음 실행으로", flush=True)
         pending = []
@@ -430,15 +475,20 @@ def main() -> None:
     llm = "Gemini " + MODEL_NAME if gemini_client else ("OpenAI gpt-4o-mini" if openai_client else "없음")
     print(f"Using provider: {'Azure Translator(F0) 우선 + ' if _AZURE['enabled'] else ''}{llm}", flush=True)
     cache = load_cache()
+    init_azure_budget(cache)
 
     hub = json.loads(HUB_PATH.read_text(encoding="utf-8"))
     stays_doc = json.loads(STAYS_PATH.read_text(encoding="utf-8"))
 
     story_records = [(st["id"], build_story_payload(st)) for st in hub.get("daily_stories", []) if st.get("id")]
     item_records = []
-    for it in hub.get("festivals", []) + hub.get("spots", []) + hub.get("markets", []) + hub.get("culture", []) + hub.get("camping", []):
+    for it in hub.get("festivals", []) + hub.get("spots", []) + hub.get("markets", []) + hub.get("culture", []):
         if it.get("id"):
             item_records.append((str(it["id"]), build_item_payload(it)))
+    # 캠핑장·휴양림은 무료 한도 안에서 마지막 순서로: 휴양림 먼저, 그다음 캠핑장(시·도·이름 순). 다 못 하면 다음 달 이어서.
+    camping = sorted((it for it in hub.get("camping", []) if it.get("id")),
+                     key=lambda it: (it.get("sub") != "forest", str(it.get("province") or ""), str(it.get("title") or "")))
+    camp_records = [(str(it["id"]), build_item_payload(it)) for it in camping]
     market_records = [(mk["id"], build_market_payload(mk)) for mk in hub.get("traditional_markets", []) if mk.get("id")]
     stay_records = [
         (str(st["listing_id"]), build_stay_payload(st))
@@ -457,8 +507,13 @@ def main() -> None:
         stays_out = {lang: {} for lang in LANGS}
     else:
         stays_out = process_section(openai_client, gemini_client, "stay", stay_records, cache, batch_size=stay_bs, max_workers=workers)
+    camp_out = process_section(openai_client, gemini_client, "camp", camp_records, cache, batch_size=item_bs, max_workers=workers)
+    for lang in LANGS:
+        items_out[lang].update(camp_out[lang])  # 앱·SEO 는 items 맵에서 id 로 찾는다
 
+    record_azure_usage(cache)
     save_cache(cache)
+    print(f"[azure] {_AZURE['month']} 누적 {AZURE_MONTHLY_BUDGET - _AZURE['budget_left']:,}자 / 한도 {AZURE_MONTHLY_BUDGET:,}자", flush=True)
     if _AZURE["chars"]:
         print(f"[azure] 이번 실행 원문 {_AZURE['chars']:,}자 번역 (무료 한도 월 200만 자, 세 언어 동시 번역은 원문 글자 수 × 3 으로 집계)", flush=True)
 

@@ -56,7 +56,11 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
   core 가 없으면(로컬 개발) 앱이 원본 `public_travel_hub.json` 으로 대체한다.
 - **캠핑장·휴양림**: `camping` 섹션은 `hub/camping.json`(약 1.6MB)으로 따로 두고 앱이 2단계에서 받는다. 기본 피드에는 안 나오고
   '자연·액티비티' 칩·검색·지도에서만 보인다. 상세 본문은 `details_camping_{시·도}.json` 에 따로 있어 다른 장소 상세를 열 때 받지 않는다.
-  번역은 이름·지역·한 줄 소개만(무료 번역 한도).
+  번역은 이름·지역·한 줄 소개만.
+- **번역 월 한도**: Azure 무료 월 200만 자(원문 × 3개 언어)의 95% 안에서만 Azure 를 쓴다. 이번 달(KST) 사용량은
+  `translation_cache.json` 의 `__azure_usage__` 에 기록되고 달이 바뀌면 0부터. 순서: 스토리 → 볼거리·축제·시장·공연 → 장날 목록
+  → 숙소 → 캠핑장·휴양림(휴양림 먼저). 한도에 닿으면 그 자리에서 멈추고, 캠핑장·휴양림은 유료(Gemini)로 넘기지 않고 다음 달에 이어서.
+  다른 섹션은 예전처럼 Gemini 로 넘긴다. 바뀐 원문(해시)·한글이 든 문장만 보낸다.
 - **번역**: `translate_hub.py` 가 원문 해시 캐시(`backend/translation_cache.json`, git 커밋)로 변경분만 Gemini 번역.
   앱은 외국어 전환 시 `i18n/{lang}/core.json`(목록용)만 받고, 상세를 열면 그 시·도의 본문 번역을 추가로 받는다.
 
