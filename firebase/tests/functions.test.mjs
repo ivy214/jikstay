@@ -440,3 +440,19 @@ describe("텔레그램 채널 게시 문구", async () => {
     assert.equal(tg.buildWeekendMessage({ festivals: [] }, "20261127"), null);
   });
 });
+
+describe("여행코스 공유 미리보기", () => {
+  it("자연·액티비티 테마면 걷기길·레포츠·캠핑 문구, 아니면 기존 문구", () => {
+    const outdoor = fn.buildPlanOgHtml(SAMPLE_TPL, "d2:강원:전체:outdoor:0:1.m.spot_tr_1,1.s.spot_cp_1", "https://jikstay.app", "ko");
+    assert.match(outdoor, /<title>강원 1박2일 자연·액티비티 여행코스 · 걷기길·레포츠·캠핑/);
+    assert.match(outdoor, /캠핑장을 하루 동선으로/);
+    assert.match(outdoor, /"@type":"TouristTrip"/);
+    const en = fn.buildPlanOgHtml(SAMPLE_TPL, "d3:강원:전체:outdoor:1:1.m.spot_tr_1", "https://jikstay.app", "en");
+    assert.match(en, /Outdoor Trip · Trails, Activities &amp; Campsites/);
+    const plain = fn.buildPlanOgHtml(SAMPLE_TPL, "d2:강원:전체:all:0:1.m.spot_at_1", "https://jikstay.app", "ko");
+    assert.match(plain, /<title>강원 1박2일 추천 여행코스 · 축제·맛집·숙소/);
+    // 테마 칸이 없는 예전(5파트) 링크도 그대로
+    const legacy = fn.buildPlanOgHtml(SAMPLE_TPL, "d2:강원:all:0:1.m.spot_at_1", "https://jikstay.app", "ko");
+    assert.match(legacy, /추천 여행코스 · 축제·맛집·숙소/);
+  });
+});

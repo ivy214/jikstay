@@ -6,7 +6,21 @@ import 'discovery_models.dart';
 import 'i18n.dart';
 import 'web_utils.dart';
 
-enum TripTheme { all, festival, food, hanok, culture }
+enum TripTheme { all, festival, food, hanok, culture, outdoor }
+
+/// 캠핑장(고캠핑)·야영장: 낮 일정에는 넣지 않고 '자연·액티비티' 테마의 숙박 칸에만.
+bool isCampsiteItem(DiscoveryItem it) => it.category == DiscoveryCategory.outdoor && it.raw['sub'] == 'camping';
+
+String _outdoorSub(DiscoveryItem it) => it.category == DiscoveryCategory.outdoor ? (it.raw['sub'] ?? '').toString() : '';
+
+/// 자연·액티비티 테마에서 그날 숙소로 캠핑장을 고를 때, 동선에서 이 거리 안에 있어야 한다(없으면 일반 숙소).
+const double kCampsiteMaxKm = 30.0;
+
+/// 자연·액티비티 테마 오후 레포츠는 동선에서 이 거리 안만 (멀면 가까운 걷기길·휴양림·볼거리로).
+const double kOutdoorActivityMaxKm = 25.0;
+
+/// 점심은 동선에서 이 거리 안의 먹거리, 없으면 같은 거리 안 전통시장.
+const double kLunchMaxKm = 15.0;
 
 class TripStop {
   final int day;
@@ -151,7 +165,18 @@ TripPlan generateTripPlan({
       .toList()
     ..sort((a, b) => b.priorityScore.compareTo(a.priorityScore));
 
+  // 자연·액티비티: 걷기길·휴양림·레포츠 (사진·경로 그림이 있는 곳 우선)
+  final outdoorAnchors = theme == TripTheme.outdoor
+      ? (anchorPool.where((it) => it.category == DiscoveryCategory.outdoor && !isCampsiteItem(it)).toList()
+        ..sort((a, b) {
+          int vis(DiscoveryItem x) => (x.imageUrl.isNotEmpty || (x.raw['route'] ?? '').toString().isNotEmpty) ? 1 : 0;
+          final v = vis(b).compareTo(vis(a));
+          return v != 0 ? v : b.priorityScore.compareTo(a.priorityScore);
+        }))
+      : <DiscoveryItem>[];
+
   final anchors = <DiscoveryItem>[
+    ...outdoorAnchors,
     if (theme == TripTheme.food || theme == TripTheme.hanok) ...spotAnchors else ...eventAnchors,
     if (theme == TripTheme.food || theme == TripTheme.hanok) ...eventAnchors else ...spotAnchors,
   ];
@@ -160,7 +185,8 @@ TripPlan generateTripPlan({
     anchors.addAll(anchorPool.where((it) =>
         it.category != DiscoveryCategory.ebook &&
         it.category != DiscoveryCategory.stay &&
-        it.category != DiscoveryCategory.culture));
+        it.category != DiscoveryCategory.culture &&
+        !isCampsiteItem(it)));
   }
 
   final usedIds = <String>{};
@@ -174,14 +200,28 @@ TripPlan generateTripPlan({
     bool excludeNight = false,
     bool excludeMorning = false,
     DateTime? openOn,
+    bool allowCampsite = false,
+    Set<String>? outdoorSubs,
+    double? maxKm,
   }) {
+    // 캠핑장은 숙박 칸(allowCampsite)에서만, 자연·액티비티는 필요한 종류(outdoorSubs)만, 동선에서 maxKm 안만
+    bool kindOk(DiscoveryItem it) {
+      if (isCampsiteItem(it) && !allowCampsite) return false;
+      if (outdoorSubs != null && it.category == DiscoveryCategory.outdoor && !outdoorSubs.contains(_outdoorSub(it))) return false;
+      if (maxKm != null && dayAnchor != null && dayAnchor.lat != 0 && it.lat != 0 &&
+          haversineKm(dayAnchor.lat, dayAnchor.lng, it.lat, it.lng) > maxKm) {
+        return false;
+      }
+      return true;
+    }
+
     // 공연·전시는 그날 실제로 열리는 것만 (다른 분류는 날짜 무관)
     bool openOk(DiscoveryItem it) =>
         openOn == null || it.category != DiscoveryCategory.culture || isOpenDuring(it, openOn, openOn);
     var candidates = nearbyPool.where((it) {
       if (usedIds.contains(it.id)) return false;
       if (!categories.contains(it.category)) return false;
-      if (!openOk(it)) return false;
+      if (!openOk(it) || !kindOk(it)) return false;
       if (stayFilter && foreignerOnly && !_isForeignerEligibleStay(it)) return false;
       if (excludeNight && _isNightItem(it)) return false;
       if (excludeMorning && _isMorningItem(it)) return false;
@@ -192,7 +232,7 @@ TripPlan generateTripPlan({
       candidates = nearbyPool.where((it) {
         if (usedIds.contains(it.id)) return false;
         if (!categories.contains(it.category)) return false;
-        if (!openOk(it)) return false;
+        if (!openOk(it) || !kindOk(it)) return false;
         if (stayFilter && foreignerOnly && !_isForeignerEligibleStay(it)) return false;
         return true;
       }).toList();
@@ -253,20 +293,36 @@ TripPlan generateTripPlan({
             usedIds.add(dayAnchor!.id);
             return dayAnchor;
           })()
-        : (theme == TripTheme.festival
-            ? pickNearest(dayAnchor, [DiscoveryCategory.event, DiscoveryCategory.attraction], excludeNight: true)
-            : pickNearest(dayAnchor, [DiscoveryCategory.attraction, DiscoveryCategory.event], excludeNight: true));
+        : switch (theme) {
+            TripTheme.festival => pickNearest(dayAnchor, [DiscoveryCategory.event, DiscoveryCategory.attraction], excludeNight: true),
+            // 오전: 걷기길·휴양림·레포츠 (없으면 볼거리)
+            TripTheme.outdoor => pickNearest(dayAnchor, [DiscoveryCategory.outdoor], excludeNight: true) ??
+                pickNearest(dayAnchor, [DiscoveryCategory.attraction, DiscoveryCategory.event], excludeNight: true),
+            _ => pickNearest(dayAnchor, [DiscoveryCategory.attraction, DiscoveryCategory.event], excludeNight: true),
+          };
 
     final anchorForDay = morning ?? dayAnchor;
     if (morning != null) stops.add(TripStop(day: d, slotKey: 'morning', item: morning));
 
-    final lunch = pickNearest(anchorForDay, [DiscoveryCategory.food]);
+    // 점심: 15km 안 먹거리 → 15km 안 전통시장(먹거리 데이터가 적은 해안·산간 코스) → 30km 안 먹거리·시장
+    // → 그래도 없으면 가장 가까운 먹거리
+    final lunch = pickNearest(anchorForDay, [DiscoveryCategory.food], maxKm: kLunchMaxKm) ??
+        pickNearest(anchorForDay, [DiscoveryCategory.market], maxKm: kLunchMaxKm) ??
+        pickNearest(anchorForDay, [DiscoveryCategory.food, DiscoveryCategory.market], maxKm: kLunchMaxKm * 2) ??
+        pickNearest(anchorForDay, [DiscoveryCategory.food]);
     if (lunch != null) stops.add(TripStop(day: d, slotKey: 'lunch', item: lunch));
 
     final afternoon = switch (theme) {
       TripTheme.food => pickNearest(anchorForDay, [DiscoveryCategory.food, DiscoveryCategory.event, DiscoveryCategory.attraction], excludeMorning: true),
       TripTheme.culture => pickNearest(anchorForDay, [DiscoveryCategory.culture, DiscoveryCategory.event, DiscoveryCategory.attraction],
           excludeMorning: true, openOn: date),
+      // 오후: 동선 25km 안의 레포츠·체험 먼저, 없으면 가까운 다른 자연·액티비티·볼거리 (먼 레포츠로 길게 이동하지 않게)
+      TripTheme.outdoor => pickNearest(anchorForDay, [DiscoveryCategory.outdoor],
+              excludeMorning: true, outdoorSubs: {'activity'}, maxKm: kOutdoorActivityMaxKm) ??
+          pickNearest(anchorForDay, [DiscoveryCategory.outdoor, DiscoveryCategory.attraction], excludeMorning: true),
+      // 균형 추천: 축제·볼거리에 레포츠·걷기길·휴양림도 함께 (캠핑장 제외)
+      TripTheme.all => pickNearest(anchorForDay, [DiscoveryCategory.event, DiscoveryCategory.attraction, DiscoveryCategory.outdoor],
+          excludeMorning: true),
       _ => pickNearest(anchorForDay, [DiscoveryCategory.event, DiscoveryCategory.attraction], excludeMorning: true),
     };
     if (afternoon != null) stops.add(TripStop(day: d, slotKey: 'afternoon', item: afternoon));
@@ -276,12 +332,17 @@ TripPlan generateTripPlan({
     if (culture != null) stops.add(TripStop(day: d, slotKey: 'culture', item: culture));
 
     if (d < clampedDays) {
-      final stay = pickNearest(
-        anchorForDay,
-        [DiscoveryCategory.stay],
-        preferHanok: theme == TripTheme.hanok,
-        stayFilter: true,
-      );
+      // 자연·액티비티: 동선 30km 안 캠핑장 → 없으면 인허가 확인된 숙소
+      final camp = theme == TripTheme.outdoor
+          ? pickNearest(anchorForDay, [DiscoveryCategory.outdoor], allowCampsite: true, outdoorSubs: {'camping'}, maxKm: kCampsiteMaxKm)
+          : null;
+      final stay = camp ??
+          pickNearest(
+            anchorForDay,
+            [DiscoveryCategory.stay],
+            preferHanok: theme == TripTheme.hanok,
+            stayFilter: true,
+          );
       if (stay != null) {
         stops.add(TripStop(day: d, slotKey: 'stay', item: stay));
         prevStay = stay;
@@ -418,6 +479,13 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
   }
 
   String _slotLabel(TripStop stop, AppLang lang) => switch (stop.slotKey) {
+        // 자연·액티비티 칸은 종류(걷기길·레포츠·휴양림·캠핑장)를 밝힌다 — 일반 칸보다 먼저 검사
+        'afternoon' when stop.item.category == DiscoveryCategory.outdoor =>
+          '${pickLangText(lang, ko: '오후', en: 'Afternoon', ja: '午後', zh: '下午')} · ${stop.item.categoryBadgeText(lang)}',
+        'morning' when stop.item.category == DiscoveryCategory.outdoor =>
+          '${pickLangText(lang, ko: '오전', en: 'Morning', ja: '午前', zh: '上午')} · ${stop.item.categoryBadgeText(lang)}',
+        'lunch' when stop.item.isMarket => pickLangText(lang, ko: '점심 · 전통시장', en: 'Lunch · Market', ja: '昼食・伝統市場', zh: '午餐・傳統市場'),
+        'stay' when isCampsiteItem(stop.item) => pickLangText(lang, ko: '캠핑 1박', en: 'Campsite Night', ja: 'キャンプ泊', zh: '露營過夜'),
         'morning' => pickLangText(lang, ko: '오전 코스', en: 'Morning', ja: '午前', zh: '上午'),
         'lunch' => pickLangText(lang, ko: '로컬 미식', en: 'Local Food', ja: 'ご当地グルメ', zh: '当地美食'),
         'afternoon' => _isNightItem(stop.item)
@@ -436,6 +504,7 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
         TripTheme.food => pickLangText(lang, ko: '로컬 미식', en: 'Foodie', ja: 'グルメ', zh: '美食之旅'),
         TripTheme.hanok => pickLangText(lang, ko: '한옥·힐링', en: 'Hanok & Calm', ja: '韓屋・癒し', zh: '韩屋慢游'),
         TripTheme.culture => pickLangText(lang, ko: '공연·전시', en: 'Shows & Exhibits', ja: '公演・展示', zh: '演出展览'),
+        TripTheme.outdoor => pickLangText(lang, ko: '자연·액티비티', en: 'Outdoors', ja: '自然・アクティビティ', zh: '自然・戶外'),
       };
 
   Future<void> _copyShareUrl(AppLang lang) async {
@@ -692,11 +761,15 @@ class _TripPlannerDialogState extends State<TripPlannerDialog> {
                                     leading: CircleAvatar(
                                       backgroundColor: iconBg,
                                       child: Icon(
-                                        stop.slotKey == 'stay'
-                                            ? Icons.bed_rounded
-                                            : stop.slotKey == 'lunch'
-                                                ? Icons.restaurant_rounded
-                                                : Icons.place_rounded,
+                                        isCampsiteItem(stop.item)
+                                            ? Icons.park_rounded
+                                            : stop.slotKey == 'stay'
+                                                ? Icons.bed_rounded
+                                                : stop.slotKey == 'lunch'
+                                                    ? Icons.restaurant_rounded
+                                                    : stop.item.category == DiscoveryCategory.outdoor
+                                                        ? Icons.hiking_rounded
+                                                        : Icons.place_rounded,
                                         color: iconColor,
                                         size: 20,
                                       ),

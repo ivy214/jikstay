@@ -807,6 +807,76 @@ void main() {
       expect(resolveStartLang(urlLang: 'ja', storedLang: 'ko', browserLangs: ['en-US']), AppLang.ja);
     });
 
+    group('여행코스: 자연·액티비티', () {
+      DiscoveryItem place(String id, String kind, double lat, {String sub = '', String img = 'https://x/a.jpg'}) =>
+          parseSpotJson({
+            'id': id, 'kind': kind, 'sub': sub, 'title': '장소 $id', 'province': '강원', 'region_label': '강원 강릉시',
+            'addr': '강원특별자치도 강릉시', 'lat': lat, 'lng': 128.90, 'image_url': img,
+          }, fallbackCategory: DiscoveryCategory.attraction)!;
+      // 위도 0.1도 ≈ 11km
+      List<DiscoveryItem> base({bool nearCamp = true}) => [
+            place('spot_tr_1', 'outdoor', 37.70, sub: 'trail', img: ''),
+            place('spot_ou_1', 'outdoor', 37.71, sub: 'activity'),
+            place('spot_ou_2', 'outdoor', 37.72, sub: 'activity'),
+            place('spot_fr_1', 'outdoor', 37.73, sub: 'forest'),
+            place('spot_at_1', 'attraction', 37.70),
+            place('spot_at_2', 'attraction', 37.71),
+            place('spot_fo_1', 'food', 37.70),
+            place('spot_fo_2', 'food', 37.71),
+            if (nearCamp) place('spot_cp_near', 'outdoor', 37.75, sub: 'camping'),
+            place('spot_cp_far', 'outdoor', 38.30, sub: 'camping'), // 약 66km
+            DiscoveryItem(
+              id: 'stay_1', category: DiscoveryCategory.stay, title: '합법 민박', province: '강원',
+              regionLabel: '강원 강릉시', address: '강원특별자치도 강릉시', lat: 37.70, lng: 128.90, imageUrl: '',
+            ),
+          ];
+
+      test('오전·오후는 걷기길·레포츠, 숙박은 30km 안 캠핑장', () {
+        final plan = generateTripPlan(allItems: base(), province: '강원', days: 2, theme: TripTheme.outdoor,
+            now: DateTime(2026, 11, 18));
+        final d1 = {for (final s in plan.stops.where((s) => s.day == 1)) s.slotKey: s.item};
+        expect(d1['morning']!.category, DiscoveryCategory.outdoor);
+        expect(isCampsiteItem(d1['morning']!), isFalse);
+        expect(d1['afternoon']!.raw['sub'], 'activity');
+        expect(d1['stay']!.id, 'spot_cp_near');
+        expect(plan.stops.any((s) => s.item.id == 'spot_cp_far'), isFalse);
+
+        final back = decodeTripPlanParam(encodeTripPlanParam(plan), base())!;
+        expect(back.theme, TripTheme.outdoor);
+        expect(back.stops.firstWhere((s) => s.slotKey == 'stay').item.id, 'spot_cp_near');
+      });
+
+      test('점심: 15km 안 먹거리가 없으면 가까운 전통시장', () {
+        final items = [
+          ...base().where((it) => it.category != DiscoveryCategory.food),
+          place('spot_fo_far', 'food', 38.30), // 약 66km
+          place('spot_mk_1', 'market', 37.74),
+        ];
+        final plan = generateTripPlan(allItems: items, province: '강원', days: 1, theme: TripTheme.outdoor,
+            now: DateTime(2026, 11, 18));
+        expect(plan.stops.firstWhere((s) => s.slotKey == 'lunch').item.id, 'spot_mk_1');
+        // 시장도 없으면 멀어도 먹거리
+        final noMarket = generateTripPlan(allItems: items.where((it) => it.id != 'spot_mk_1').toList(), province: '강원',
+            days: 1, theme: TripTheme.outdoor, now: DateTime(2026, 11, 18));
+        expect(noMarket.stops.firstWhere((s) => s.slotKey == 'lunch').item.id, 'spot_fo_far');
+      });
+
+      test('가까운 캠핑장이 없으면 인허가 숙소', () {
+        final plan = generateTripPlan(allItems: base(nearCamp: false), province: '강원', days: 2,
+            theme: TripTheme.outdoor, now: DateTime(2026, 11, 18));
+        expect(plan.stops.firstWhere((s) => s.slotKey == 'stay').item.id, 'stay_1');
+      });
+
+      test('균형 추천: 캠핑장은 낮 일정·숙박 어디에도 넣지 않는다', () {
+        for (var seed = 0; seed < 6; seed++) {
+          final plan = generateTripPlan(allItems: base(), province: '강원', days: 3, seedOffset: seed,
+              now: DateTime(2026, 11, 18));
+          expect(plan.stops.where((s) => isCampsiteItem(s.item)), isEmpty);
+          expect(plan.stops.where((s) => s.slotKey == 'stay').map((s) => s.item.id).toSet(), {'stay_1'});
+        }
+      });
+    });
+
     test('여행코스: 그날 열리는 공연·전시를 하루 1곳씩 넣고 URL로 복원된다', () {
       DiscoveryItem show(String id, String start, String end) => DiscoveryItem(
             id: id,

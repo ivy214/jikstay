@@ -430,6 +430,20 @@ function buildPlanOgHtml(template, rawPlan, origin, rawLang = "ko") {
   const days = Math.max(1, Math.min(5, parseInt((parts[0] || "d2").replace(/^d/, ""), 10) || 2));
   const prov = parts[1] && parts[1] !== "전체" ? parts[1] : (lang === "ko" ? "대한민국" : "Korea");
   const provEn = PROVINCE_EN[prov] || prov;
+  // 테마: 6파트(d2:시도:시군구:테마:외국인:코스) 형식의 4번째. 자연·액티비티면 미리보기 문구도 그에 맞춘다
+  const outdoor = parts.length >= 6 && parts[3] === "outdoor";
+  if (outdoor) {
+    const oTitle = {
+      ko: `${prov} ${days - 1}박${days}일 자연·액티비티 여행코스 · 걷기길·레포츠·캠핑 | 직스테이 로컬`,
+      en: `${provEn} ${days}-Day Outdoor Trip · Trails, Activities & Campsites | Jikstay Korea`,
+      ja: `${prov} ${days}日間 自然・アクティビティ旅行プラン | Jikstay Korea`,
+      zh: `${prov} ${days}日自然・戶外行程・步道與露營 | Jikstay 韓國`,
+    }[lang];
+    const oDesc = lang === "ko"
+      ? `${prov} 코리아둘레길 걷기길·자연휴양림·레포츠 체험과 로컬 맛집, 가까운 캠핑장을 하루 동선으로 묶은 여행코스입니다.`
+      : `Custom ${days}-day ${provEn} outdoor itinerary: walking trails, recreation forests, activities, local food and nearby campsites.`;
+    return buildPlanHtmlWith(template, rawPlan, origin, lang, htmlLang, oTitle, oDesc);
+  }
   const titleText =
     lang === "ko"
       ? `${prov} ${days - 1}박${days}일 추천 여행코스 · 축제·맛집·숙소 | 직스테이 로컬`
@@ -442,6 +456,10 @@ function buildPlanOgHtml(template, rawPlan, origin, rawLang = "ko") {
     lang === "ko"
       ? `${prov} 임박 축제, 로컬 맛집, 공공데이터 등록 숙소를 반경 55km 동선으로 묶은 맞춤 여행코스입니다.`
       : `Custom ${days}-day ${provEn} itinerary combining local festivals, top food spots & public-data stays.`;
+  return buildPlanHtmlWith(template, rawPlan, origin, lang, htmlLang, titleText, descText);
+}
+
+function buildPlanHtmlWith(template, rawPlan, origin, lang, htmlLang, titleText, descText) {
   const canon = `${origin}/?plan=${encodeURIComponent(rawPlan)}${lang === "ko" ? "" : `&lang=${encodeURIComponent(lang)}`}`;
   const jsonLd = JSON.stringify({
     "@context": "https://schema.org",
@@ -1277,6 +1295,7 @@ exports.serveRobots = onRequest({ region: "asia-northeast3" }, (req, res) => {
 });
 
 exports.buildOgHtml = buildOgHtml;
+exports.buildPlanOgHtml = buildPlanOgHtml;
 exports.primaryDomainRedirectUrl = primaryDomainRedirectUrl;
 exports.stayTitleQualifierKo = stayTitleQualifierKo;
 exports.buildTopicOgHtml = buildTopicOgHtml;
