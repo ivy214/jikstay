@@ -936,6 +936,43 @@ void main() {
       expect(full.raw.containsKey('has_details'), isFalse);
     });
 
+    test('캠핑장·휴양림 상세는 details_camping_{시도} 에서 합친다', () async {
+      HubDetailStore.clearForTest();
+      HubDetailStore.seed('gangwon', {'spot_cp_7595': {'paragraphs': ['볼거리 파일에 있으면 안 됨']}});
+      HubDetailStore.seed('camping_gangwon', {
+        'spot_cp_7595': {'paragraphs': ['남대천변 캠핑장']},
+      });
+      final core = parseSpotJson({
+        'id': 'spot_cp_7595',
+        'kind': 'outdoor',
+        'sub': 'camping',
+        'title': '풀앤밸리야영장',
+        'province': '강원',
+        'lat': 37.99,
+        'lng': 128.65,
+        'has_details': true,
+      }, fallbackCategory: DiscoveryCategory.attraction)!;
+      expect(core.category, DiscoveryCategory.outdoor);
+      expect(core.isCampingSection, isTrue);
+      expect(core.categoryBadgeText(AppLang.ko), '캠핑장');
+      expect(core.categoryEmoji, '⛺');
+      final full = await hydrateDiscoveryItem(core);
+      expect(full.paragraphs, ['남대천변 캠핑장']);
+      HubDetailStore.clearForTest();
+    });
+
+    test('레포츠·휴양림 배지와 검색어', () {
+      Map<String, dynamic> m(String sub) =>
+          {'id': 'spot_ou_$sub', 'kind': 'outdoor', 'sub': sub, 'title': 't', 'province': '제주', 'lat': 33.4, 'lng': 126.5};
+      final act = parseSpotJson(m('activity'), fallbackCategory: DiscoveryCategory.attraction)!;
+      expect(act.categoryBadgeText(AppLang.ko), '레포츠·체험');
+      expect(act.isCampingSection, isFalse);
+      expect(parseSpotJson(m('forest'), fallbackCategory: DiscoveryCategory.attraction)!.categoryBadgeText(AppLang.en),
+          'Recreation Forest');
+      expect(parseSearchQuery('강원 캠핑장').category, DiscoveryCategory.outdoor);
+      expect(parseSearchQuery('제주 레포츠').category, DiscoveryCategory.outdoor);
+    });
+
     test('상세 표시가 없는 항목은 그대로 반환', () async {
       final item = parseSpotJson({'id': 'spot_b', 'title': '짧은집', 'province': '세종', 'lat': 36.5, 'lng': 127.2},
           fallbackCategory: DiscoveryCategory.food)!;

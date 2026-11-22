@@ -54,6 +54,9 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
   볼거리·먹거리 수에는 상한이 없다(주간 신규 등록이 계속 쌓임) — core 는 한 곳에 약 0.6KB씩 늘어난다.
   더 줄여야 하면 다음 단계는 카드 설명까지 지연 로드(core 를 검색·지도용 색인만으로)하는 것.
   core 가 없으면(로컬 개발) 앱이 원본 `public_travel_hub.json` 으로 대체한다.
+- **캠핑장·휴양림**: `camping` 섹션은 `hub/camping.json`(약 1.6MB)으로 따로 두고 앱이 2단계에서 받는다. 기본 피드에는 안 나오고
+  '자연·액티비티' 칩·검색·지도에서만 보인다. 상세 본문은 `details_camping_{시·도}.json` 에 따로 있어 다른 장소 상세를 열 때 받지 않는다.
+  번역은 이름·지역·한 줄 소개만(무료 번역 한도).
 - **번역**: `translate_hub.py` 가 원문 해시 캐시(`backend/translation_cache.json`, git 커밋)로 변경분만 Gemini 번역.
   앱은 외국어 전환 시 `i18n/{lang}/core.json`(목록용)만 받고, 상세를 열면 그 시·도의 본문 번역을 추가로 받는다.
 
@@ -88,6 +91,8 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 | `weekly_hub_refresh.py` | 주간: 진행 중 축제 갱신·상세 보강 (CI 에서는 `--no-translate` 후 번역을 별도 단계로) |
 | `weekly_spot_refresh.py` | 주간: 볼거리·먹거리 삭제 확인·반값여행 시·군 보충·신규 등록 추가 (`--dry-run` 으로 미리 보기) |
 | `collect_half_price_spots.py` | 반값여행 대상 25개 시·군별 볼거리 6·먹거리 4·축제(조회순)를 시·군 코드로 추가 수집(`half_price_city` 표시, `--upload` 로 Firestore 문서 생성). 허브를 `build_travel_hub.py` 로 새로 만들면 다시 실행 |
+| `collect_outdoor_spots.py` | (한 번) 자연·액티비티(`kind: outdoor`): 관광공사 레포츠(28) 시·도별 8곳 — 체험형 우선·같은 종류 2곳·길(`sub: trail`) 절반까지·시·군·구 분산, 캠핑장·골프장·실내 체육시설 제외. 이후 신규·폐업은 `weekly_spot_refresh.py` |
+| `refresh_camping.py` | 주간: 고캠핑 전체(운영 중·사진·좌표 있는 약 2,250곳, `spot_cp_…`, 이용 안내는 고캠핑 값만) + TourAPI 자연휴양림·치유의숲(약 170곳, `spot_fr_…`) → 허브 `camping` 섹션. 사라진 곳 closed(10% 넘으면 보류) |
 | `translate_hub.py` | EN/JA/ZH 증분 번역 (Gemini, 키 없으면 OpenAI) |
 | `enrich_naver_local.py` | 네이버 지역 검색으로 `naver_link`(공식 링크, OTA 제외)·`naver_category` 보강. 허브/색인을 다시 만들면 재실행(캐시로 즉시 복원) |
 | `clean_naver_reviews.py` | 장소와 무관한 네이버 방문기 제거(`is_relevant_place_snippet`), `--refetch` 로 빈 곳 재검색 |

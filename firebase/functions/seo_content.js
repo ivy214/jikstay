@@ -23,14 +23,14 @@ const PROVINCE_CODES = {
 
 const LABELS = {
   ko: { address: "주소", info: "이용 안내", nearby: "주변 볼거리·먹거리·축제", more: "지역 여행 정보", home: "전국 여행 정보",
-    festivals: "축제·행사", attractions: "볼거리", food: "먹거리", stays: "숙소", regions: "17개 시·도 여행 정보" },
+    festivals: "축제·행사", attractions: "볼거리", food: "먹거리", outdoor: "레포츠·캠핑장", stays: "숙소", regions: "17개 시·도 여행 정보" },
   en: { address: "Address", info: "Visitor information", nearby: "Nearby attractions, food & festivals", more: "Travel guide",
-    home: "Korea travel guide", festivals: "Festivals & events", attractions: "Things to do", food: "Local food",
+    home: "Korea travel guide", festivals: "Festivals & events", attractions: "Things to do", food: "Local food", outdoor: "Activities & campsites",
     stays: "Places to stay", regions: "Travel guides for 17 provinces" },
   ja: { address: "住所", info: "利用案内", nearby: "周辺の観光・グルメ・祭り", more: "旅行ガイド", home: "韓国旅行ガイド",
-    festivals: "祭り・イベント", attractions: "観光スポット", food: "グルメ", stays: "宿泊", regions: "17市道の旅行ガイド" },
+    festivals: "祭り・イベント", attractions: "観光スポット", food: "グルメ", outdoor: "アクティビティ・キャンプ場", stays: "宿泊", regions: "17市道の旅行ガイド" },
   zh: { address: "地址", info: "參觀資訊", nearby: "周邊景點・美食・慶典", more: "旅遊指南", home: "韓國旅遊指南",
-    festivals: "慶典・活動", attractions: "景點", food: "在地美食", stays: "住宿", regions: "17市道旅遊指南" },
+    festivals: "慶典・活動", attractions: "景點", food: "在地美食", outdoor: "戶外活動・露營地", stays: "住宿", regions: "17市道旅遊指南" },
 };
 
 function escapeHtml(value) {

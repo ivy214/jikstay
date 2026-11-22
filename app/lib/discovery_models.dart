@@ -15,6 +15,7 @@ enum DiscoveryCategory {
   all('cat_all', Icons.auto_awesome_rounded, Color(0xFF1E293B)),
   event('cat_event', Icons.celebration_rounded, Color(0xFF7C3AED)),
   attraction('cat_attraction', Icons.landscape_rounded, Color(0xFF059669)),
+  outdoor('cat_outdoor', Icons.hiking_rounded, Color(0xFF0E7490)),
   food('cat_food', Icons.restaurant_rounded, Color(0xFFD97706)),
   market('cat_market', Icons.storefront_rounded, Color(0xFF92400E)),
   culture('cat_culture', Icons.theater_comedy_rounded, Color(0xFFDB2777)),
@@ -492,6 +493,10 @@ class DiscoveryItem {
   /// 전통시장·5일장 (지역시장 분류).
   /// - spot_mk_… : 한국관광공사 전국 전통시장 (Firestore 문서 있음 → 후기·찜·클릭 집계)
   /// - mkt_…     : 손으로 정리한 대표 5일장을 검색 결과용으로만 만든 항목 (Firestore 문서 없음)
+  /// 캠핑장(고캠핑, spot_cp_…)·자연휴양림(spot_fr_…): data/hub/camping.json 에서 2단계로 받는다.
+  static bool isCampingSectionId(String id) => id.startsWith('spot_cp_') || id.startsWith('spot_fr_');
+  bool get isCampingSection => isCampingSectionId(id);
+
   bool get isMarket => category == DiscoveryCategory.market || raw['kind'] == 'market' || id.startsWith('mkt_');
 
   /// Firestore spots/listings 문서가 있어 후기 작성·클릭 집계가 가능한 항목
@@ -687,6 +692,7 @@ class DiscoveryItem {
   String get categoryEmoji => isMarket ? '🧺' : switch (category) {
     DiscoveryCategory.event => '🎉',
     DiscoveryCategory.attraction => '🏞️',
+    DiscoveryCategory.outdoor => switch (raw['sub']) { 'camping' => '⛺', 'forest' => '🌲', 'trail' => '🥾', _ => '🏄' },
     DiscoveryCategory.food => '🍲',
     DiscoveryCategory.market => '🧺',
     DiscoveryCategory.culture => '🎭',
@@ -700,6 +706,12 @@ class DiscoveryItem {
       : switch (category) {
     DiscoveryCategory.event => pickLangText(lang, ko: '축제·행사', en: 'Event', ja: '祭り・イベント', zh: '慶典活動'),
     DiscoveryCategory.attraction => pickLangText(lang, ko: '볼거리', en: 'Sight', ja: '観光名所', zh: '必訪景點'),
+    DiscoveryCategory.outdoor => switch (raw['sub']) {
+        'camping' => pickLangText(lang, ko: '캠핑장', en: 'Campsite', ja: 'キャンプ場', zh: '露營地'),
+        'trail' => pickLangText(lang, ko: '걷기길', en: 'Trail', ja: 'ウォーキングコース', zh: '步道'),
+        'forest' => pickLangText(lang, ko: '자연휴양림', en: 'Recreation Forest', ja: '自然休養林', zh: '自然休養林'),
+        _ => pickLangText(lang, ko: '레포츠·체험', en: 'Activity', ja: 'アクティビティ', zh: '戶外體驗'),
+      },
     DiscoveryCategory.food => pickLangText(lang, ko: '먹거리', en: 'Food', ja: 'グルメ', zh: '在地美食'),
     DiscoveryCategory.market => pickLangText(lang, ko: '전통시장', en: 'Market', ja: '伝統市場', zh: '傳統市場'),
     DiscoveryCategory.culture => raw['culture_type'] == '전시'

@@ -174,6 +174,12 @@ String trUi(String key, AppLang lang) {
       AppLang.ja: '🏞️ 見どころ',
       AppLang.zh: '🏞️ 必訪景點',
     },
+    'cat_outdoor': {
+      AppLang.ko: '🏄 자연·액티비티',
+      AppLang.en: '🏄 Outdoors & Activities',
+      AppLang.ja: '🏄 自然・アクティビティ',
+      AppLang.zh: '🏄 自然・戶外活動',
+    },
     'cat_food': {
       AppLang.ko: '🍲 먹거리',
       AppLang.en: '🍲 Local Food',

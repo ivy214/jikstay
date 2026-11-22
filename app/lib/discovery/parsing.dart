@@ -54,6 +54,7 @@ DiscoveryItem? parseSpotJson(Map<String, dynamic> m, {required DiscoveryCategory
   final cat = switch (kind) {
     'event' => DiscoveryCategory.event,
     'attraction' => DiscoveryCategory.attraction,
+    'outdoor' => DiscoveryCategory.outdoor,
     'food' => DiscoveryCategory.food,
     'ebook' => DiscoveryCategory.ebook,
     'stay' => DiscoveryCategory.stay,
@@ -86,11 +87,14 @@ DiscoveryItem? parseSpotJson(Map<String, dynamic> m, {required DiscoveryCategory
     DiscoveryCategory.ebook => 110.0,
     DiscoveryCategory.food => 90.0,
     DiscoveryCategory.attraction => 88.0,
+    DiscoveryCategory.outdoor => 86.0,
     DiscoveryCategory.market => 80.0,
     DiscoveryCategory.culture => 85.0,
     DiscoveryCategory.stay => 75.0,
     DiscoveryCategory.all => 50.0,
   };
+  // 전국 캠핑장·휴양림(약 2,400곳)이 직접 고른 레포츠·걷기길을 덮지 않도록 조금 뒤로
+  if (cat == DiscoveryCategory.outdoor && (m['sub'] == 'camping' || m['sub'] == 'forest')) prio -= 4.0;
   if (isSponsored) prio += 35.0;
   if (rCount > 0) prio += (sSum / rCount) * 8.0;
   if (clicks > 0) prio += math.min(20.0, clicks * 0.8);
@@ -311,6 +315,7 @@ ConnectedBundle buildConnectedBundle(
       case DiscoveryCategory.culture: // 공연·전시는 주변 축제·행사 동선에 함께
         scoredEvents.add((effectiveDist, it));
       case DiscoveryCategory.attraction:
+      case DiscoveryCategory.outdoor: // 레포츠·체험은 주변 볼거리 동선에 함께
         scoredAttractions.add((effectiveDist, it));
       case DiscoveryCategory.food:
       case DiscoveryCategory.market: // 시장은 주변 먹거리 동선에 함께

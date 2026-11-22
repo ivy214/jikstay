@@ -1518,7 +1518,7 @@ def enrich_spots_and_festivals_details(
 
         if info is None:
             info = {}
-            ctype = {"event": "15", "food": "39", "attraction": "12"}.get(kind, "12")
+            ctype = str(d.get("content_type") or "") or {"event": "15", "food": "39", "attraction": "12", "outdoor": "28"}.get(kind, "12")
             overview = ""
             homepage = ""
             if cid and cid.isdigit():
@@ -1563,7 +1563,7 @@ def enrich_spots_and_festivals_details(
                     info["homepage"] = homepage
                 info["intro"] = intro_map
 
-            q_suffix = "후기" if kind in ("food", "attraction") else "일정 후기"
+            q_suffix = "후기" if kind in ("food", "attraction", "outdoor") else "일정 후기"
             q_region = reg_label if reg_label else prov
             info["naver_reviews"] = _fetch_naver_place_blog_snippets(
                 f"{q_region} {title} {q_suffix}".strip(),
@@ -1594,6 +1594,9 @@ def enrich_spots_and_festivals_details(
 
         p_rows: list[dict[str, str]] = []
         pull_quote = ""
+        # 자연휴양림처럼 관광지(12)로 등록된 outdoor 항목은 관광지 이용 안내 칸을 쓴다
+        if kind == "outdoor" and str(d.get("content_type") or "28") != "28":
+            kind = "attraction"
 
         if kind == "food":
             p_header = "방문 전 필수 확인 · 대표 메뉴 · 영업시간 · 편의안내"
@@ -1642,6 +1645,24 @@ def enrich_spots_and_festivals_details(
                 paragraphs.append(f"주요 프로그램: {prog}")
             if ev_place:
                 pull_quote = f"{reg_label} 계절 추천 축제 · {ev_place}" + (f" ({sd} ~ {ed})" if sd else "")
+        elif kind == "outdoor":
+            # 레포츠: 관광공사 detailIntro2(28) 값만 그대로 쓴다. 없는 칸은 만들지 않는다(요금·연령 제한을 추정하지 않음).
+            p_header = "이용 전 필수 확인 · 운영기간 · 요금 · 예약 · 체험 연령"
+            for key, label, n in (
+                ("openperiod", "운영 기간", 70),
+                ("usetimeleports", "이용 시간", 70),
+                ("restdateleports", "쉬는 날", 50),
+                ("usefeeleports", "이용 요금", 90),
+                ("expagerangeleports", "체험 가능 연령", 50),
+                ("reservation", "예약 안내", 70),
+                ("parkingleports", "주차 안내", 50),
+            ):
+                v = intro_m.get(key, "")[:n]
+                if v:
+                    p_rows.append({"label": label, "value": v})
+            tel_o = intro_m.get("infocenterleports", "")[:50] or str(d.get("tel") or "")
+            if tel_o:
+                p_rows.append({"label": "문의 안내", "value": tel_o})
         else:
             p_header = "탐방 전 필수 확인 · 관람시간 · 주차 · 편의안내"
             use_t = intro_m.get("usetime", "")[:70]
@@ -1674,7 +1695,7 @@ def enrich_spots_and_festivals_details(
             d["pull_quote"] = pull_quote[:130]
         if p_rows:
             d["practical_header"] = p_header
-            d["practical_info"] = p_rows[:6]
+            d["practical_info"] = p_rows[:7] if kind == "outdoor" else p_rows[:6]
         if info.get("homepage") and not d.get("url"):
             d["url"] = info["homepage"]
         if info.get("naver_reviews"):

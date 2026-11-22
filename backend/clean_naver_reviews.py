@@ -63,7 +63,7 @@ def main() -> None:
     if args.refetch and not args.dry_run:
         for rec in emptied:
             kind = str(rec.get("kind") or "attraction")
-            suffix = "후기" if kind in ("food", "attraction") else "일정 후기"
+            suffix = "후기" if kind in ("food", "attraction", "outdoor") else "일정 후기"
             region = str(rec.get("region_label") or rec.get("province") or "")
             title = str(rec.get("title") or "")
             found = _fetch_naver_place_blog_snippets(

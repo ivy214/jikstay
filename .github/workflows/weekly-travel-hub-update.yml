@@ -98,6 +98,17 @@ jobs:
             python backend/refresh_markets.py --no-firestore
           fi
 
+      # 캠핑장·자연휴양림: 고캠핑 전체 목록(상세 호출 없음) + TourAPI 휴양림(새 곳만 상세) → camping 섹션 · 사라진 곳 closed
+      - name: Refresh campsites & recreation forests
+        id: camping
+        continue-on-error: true
+        run: |
+          if [ "${{ steps.admin.outputs.enabled }}" = "true" ]; then
+            python backend/refresh_camping.py
+          else
+            python backend/refresh_camping.py --no-firestore
+          fi
+
       # 공연·전시: 한국문화정보원 — 오늘부터 8주 안에 열리는 공연·전시로 culture 섹션을 다시 만듦 (새 항목만 상세 호출)
       - name: Refresh performances & exhibitions
         id: culture
@@ -240,9 +251,9 @@ jobs:
 
       - name: Fail if spot refresh or license recheck failed
         # !cancelled() 가 없으면 앞 단계(배포 등)가 실패했을 때 이 검사 자체가 건너뛰어진다
-        if: ${{ !cancelled() && (steps.admin.outcome == 'failure' || steps.spots.outcome == 'failure' || steps.markets.outcome == 'failure' || steps.culture.outcome == 'failure' || steps.licenses.outcome == 'failure') }}
+        if: ${{ !cancelled() && (steps.admin.outcome == 'failure' || steps.spots.outcome == 'failure' || steps.markets.outcome == 'failure' || steps.culture.outcome == 'failure' || steps.camping.outcome == 'failure' || steps.licenses.outcome == 'failure') }}
         run: |
-          echo "::error::Firebase 키(${{ steps.admin.outcome }}) · 볼거리·먹거리 갱신(${{ steps.spots.outcome }}) · 전통시장 갱신(${{ steps.markets.outcome }}) · 공연·전시 갱신(${{ steps.culture.outcome }}) · 숙소 인허가 재확인(${{ steps.licenses.outcome }}) 중 실패한 단계가 있습니다. 나머지 데이터는 커밋됐습니다."
+          echo "::error::Firebase 키(${{ steps.admin.outcome }}) · 볼거리·먹거리 갱신(${{ steps.spots.outcome }}) · 전통시장 갱신(${{ steps.markets.outcome }}) · 공연·전시 갱신(${{ steps.culture.outcome }}) · 캠핑장 갱신(${{ steps.camping.outcome }}) · 숙소 인허가 재확인(${{ steps.licenses.outcome }}) 중 실패한 단계가 있습니다. 나머지 데이터는 커밋됐습니다."
           exit 1
 
       - name: Fail if translation failed

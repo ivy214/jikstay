@@ -38,9 +38,14 @@ PROVINCE_CODES = {
 }
 OTHER_CODE = "etc"
 
-SPLIT_SECTIONS = ("spots", "festivals", "markets", "culture")
-# 전통시장(약 800곳)·공연·전시(약 900건)는 첫 화면에 필요 없어 core 에서 빼고 hub/markets.json 으로 따로 둔다 (앱이 2단계에서 받음)
-SEPARATE_SECTIONS = ("markets", "culture")
+SPLIT_SECTIONS = ("spots", "festivals", "markets", "culture", "camping")
+# 전통시장(약 800곳)·공연·전시(약 900건)·캠핑장·휴양림(약 2,400곳)은 첫 화면에 필요 없어 core 에서 빼고
+# hub/markets.json · culture.json · camping.json 으로 따로 둔다 (앱이 2단계에서 받음)
+SEPARATE_SECTIONS = ("markets", "culture", "camping")
+# 캠핑장(약 2,300곳)의 소개 본문은 양이 많아, 같은 시·도 볼거리·먹거리 상세 파일에 섞으면 식당 하나를 열어도
+# 캠핑장 본문까지 받게 된다(경기 550KB → 1.4MB). 캠핑 섹션 상세는 details_camping_{code}.json 으로 따로 둔다.
+# app/lib/hub_details.dart 의 HubDetailStore.detailFor 와 같아야 한다.
+SEPARATE_DETAIL_SECTIONS = ("camping",)
 # 상세 화면(spot_detail_sheet·story_detail_page, hydrateDiscoveryItem 으로 합침)에서만 쓰는 필드.
 # 첫 화면 데이터는 볼거리 수에 비례해 커지므로(상한 없음) 카드·검색·지도·일정 짜기에 안 쓰는 필드는 모두 여기로.
 # tel(자동 생성 스토리)·url(이벤트 배너)은 목록 단계에서도 쓰므로 core 에 둔다.
@@ -88,6 +93,8 @@ def split(hub: dict[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, dict
             if detail and slim.get("id"):
                 slim["has_details"] = True
                 code = PROVINCE_CODES.get(str(slim.get("province") or ""), OTHER_CODE)
+                if sec in SEPARATE_DETAIL_SECTIONS:
+                    code = f"{sec}_{code}"
                 details.setdefault(code, {})[str(slim["id"])] = detail
             out_items.append(slim)
         core[sec] = out_items

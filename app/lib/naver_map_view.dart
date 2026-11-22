@@ -151,6 +151,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
     final catWord = switch (widget.selectedCategory) {
       DiscoveryCategory.event => '축제 행사',
       DiscoveryCategory.attraction => '가볼만한곳 명소',
+      DiscoveryCategory.outdoor => '레포츠 캠핑장',
       DiscoveryCategory.food => '로컬 맛집',
       DiscoveryCategory.market => '전통시장 5일장',
       DiscoveryCategory.culture => '공연 전시',

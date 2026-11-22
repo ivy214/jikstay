@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-주간 볼거리·먹거리 갱신 (한국관광공사 TourAPI).
+주간 볼거리·먹거리·레포츠 갱신 (한국관광공사 TourAPI).
 
-1) 폐업·삭제 확인: 전국 볼거리(12)·먹거리(39) 목록 전체를 시·도별로 받아(약 60회 호출),
+1) 폐업·삭제 확인: 전국 볼거리(12)·먹거리(39)·레포츠(28) 목록 전체를 시·도별로 받아(약 80회 호출),
    허브에 있는데 관광공사 목록에서 사라진 곳을 허브에서 빼고 Firestore spots 를 closed 로 바꾼다.
    - 목록 조회가 하나라도 실패하면 이 단계 전체를 건너뛴다(일부만 받은 목록으로 지우지 않도록).
    - 사라진 곳이 확인 대상의 10%를 넘으면 API 이상으로 보고 건너뛴다.
@@ -37,8 +37,9 @@ from build_travel_hub import (  # noqa: E402
     upload_spots_to_firestore,
 )
 from collect_half_price_spots import DETAIL_CACHE, HUB_PATH, _items, _load_env, _spot_doc, collect  # noqa: E402
+from collect_outdoor_spots import is_excluded, outdoor_sub  # noqa: E402
 
-SPOT_KINDS = {"12": "attraction", "39": "food"}
+SPOT_KINDS = {"12": "attraction", "39": "food", "28": "outdoor"}
 NEW_DAYS = 14
 NEW_PER_TYPE = 2
 MAX_REMOVE_RATIO = 0.10
@@ -75,7 +76,7 @@ def fetch_live_content_ids() -> set[str] | None:
 def find_closed(hub: dict[str, Any], live: set[str]) -> list[dict[str, Any]]:
     checked = [
         s for s in hub.get("spots") or []
-        if s.get("kind") in ("attraction", "food") and str(s.get("content_id") or "").isdigit()
+        if s.get("kind") in SPOT_KINDS.values() and str(s.get("content_id") or "").isdigit()
     ]
     gone = [s for s in checked if str(s["content_id"]) not in live]
     if checked and len(gone) / len(checked) > MAX_REMOVE_RATIO:
@@ -99,6 +100,11 @@ def fetch_new_registrations(existing_cids: set[str]) -> list[dict[str, Any]]:
                     doc = _spot_doc(it, kind)
                     if not doc or doc["content_id"] in existing_cids or doc["province"] != prov:
                         continue
+                    if kind == "outdoor":
+                        # 캠핑장(고캠핑이 따로 맡음)·골프장·실내 체육시설 등은 넣지 않는다 (collect_outdoor_spots 와 같은 기준)
+                        if is_excluded(doc["title"]):
+                            continue
+                        doc["sub"] = outdoor_sub(doc["title"])
                     doc["added_at"] = today
                     existing_cids.add(doc["content_id"])
                     out.append(doc)
@@ -182,7 +188,7 @@ def main() -> None:
     print("[weekly-spots] 2) 반값여행 시·군 모자란 곳 채우는 중...")
     hp_spots, hp_events, _ = collect(hub)
 
-    print("[weekly-spots] 3) 최근 등록된 볼거리·먹거리 확인 중...")
+    print("[weekly-spots] 3) 최근 등록된 볼거리·먹거리·레포츠 확인 중...")
     existing = {str(x.get("content_id") or "") for x in [*(hub.get("spots") or []), *(hub.get("festivals") or []), *hp_spots, *hp_events]}
     new_regs = fetch_new_registrations(existing)
     for s in new_regs:

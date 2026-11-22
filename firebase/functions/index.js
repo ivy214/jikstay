@@ -331,7 +331,11 @@ function buildSpotOgHtml(template, spot, spotId, origin, rawLang = "ko", data = 
     `\n  <link rel="alternate" hreflang="x-default" href="${escapeHtml(`${origin}/?${queryKey}=${encodedId}`)}">`,
   ].join("");
 
-  const schemaType = kind === "event" ? "Festival" : kind === "food" ? "Restaurant" : kind === "market" ? "Store" : "TouristAttraction";
+  const schemaType = kind === "event" ? "Festival" : kind === "food" ? "Restaurant" : kind === "market" ? "Store"
+    : kind === "outdoor" && spot.sub === "camping" ? "Campground"
+    : kind === "outdoor" && spot.sub === "activity" ? "SportsActivityLocation"
+    : kind === "outdoor" && spot.sub === "forest" ? "Park"
+    : "TouristAttraction";
   const jsonLdObj = {
     "@context": "https://schema.org",
     "@type": schemaType,
@@ -537,6 +541,7 @@ function buildRegionOgHtml(template, province, origin, rawLang = "ko", data = nu
       { heading: `${provLabel} · ${L.festivals}`, html: seo.linkList(spotLinks(festivals, 15)) },
       { heading: `${provLabel} · ${L.attractions}`, html: seo.linkList(spotLinks(spots.filter((x) => x.kind === "attraction"), 30)) },
       { heading: `${provLabel} · ${L.food}`, html: seo.linkList(spotLinks(spots.filter((x) => x.kind === "food"), 30)) },
+      { heading: `${provLabel} · ${L.outdoor}`, html: seo.linkList(spotLinks(spots.filter((x) => x.kind === "outdoor"), 30)) },
       { heading: `${provLabel} · ${L.stays}`, html: seo.linkList(stays) },
       { heading: `${provLabel} · ${MARKET_LABEL[lang] || MARKET_LABEL.ko}`, html: seo.linkList(spotLinks(((data && data.markets) || []).filter(inProv), 40)) },
       { heading: `${provLabel} · ${(TOPIC_TEXT.culture[lang] || TOPIC_TEXT.culture.ko).exhibitions}`, html: seo.linkList(spotLinks(activeCulture({ culture: (data && data.culture) || [] }, today).filter(inProv), 30)) },

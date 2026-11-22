@@ -59,6 +59,16 @@ const Map<String, DiscoveryCategory> _kCategoryWords = {
   '볼거리': DiscoveryCategory.attraction,
   '명소': DiscoveryCategory.attraction,
   '관광지': DiscoveryCategory.attraction,
+  '레포츠': DiscoveryCategory.outdoor,
+  '액티비티': DiscoveryCategory.outdoor,
+  '아웃도어': DiscoveryCategory.outdoor,
+  '캠핑': DiscoveryCategory.outdoor,
+  '캠핑장': DiscoveryCategory.outdoor,
+  '야영장': DiscoveryCategory.outdoor,
+  '글램핑': DiscoveryCategory.outdoor,
+  '둘레길': DiscoveryCategory.outdoor,
+  '휴양림': DiscoveryCategory.outdoor,
+  '자연휴양림': DiscoveryCategory.outdoor,
 };
 
 // 의미 없이 붙는 말 — 떼어 내고 버린다. 긴 말을 먼저 검사한다.

@@ -446,6 +446,21 @@ class _HomePageState extends State<HomePage> {
     }
     _noticeEndedDeepLink();
 
+    // 캠핑장(고캠핑)·자연휴양림 (약 2,400곳). 기본 피드에는 넣지 않고 '자연·액티비티'·검색·지도에서만 보인다.
+    final campingJson = await fetchWebJson('data/hub/camping.json');
+    if (campingJson != null && campingJson['camping'] is List) {
+      for (final raw in (campingJson['camping'] as List)) {
+        if (raw is Map) {
+          final parsed = parseSpotJson(Map<String, dynamic>.from(raw), fallbackCategory: DiscoveryCategory.outdoor);
+          if (parsed != null) itemsById[parsed.id] = parsed;
+        }
+      }
+      if (mounted) {
+        setState(() => _allItems = itemsById.values.toList());
+        _openPendingMarketDeepLink();
+      }
+    }
+
     final staysJson = await fetchWebJson('data/public_stays_index.json');
     if (staysJson != null && staysJson['items'] is List) {
       for (final raw in (staysJson['items'] as List)) {
@@ -652,10 +667,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 시장·공연·전시 상세 링크(?spot=spot_mk_… / spot_cu_…)는 2단계에서 목록을 받은 뒤에야 열 수 있다.
+  /// 시장·공연·전시·캠핑장 상세 링크(?spot=spot_mk_… / spot_cu_… / spot_cp_… / spot_fr_…)는 2단계에서 목록을 받은 뒤에야 열 수 있다.
   void _openPendingMarketDeepLink() {
     final id = (widget.initialSpotId ?? '').trim();
-    if (!(id.startsWith('spot_mk_') || id.startsWith('spot_cu_')) || _marketDeepLinkHandled) return;
+    if (!(id.startsWith('spot_mk_') || id.startsWith('spot_cu_') || DiscoveryItem.isCampingSectionId(id)) ||
+        _marketDeepLinkHandled) {
+      return;
+    }
     for (final it in _allItems) {
       if (it.id == id) {
         _marketDeepLinkHandled = true;
@@ -725,7 +743,8 @@ class _HomePageState extends State<HomePage> {
             : _allItems
                 .where((it) =>
                     (!it.isMarket || _category == DiscoveryCategory.market) &&
-                    (it.category != DiscoveryCategory.culture || _category == DiscoveryCategory.culture))
+                    (it.category != DiscoveryCategory.culture || _category == DiscoveryCategory.culture) &&
+                    (!it.isCampingSection || _category == DiscoveryCategory.outdoor))
                 .toList())
         : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
     bool keep(DiscoveryItem it) {

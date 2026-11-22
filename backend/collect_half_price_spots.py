@@ -116,7 +116,7 @@ def _spot_doc(it: dict[str, Any], kind: str, city: str = "") -> dict[str, Any] |
     d1, d2 = parse_korean_address(addr1)
     prov = normalize_province_short(d1, d2)
     lat, lng = _parse_wgs84(it, prov)
-    prefix = {"attraction": "at", "food": "fo", "event": "ev"}[kind]
+    prefix = {"attraction": "at", "food": "fo", "event": "ev", "outdoor": "ou"}[kind]
     doc: dict[str, Any] = {
         "id": f"spot_{prefix}_{cid}",
         "kind": kind,
@@ -132,6 +132,8 @@ def _spot_doc(it: dict[str, Any], kind: str, city: str = "") -> dict[str, Any] |
         "tel": str(it.get("tel") or "").strip(),
         "map_url": f"https://map.naver.com/p/search/{quote(f'{prov} {title}'.strip())}",
     }
+    if kind == "outdoor":
+        doc["sub"] = "activity"  # 관광공사 레포츠(contentTypeId=28). 산·공원(park)·걷기길(trail)은 다음 단계
     if city:
         doc["half_price_city"] = city
     if kind == "event":

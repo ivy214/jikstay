@@ -59,7 +59,9 @@ class HubDetailStore {
   }
 
   static Future<Map<String, dynamic>?> detailFor(String id, String province) async {
-    final code = kProvinceDetailCodes[province] ?? 'etc';
+    final prov = kProvinceDetailCodes[province] ?? 'etc';
+    // 캠핑장·휴양림 상세는 details_camping_{code}.json 에 따로 있다 (backend/split_hub.py SEPARATE_DETAIL_SECTIONS)
+    final code = DiscoveryItem.isCampingSectionId(id) ? 'camping_$prov' : prov;
     if (!splitAvailable && !_byCode.containsKey(code)) return null;
     final all = await _load(code);
     final d = all[id];
