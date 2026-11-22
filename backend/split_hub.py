@@ -50,7 +50,9 @@ SEPARATE_DETAIL_SECTIONS = ("camping",)
 # 첫 화면 데이터는 볼거리 수에 비례해 커지므로(상한 없음) 카드·검색·지도·일정 짜기에 안 쓰는 필드는 모두 여기로.
 # tel(자동 생성 스토리)·url(이벤트 배너)은 목록 단계에서도 쓰므로 core 에 둔다.
 DETAIL_FIELDS = ("paragraphs", "naver_reviews", "practical_info", "practical_header", "images",
-                 "pull_quote", "naver_link", "content_id")
+                 "pull_quote", "naver_link", "content_id",
+                 # 걷기길: GPX 링크·끝 지점·거리/시간(이용 안내 칸에 이미 있음)
+                 "gpx_url", "end_lat", "end_lng", "distance_km", "duration_min")
 OVERVIEW_PREVIEW_CHARS = 50  # 카드 부제목(1줄)·검색용 미리보기 길이 (전체는 상세 파일에)
 # app/lib/trip_planner.dart 의 아침·야간 판정 키워드. 잘린 개요에서 빠지는 키워드는 'kw' 필드로 보존한다.
 TRIP_KEYWORDS = ("야간", "밤길", "야경", "불빛", "별빛", "달빛", "야시장", "나이트", "night", "모닝", "아침", "새벽", "일출", "morning")

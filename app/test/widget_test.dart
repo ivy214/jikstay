@@ -15,6 +15,7 @@ import 'package:jikstay/naver_place_info.dart';
 import 'package:jikstay/search_query.dart';
 import 'package:jikstay/spot_detail_sheet.dart';
 import 'package:jikstay/translation_store.dart';
+import 'package:jikstay/trail_route.dart';
 import 'package:jikstay/ux_widgets.dart';
 import 'package:jikstay/travel_hub.dart';
 import 'package:jikstay/trip_planner.dart';
@@ -959,6 +960,60 @@ void main() {
       final full = await hydrateDiscoveryItem(core);
       expect(full.paragraphs, ['남대천변 캠핑장']);
       HubDetailStore.clearForTest();
+    });
+
+    test('걷기길: 사진 없는 코스·캠핑장은 기본 피드 밖, 출처는 두루누비·고캠핑', () {
+      DiscoveryItem p(String id, String sub, {String img = ''}) => parseSpotJson({
+            'id': id, 'kind': 'outdoor', 'sub': sub, 'title': 't', 'province': '강원', 'lat': 37.7, 'lng': 128.9,
+            'image_url': img,
+          }, fallbackCategory: DiscoveryCategory.attraction)!;
+      final bare = p('spot_tr_NG0000005116', 'trail');
+      final photo = p('spot_tr_NG0000005117', 'trail', img: 'https://tong.visitkorea.or.kr/a.jpg');
+      expect(bare.isOutdoorListOnly, isTrue);
+      expect(photo.isOutdoorListOnly, isFalse);
+      expect(p('spot_cp_1', 'camping', img: 'https://x/a.jpg').isOutdoorListOnly, isTrue);
+      expect(p('spot_ou_1', 'activity', img: 'https://x/a.jpg').isOutdoorListOnly, isFalse);
+      expect(bare.categoryBadgeText(AppLang.ko), '걷기길');
+      expect(itemSourceLabel(bare, AppLang.ko), '한국관광공사 두루누비');
+      expect(itemSourceLabel(p('spot_cp_1', 'camping'), AppLang.ko), '한국관광공사 고캠핑');
+      expect(parseSearchQuery('강원 걷기길').category, DiscoveryCategory.outdoor);
+
+      // 경로 그림이 있으면 사진이 없어도 기본 피드에 나온다
+      final routed = parseSpotJson({
+        'id': 'spot_tr_r', 'kind': 'outdoor', 'sub': 'trail', 'title': 't', 'province': '부산', 'lat': 35.1, 'lng': 129.1,
+        'route': '_p~iF~ps|U_ulLnnqC_mqNvxq`@',
+      }, fallbackCategory: DiscoveryCategory.attraction)!;
+      expect(routed.isOutdoorListOnly, isFalse);
+      expect(routeThumbOrNull(routed), isNotNull);
+      expect(routeThumbOrNull(bare), isNull);
+      // 코스 위 볼거리 사진은 설명을 붙인다
+      final onCourse = parseSpotJson({...routed.raw, 'image_url': 'https://x/a.jpg', 'image_place': '신선대'},
+          fallbackCategory: DiscoveryCategory.attraction)!;
+      expect(imagePlaceCaption(onCourse, AppLang.ko), '코스 위 볼거리: 신선대');
+      expect(imagePlaceCaption(photo, AppLang.ko), '');
+    });
+
+    testWidgets('경로 그림: 썸네일·상세 칸이 오류 없이 그려진다', (tester) async {
+      final it = parseSpotJson({
+        'id': 'spot_tr_w', 'kind': 'outdoor', 'sub': 'trail', 'title': 't', 'province': '부산', 'lat': 35.1, 'lng': 129.1,
+        'route': '_p~iF~ps|U_ulLnnqC_mqNvxq`@',
+      }, fallbackCategory: DiscoveryCategory.attraction)!;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Column(children: [
+            SizedBox(width: 88, height: 88, child: routeThumbOrNull(it)),
+            TrailRoutePanel(item: it, lang: AppLang.ko),
+          ]),
+        ),
+      ));
+      expect(tester.takeException(), isNull);
+      expect(find.text('코스 경로'), findsOneWidget);
+      expect(find.byType(TrailRouteView), findsNWidgets(2));
+    });
+
+    test('경로 polyline 해석 (구글 예시, backend encode_polyline 과 같은 규칙)', () {
+      expect(decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@'), [(38.5, -120.2), (40.7, -120.95), (43.252, -126.453)]);
+      expect(decodePolyline('_p~iF~ps|U_'), isEmpty); // 잘린 문자열은 빈 목록
     });
 
     test('레포츠·휴양림 배지와 검색어', () {

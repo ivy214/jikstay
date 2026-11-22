@@ -68,6 +68,8 @@ const Map<String, DiscoveryCategory> _kCategoryWords = {
   '글램핑': DiscoveryCategory.outdoor,
   '둘레길': DiscoveryCategory.outdoor,
   '휴양림': DiscoveryCategory.outdoor,
+  '걷기길': DiscoveryCategory.outdoor,
+  '트레킹': DiscoveryCategory.outdoor,
   '자연휴양림': DiscoveryCategory.outdoor,
 };
 

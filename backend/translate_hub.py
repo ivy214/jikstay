@@ -205,6 +205,15 @@ def build_item_payload(it: dict[str, Any]) -> dict[str, Any]:
             "region_label": it.get("region_label", ""),
             "pull_quote": it.get("pull_quote", ""),
         }
+    if str(it.get("id") or "").startswith("spot_tr_"):
+        # 두루누비 걷기길(약 170코스): 긴 설명·찾아가는 길은 빼고 핵심만 (상세 본문은 한국어 원문)
+        return {
+            "title": it.get("title", ""),
+            "region_label": it.get("region_label", ""),
+            "overview": it.get("overview", ""),
+            "practical_header": it.get("practical_header", ""),
+            "practical_info": it.get("practical_info", []),
+        }
     if it.get("kind") == "market":
         # 전통시장(약 800곳)은 핵심 정보만: 긴 본문까지 번역하면 무료 번역 한도(월 200만 자)를 거의 다 쓴다.
         # 상세 화면에서 번역이 없는 본문은 한국어 원문으로 보인다.

@@ -497,6 +497,12 @@ class DiscoveryItem {
   static bool isCampingSectionId(String id) => id.startsWith('spot_cp_') || id.startsWith('spot_fr_');
   bool get isCampingSection => isCampingSectionId(id);
 
+  /// 기본 '전체' 피드에는 넣지 않고 '자연·액티비티'·검색·지도에서만 보이는 항목:
+  /// 캠핑장·휴양림(약 2,400곳)과, 사진도 경로 그림도 없는 자연·액티비티(빈 카드가 피드를 비어 보이게 하지 않도록).
+  bool get isOutdoorListOnly =>
+      isCampingSection ||
+      (category == DiscoveryCategory.outdoor && imageUrl.isEmpty && (raw['route'] ?? '').toString().isEmpty);
+
   bool get isMarket => category == DiscoveryCategory.market || raw['kind'] == 'market' || id.startsWith('mkt_');
 
   /// Firestore spots/listings 문서가 있어 후기 작성·클릭 집계가 가능한 항목

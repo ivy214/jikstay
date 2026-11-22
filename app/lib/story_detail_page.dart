@@ -9,6 +9,7 @@ import 'discovery_models.dart';
 import 'hub_details.dart';
 import 'i18n.dart';
 import 'spot_detail_sheet.dart';
+import 'trail_route.dart';
 import 'translation_store.dart';
 import 'ux_widgets.dart';
 import 'web_utils.dart';
@@ -881,7 +882,7 @@ class _StoryNearbyStopTile extends StatelessWidget {
                   height: 64,
                   child: item.imageUrl.isNotEmpty
                       ? StorageImage(url: item.imageUrl, cacheWidth: 240)
-                      : Container(
+                      : routeThumbOrNull(item) ?? Container(
                           color: item.category.color.withValues(alpha: 0.1),
                           alignment: Alignment.center,
                           child: Column(

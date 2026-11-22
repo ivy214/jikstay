@@ -27,6 +27,7 @@ import 'spot_detail_sheet.dart';
 import 'story_detail_page.dart';
 import 'translation_store.dart';
 import 'travel_hub.dart';
+import 'trail_route.dart';
 import 'trip_planner.dart';
 import 'ux_widgets.dart';
 import 'web_utils.dart';
@@ -744,7 +745,7 @@ class _HomePageState extends State<HomePage> {
                 .where((it) =>
                     (!it.isMarket || _category == DiscoveryCategory.market) &&
                     (it.category != DiscoveryCategory.culture || _category == DiscoveryCategory.culture) &&
-                    (!it.isCampingSection || _category == DiscoveryCategory.outdoor))
+                    (!it.isOutdoorListOnly || _category == DiscoveryCategory.outdoor))
                 .toList())
         : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
     bool keep(DiscoveryItem it) {

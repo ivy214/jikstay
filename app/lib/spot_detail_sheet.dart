@@ -12,6 +12,7 @@ import 'hub_details.dart';
 import 'i18n.dart';
 import 'naver_place_info.dart';
 import 'review_auth.dart';
+import 'trail_route.dart';
 import 'translation_store.dart';
 import 'ux_widgets.dart';
 import 'web_utils.dart';
@@ -667,7 +668,24 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                       child: SizedBox(
                         height: isWide ? 350 : 225,
                         width: double.infinity,
-                        child: StorageImage(url: activeHero, cacheWidth: 1080),
+                        child: Stack(fit: StackFit.expand, children: [
+                          StorageImage(url: activeHero, cacheWidth: 1080),
+                          // 걷기길: 코스 자체가 아닌 코스 위 볼거리 사진이면 밝힌다
+                          if (activeHero == _current.imageUrl && imagePlaceCaption(_current, lang).isNotEmpty)
+                            Positioned(
+                              left: 10,
+                              bottom: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(imagePlaceCaption(_current, lang),
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
+                              ),
+                            ),
+                        ]),
                       ),
                     ),
                     if (gallery.length > 1) ...[
@@ -702,6 +720,11 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 24),
+                  ],
+                  // 걷기길: 코스 경로 그림 (사진이 없으면 사진 자리를 대신한다)
+                  if (itemRoute(_current).isNotEmpty) ...[
+                    TrailRoutePanel(item: _current, lang: lang, height: activeHero.isEmpty ? (isWide ? 300 : 220) : 170),
                     const SizedBox(height: 24),
                   ],
 
@@ -1511,7 +1534,7 @@ class _ConnectedHorizontalRow extends StatelessWidget {
                             height: 76,
                             child: it.imageUrl.isNotEmpty
                                 ? StorageImage(url: it.imageUrl, cacheWidth: 220)
-                                : Container(
+                                : routeThumbOrNull(it) ?? Container(
                                     color: it.category.color.withValues(alpha: 0.1),
                                     alignment: Alignment.center,
                                     child: Icon(it.category.icon, color: it.category.color, size: 24),

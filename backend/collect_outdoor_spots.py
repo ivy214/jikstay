@@ -34,6 +34,7 @@ from build_travel_hub import (  # noqa: E402
     upload_spots_to_firestore,
 )
 from collect_half_price_spots import DETAIL_CACHE, HUB_PATH, _items, _load_env, _spot_doc  # noqa: E402
+from refresh_trails import THEME_RE  # noqa: E402
 
 PER_PROVINCE = 8  # 레포츠·걷기길
 
@@ -69,7 +70,8 @@ TRAIL_RE = re.compile(r"(둘레길|올레|누리길|나들길|바우길|구불�
 
 
 def is_excluded(title: str) -> bool:
-    return bool(EXCLUDE_RE.search(title) or CAMP_RE.search(title))
+    # 코리아둘레길(해파랑·남파랑·서해랑·DMZ 평화의 길) 코스는 refresh_trails.py(두루누비)가 맡는다
+    return bool(EXCLUDE_RE.search(title) or CAMP_RE.search(title) or THEME_RE.search(title))
 
 
 def outdoor_sub(title: str) -> str:

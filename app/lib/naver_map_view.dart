@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import 'detail_page.dart' show StorageImage;
 import 'discovery_models.dart';
 import 'i18n.dart';
+import 'trail_route.dart';
 
 class NaverLocalMapView extends StatefulWidget {
   final List<DiscoveryItem> items;
@@ -375,7 +376,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                 height: 64,
                                 child: _selectedPinItem!.imageUrl.isNotEmpty
                                     ? StorageImage(url: _selectedPinItem!.imageUrl, cacheWidth: 200)
-                                    : Container(
+                                    : routeThumbOrNull(_selectedPinItem!) ?? Container(
                                         color: _selectedPinItem!.category.color.withValues(alpha: 0.12),
                                         alignment: Alignment.center,
                                         child: Icon(_selectedPinItem!.category.icon, color: _selectedPinItem!.category.color),
@@ -546,7 +547,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                   height: 56,
                                   child: it.imageUrl.isNotEmpty
                                       ? StorageImage(url: it.imageUrl, cacheWidth: 180)
-                                      : Container(
+                                      : routeThumbOrNull(it) ?? Container(
                                           color: it.category.color.withValues(alpha: 0.1),
                                           alignment: Alignment.center,
                                           child: Icon(it.category.icon, size: 20, color: it.category.color),

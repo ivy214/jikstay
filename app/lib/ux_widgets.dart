@@ -327,6 +327,12 @@ String itemSourceLabel(DiscoveryItem it, AppLang lang) {
   if (it.id.startsWith('spot_ev_nv_')) {
     return pickLangText(lang, ko: '네이버 검색 축제 정보', en: 'Naver festival search', ja: 'NAVER祭り検索', zh: 'Naver 慶典搜尋');
   }
+  if (it.id.startsWith('spot_cp_')) {
+    return pickLangText(lang, ko: '한국관광공사 고캠핑', en: 'Korea Tourism Organization GoCamping', ja: '韓国観光公社 GoCamping', zh: '韓國觀光公社 GoCamping');
+  }
+  if (it.id.startsWith('spot_tr_')) {
+    return pickLangText(lang, ko: '한국관광공사 두루누비', en: 'Korea Tourism Organization Durunubi', ja: '韓国観光公社 ドゥルヌビ', zh: '韓國觀光公社 Durunubi');
+  }
   if (it.category == DiscoveryCategory.ebook) {
     return pickLangText(lang, ko: '지자체 공식 자료', en: 'Official municipal source', ja: '自治体公式資料', zh: '地方政府官方資料');
   }

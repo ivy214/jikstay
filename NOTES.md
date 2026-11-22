@@ -96,6 +96,7 @@ deploy.ps1              분할 → Flutter 빌드 → firebase/public 배치 →
 | `weekly_spot_refresh.py` | 주간: 볼거리·먹거리 삭제 확인·반값여행 시·군 보충·신규 등록 추가 (`--dry-run` 으로 미리 보기) |
 | `collect_half_price_spots.py` | 반값여행 대상 25개 시·군별 볼거리 6·먹거리 4·축제(조회순)를 시·군 코드로 추가 수집(`half_price_city` 표시, `--upload` 로 Firestore 문서 생성). 허브를 `build_travel_hub.py` 로 새로 만들면 다시 실행 |
 | `collect_outdoor_spots.py` | (한 번) 자연·액티비티(`kind: outdoor`): 관광공사 레포츠(28) 시·도별 8곳 — 체험형 우선·같은 종류 2곳·길(`sub: trail`) 절반까지·시·군·구 분산, 캠핑장·골프장·실내 체육시설 제외. 이후 신규·폐업은 `weekly_spot_refresh.py` |
+| `refresh_trails.py` | 주간: 두루누비 코리아둘레길 174코스(해파랑·남파랑·서해랑·DMZ 평화의 길) → spots (`spot_tr_…`, `sub: trail`). 거리·걷는 시간·난이도·코스 형태는 두루누비 값만, 좌표는 GPX 시작·끝 점(`backend/trail_gpx_cache.json`, 바뀐 코스만 다시 받음). 사진: ① TourAPI 에 같은 길·같은 코스 번호가 하나뿐이면 그 사진(18) ② 아니면 코스 설명 '주요 볼거리' 중 GPX 경로 2km 안의 관광공사 관광지 사진(`image_place` → 앱이 "코스 위 볼거리: …" 표시, 62) ③ 없으면 경로 그림만(`route` = 32점 이하 encoded polyline, `lib/trail_route.dart`). 네이버 이미지 검색 사진은 저작권 때문에 쓰지 않는다. 네이버 블로그 방문기(원문 링크)는 처음 보는 코스만 검색. 레포츠로 들어온 같은 코스는 대체 |
 | `refresh_camping.py` | 주간: 고캠핑 전체(운영 중·사진·좌표 있는 약 2,250곳, `spot_cp_…`, 이용 안내는 고캠핑 값만) + TourAPI 자연휴양림·치유의숲(약 170곳, `spot_fr_…`) → 허브 `camping` 섹션. 사라진 곳 closed(10% 넘으면 보류) |
 | `translate_hub.py` | EN/JA/ZH 증분 번역 (Gemini, 키 없으면 OpenAI) |
 | `enrich_naver_local.py` | 네이버 지역 검색으로 `naver_link`(공식 링크, OTA 제외)·`naver_category` 보강. 허브/색인을 다시 만들면 재실행(캐시로 즉시 복원) |

@@ -44,7 +44,7 @@ class _LiveFeedItemCard extends StatelessWidget {
                 height: 88,
                 child: item.imageUrl.isNotEmpty
                     ? StorageImage(url: item.imageUrl, cacheWidth: 280)
-                    : Container(
+                    : routeThumbOrNull(item) ?? Container(
                         color: item.category.color.withValues(alpha: 0.1),
                         alignment: Alignment.center,
                         child: Icon(item.category.icon, color: item.category.color, size: 30),

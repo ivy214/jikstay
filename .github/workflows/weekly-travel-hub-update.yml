@@ -109,6 +109,17 @@ jobs:
             python backend/refresh_camping.py --no-firestore
           fi
 
+      # 걷기길: 두루누비 코리아둘레길 코스(약 170) → spots (GPX 시작·끝 좌표는 trail_gpx_cache.json 으로 바뀐 코스만)
+      - name: Refresh walking trails
+        id: trails
+        continue-on-error: true
+        run: |
+          if [ "${{ steps.admin.outputs.enabled }}" = "true" ]; then
+            python backend/refresh_trails.py
+          else
+            python backend/refresh_trails.py --no-firestore
+          fi
+
       # 공연·전시: 한국문화정보원 — 오늘부터 8주 안에 열리는 공연·전시로 culture 섹션을 다시 만듦 (새 항목만 상세 호출)
       - name: Refresh performances & exhibitions
         id: culture
@@ -150,7 +161,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/web/data/public_travel_hub.json app/web/data/public_stays_index.json backend/stays_index_suspended.json \
                   app/web/data/translations_en.json app/web/data/translations_ja.json app/web/data/translations_zh.json \
-                  backend/translation_cache.json backend/market_detail_cache.json backend/culture_detail_cache.json \
+                  backend/translation_cache.json backend/market_detail_cache.json backend/culture_detail_cache.json backend/trail_gpx_cache.json \
                   docs/weekly_digest.md docs/weekly_digest_sns.txt
           if git diff --cached --quiet; then
             echo "No data changes to commit."
@@ -251,9 +262,9 @@ jobs:
 
       - name: Fail if spot refresh or license recheck failed
         # !cancelled() 가 없으면 앞 단계(배포 등)가 실패했을 때 이 검사 자체가 건너뛰어진다
-        if: ${{ !cancelled() && (steps.admin.outcome == 'failure' || steps.spots.outcome == 'failure' || steps.markets.outcome == 'failure' || steps.culture.outcome == 'failure' || steps.camping.outcome == 'failure' || steps.licenses.outcome == 'failure') }}
+        if: ${{ !cancelled() && (steps.admin.outcome == 'failure' || steps.spots.outcome == 'failure' || steps.markets.outcome == 'failure' || steps.culture.outcome == 'failure' || steps.camping.outcome == 'failure' || steps.trails.outcome == 'failure' || steps.licenses.outcome == 'failure') }}
         run: |
-          echo "::error::Firebase 키(${{ steps.admin.outcome }}) · 볼거리·먹거리 갱신(${{ steps.spots.outcome }}) · 전통시장 갱신(${{ steps.markets.outcome }}) · 공연·전시 갱신(${{ steps.culture.outcome }}) · 캠핑장 갱신(${{ steps.camping.outcome }}) · 숙소 인허가 재확인(${{ steps.licenses.outcome }}) 중 실패한 단계가 있습니다. 나머지 데이터는 커밋됐습니다."
+          echo "::error::Firebase 키(${{ steps.admin.outcome }}) · 볼거리·먹거리 갱신(${{ steps.spots.outcome }}) · 전통시장 갱신(${{ steps.markets.outcome }}) · 공연·전시 갱신(${{ steps.culture.outcome }}) · 캠핑장 갱신(${{ steps.camping.outcome }}) · 걷기길 갱신(${{ steps.trails.outcome }}) · 숙소 인허가 재확인(${{ steps.licenses.outcome }}) 중 실패한 단계가 있습니다. 나머지 데이터는 커밋됐습니다."
           exit 1
 
       - name: Fail if translation failed
