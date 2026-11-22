@@ -419,3 +419,62 @@ class DetailCardScrollView extends StatelessWidget {
     );
   }
 }
+
+/// 가로로 넘치는 칩 줄: 더 있는 쪽 가장자리를 흐리게 해 옆으로 밀 수 있다는 걸 보여 준다.
+class FadingHScroll extends StatefulWidget {
+  const FadingHScroll({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<FadingHScroll> createState() => _FadingHScrollState();
+}
+
+class _FadingHScrollState extends State<FadingHScroll> {
+  final _ctrl = ScrollController();
+  bool _left = false, _right = false;
+
+  void _update() {
+    if (!_ctrl.hasClients) return;
+    final p = _ctrl.position;
+    final l = p.pixels > 2, r = p.pixels < p.maxScrollExtent - 2;
+    if (l != _left || r != _right) {
+      setState(() {
+        _left = l;
+        _right = r;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(_update);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _update());
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? _update() : null);
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) => LinearGradient(
+        colors: [
+          _left ? Colors.transparent : Colors.black,
+          Colors.black,
+          Colors.black,
+          _right ? Colors.transparent : Colors.black,
+        ],
+        stops: const [0, 0.06, 0.94, 1],
+      ).createShader(rect),
+      child: SingleChildScrollView(controller: _ctrl, scrollDirection: Axis.horizontal, child: widget.child),
+    );
+  }
+}
+

@@ -12,6 +12,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'amenities.dart';
+import 'category_groups.dart';
 import 'demo_data.dart';
 import 'detail_page.dart';
 import 'discovery_models.dart';
@@ -285,7 +286,9 @@ class _HomePageState extends State<HomePage> {
 
   final TextEditingController _searchCtrl = TextEditingController();
 
-  DiscoveryCategory _category = DiscoveryCategory.all;
+  /// 카테고리 선택: 큰 분류 5개 + 세부 칩 (lib/category_groups.dart). _category 는 대표 분류 하나가 필요한 곳(지도)에.
+  CategorySelection _cat = CategorySelection.all;
+  DiscoveryCategory get _category => _cat.primary;
   HomeViewMode _viewMode = HomeViewMode.feed;
   String _selectedProvince = '전체';
   String _query = '';
@@ -585,16 +588,18 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildTripPlannerPill(AppLang lang) {
     return Padding(
-      padding: const EdgeInsets.only(right: 6),
+      padding: EdgeInsets.zero,
       child: InkWell(
         key: const Key('trip_planner_btn'),
         borderRadius: BorderRadius.circular(18),
         onTap: () => _openTripPlanner(),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: const Color(0xFF0F766E),
             borderRadius: BorderRadius.circular(18),
+            boxShadow: const [BoxShadow(color: Color(0x330F766E), blurRadius: 6, offset: Offset(0, 2))],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -602,14 +607,8 @@ class _HomePageState extends State<HomePage> {
               const Icon(Icons.route_rounded, size: 14, color: Colors.white),
               const SizedBox(width: 4),
               Text(
-                pickLangText(
-                  lang,
-                  ko: '여행코스',
-                  en: 'Trip Planner',
-                  ja: '旅行プラン',
-                  zh: '行程规划',
-                ),
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
+                pickLangText(lang, ko: '여행코스 만들기', en: 'Plan a Trip', ja: '旅行プラン作成', zh: '規劃行程'),
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Colors.white),
               ),
             ],
           ),
@@ -697,7 +696,7 @@ class _HomePageState extends State<HomePage> {
         'search_term': term,
         'results': results,
         'province': _selectedProvince,
-        'category': _category.name,
+        'category': _cat.logName,
       };
       trackPortalEvent('search', params);
       if (results == 0) trackPortalEvent('search_no_results', params);
@@ -743,15 +742,15 @@ class _HomePageState extends State<HomePage> {
             ? _allItems
             : _allItems
                 .where((it) =>
-                    (!it.isMarket || _category == DiscoveryCategory.market) &&
-                    (it.category != DiscoveryCategory.culture || _category == DiscoveryCategory.culture) &&
-                    (!it.isOutdoorListOnly || _category == DiscoveryCategory.outdoor))
+                    (!it.isMarket || _cat.showsMarkets) &&
+                    (it.category != DiscoveryCategory.culture || _cat.showsCulture) &&
+                    (!it.isOutdoorListOnly || _cat.showsListOnlyOutdoor))
                 .toList())
         : [..._allItems, ..._markets.where((m) => !_allItems.any((it) => it.id == m.id)).map(marketToDiscoveryItem)];
     bool keep(DiscoveryItem it) {
       if (_savedOnly && !saved.contains(it.id)) return false;
       if (_weekendOnly && !isOpenDuring(it, weekend.$1, weekend.$2)) return false;
-      if (_category != DiscoveryCategory.all && it.category != _category) return false;
+      if (!_cat.isAll && !_cat.matches(it)) return false;
       if (_selectedProvince != '전체' && it.province != _selectedProvince) return false;
       if (q.isEmpty) return true;
       final score = searchRelevance(it, q);
@@ -762,7 +761,7 @@ class _HomePageState extends State<HomePage> {
 
     final out = pool.where(keep).toList();
     // 기본 피드(검색·분류 선택 없음)에는 이번 주 공연·전시를 5칸마다 1개씩 끼운다 (지역·찜·주말 필터는 똑같이 적용)
-    final culture = (q.isEmpty && !includeMarkets && _category == DiscoveryCategory.all)
+    final culture = (q.isEmpty && !includeMarkets && _cat.isAll)
         ? thisWeekCulture(_allItems.where(keep), DateTime.now())
         : <DiscoveryItem>[];
 
@@ -945,7 +944,7 @@ class _HomePageState extends State<HomePage> {
                 Navigator.of(ctx).pop();
                 setState(() {
                   _viewMode = HomeViewMode.feed;
-                  _category = DiscoveryCategory.all;
+                  _cat = CategorySelection.all;
                   _searchCtrl.text = cityKeyword;
                   _query = cityKeyword;
                   _feedVisibleCount = _feedPageSize;
@@ -963,44 +962,312 @@ class _HomePageState extends State<HomePage> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  Widget _buildViewModePill({
-    required Key key,
-    required HomeViewMode mode,
-    required String label,
-    required Color activeColor,
-  }) {
-    final sel = _viewMode == mode;
-    return Padding(
+  /// 홈 탐색 바 (3줄): ① 조건(지역·내 주변·주말·찜) + 보기 방식(목록|캘린더|지도) + 여행코스
+  /// ② 큰 분류 5개 + 공식 관광지도 링크  ③ 고른 큰 분류의 세부 칩 (있을 때만). 지역을 펼치면 ①과 ② 사이에 시·도 칩.
+  PreferredSize _buildExploreBar(AppLang lang, double screenW) {
+    final narrow = screenW < 700;
+    final spec = _cat.spec;
+    final showSubs = !_cat.isAll && spec.subs.length > 1;
+    final height = 12.0 + 34 + 6 + 34 + (_showProvincePicker ? 36 : 0) + (showSubs ? 36 : 0);
+
+    void select(CategorySelection next) => setState(() {
+          _cat = next;
+          _feedVisibleCount = _feedPageSize;
+          if (_viewMode == HomeViewMode.calendar && !next.fitsCalendar) _viewMode = HomeViewMode.feed;
+        });
+
+    final regionBtn = Padding(
       padding: const EdgeInsets.only(right: 6),
       child: InkWell(
-        key: key,
+        key: const Key('region_picker_btn'),
         borderRadius: BorderRadius.circular(18),
-        onTap: () {
-          setState(() => _viewMode = mode);
-          trackPortalEvent('switch_view_mode', {
-            'mode': mode.name,
-            'province': _selectedProvince,
-          });
-        },
+        onTap: () => setState(() => _showProvincePicker = !_showProvincePicker),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          constraints: const BoxConstraints(minHeight: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
           decoration: BoxDecoration(
-            color: sel ? activeColor : Colors.white,
+            color: _selectedProvince == '전체' ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: sel ? activeColor : const Color(0xFFCBD5E1),
-              width: sel ? 1.4 : 1.0,
-            ),
+            border: Border.all(color: _selectedProvince == '전체' ? const Color(0xFFCBD5E1) : const Color(0xFF0F172A)),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: sel ? Colors.white : const Color(0xFF0F172A),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(
+              lang == AppLang.ko
+                  ? '📍 지역: ${trProvince(_selectedProvince, lang)}'
+                  : '📍 ${trProvince(_selectedProvince, lang)}',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                color: _selectedProvince == '전체' ? const Color(0xFF0F172A) : Colors.white,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Icon(
+              _showProvincePicker ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: _selectedProvince == '전체' ? const Color(0xFF475569) : Colors.white,
+            ),
+          ]),
+        ),
+      ),
+    );
+
+    final filters = [
+      regionBtn,
+      _quickFilterChip(
+        key: const Key('near_me_chip'),
+        label: _locating
+            ? pickLangText(lang, ko: '🧭 위치 확인 중…', en: '🧭 Locating…', ja: '🧭 取得中…', zh: '🧭 定位中…')
+            : pickLangText(lang, ko: '🧭 내 주변', en: '🧭 Near me', ja: '🧭 現在地周辺', zh: '🧭 我附近'),
+        selected: _userPos != null,
+        color: const Color(0xFF2563EB),
+        onTap: () => _toggleNearMe(lang),
+      ),
+      _quickFilterChip(
+        key: const Key('weekend_chip'),
+        label: pickLangText(lang, ko: '🗓 이번 주말', en: '🗓 This weekend', ja: '🗓 今週末', zh: '🗓 本週末'),
+        selected: _weekendOnly,
+        color: const Color(0xFFEA580C),
+        onTap: () => setState(() {
+          _weekendOnly = !_weekendOnly;
+          _feedVisibleCount = _feedPageSize;
+        }),
+      ),
+      _quickFilterChip(
+        key: const Key('saved_chip'),
+        label: pickLangText(lang,
+            ko: '❤️ 찜 ${SavedPlaces.ids.value.length}',
+            en: '❤️ Saved ${SavedPlaces.ids.value.length}',
+            ja: '❤️ 保存 ${SavedPlaces.ids.value.length}',
+            zh: '❤️ 收藏 ${SavedPlaces.ids.value.length}'),
+        selected: _savedOnly,
+        color: const Color(0xFFE11D48),
+        onTap: () => setState(() {
+          _savedOnly = !_savedOnly;
+          _feedVisibleCount = _feedPageSize;
+        }),
+      ),
+    ];
+
+    Widget groupChip(CategoryGroupSpec g) {
+      final sel = _cat.group == g.group;
+      return Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: Semantics(
+          button: true,
+          selected: sel,
+          child: InkWell(
+            key: Key('cat_group_${g.group.name}'),
+            borderRadius: BorderRadius.circular(18),
+            // 고른 큰 분류를 다시 누르면 전체로
+            onTap: () => select(sel ? CategorySelection.all : CategorySelection(g.group)),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: sel ? g.color : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: sel ? g.color : const Color(0xFFCBD5E1)),
+              ),
+              child: Text(
+                g.label(lang),
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: sel ? Colors.white : const Color(0xFF334155)),
+              ),
             ),
           ),
         ),
+      );
+    }
+
+    final guidesSel = _cat.group == CategoryGroup.guides;
+    final guides = categoryGroupSpec(CategoryGroup.guides);
+    final groupRow = <Widget>[
+      ...kCategoryGroups.where((g) => g.group != CategoryGroup.guides).map(groupChip),
+      // 관광지도·E-book 은 장소가 아니라 자료라서 칩이 아닌 링크로
+      TextButton(
+        key: const Key('cat_group_guides'),
+        onPressed: () => select(guidesSel ? CategorySelection.all : const CategorySelection(CategoryGroup.guides)),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: const Size(0, 32),
+          foregroundColor: guidesSel ? guides.color : const Color(0xFF64748B),
+          textStyle: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            decoration: guidesSel ? TextDecoration.underline : TextDecoration.none,
+          ),
+        ),
+        child: Text(guides.label(lang)),
+      ),
+    ];
+
+    Widget subChip(CategorySub sub) {
+      final sel = _cat.sub.key == sub.key;
+      return Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: Semantics(
+          button: true,
+          selected: sel,
+          child: InkWell(
+            key: Key('cat_sub_${sub.key}'),
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => select(CategorySelection(_cat.group, sub.key)),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 28),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: sel ? spec.color.withValues(alpha: 0.12) : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: sel ? spec.color : const Color(0xFFE2E8F0), width: sel ? 1.4 : 1),
+              ),
+              child: Text(
+                sub.label(lang),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
+                  color: sel ? spec.color : const Color(0xFF475569),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return PreferredSize(
+      preferredSize: Size.fromHeight(height),
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ① 조건 | 보기 방식 | 여행코스
+            SizedBox(
+              height: 34,
+              child: Row(children: [
+                Expanded(child: FadingHScroll(child: Row(children: filters))),
+                const SizedBox(width: 8),
+                _buildViewModeSegment(lang, iconOnly: narrow),
+                if (!narrow) ...[
+                  const SizedBox(width: 6),
+                  _buildTripPlannerPill(lang),
+                ],
+              ]),
+            ),
+            if (_showProvincePicker) ...[
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 30,
+                child: FadingHScroll(
+                  child: Row(
+                    children: kProvinceJumpList.map((p) {
+                      final sel = _selectedProvince == p.key;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 5),
+                        child: InkWell(
+                          key: Key('prov_chip_${p.key}'),
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => _selectProvince(p.key),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: sel ? const Color(0xFF0F172A) : Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: sel ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0)),
+                            ),
+                            child: Text(
+                              trProvince(p.key, lang),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: sel ? Colors.white : const Color(0xFF475569),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 6),
+            // ② 큰 분류
+            SizedBox(height: 34, child: FadingHScroll(child: Row(children: groupRow))),
+            // ③ 세부 칩
+            if (showSubs) ...[
+              const SizedBox(height: 6),
+              SizedBox(height: 30, child: FadingHScroll(child: Row(children: spec.subs.map(subChip).toList()))),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 보기 방식: 하나만 켜지는 붙은 버튼 (목록 | 캘린더 | 지도)
+  Widget _buildViewModeSegment(AppLang lang, {required bool iconOnly}) {
+    Widget seg(Key key, HomeViewMode mode, IconData icon, String label, Color color, {bool first = false, bool last = false}) {
+      final sel = _viewMode == mode;
+      final radius = BorderRadius.horizontal(
+        left: Radius.circular(first ? 17 : 0),
+        right: Radius.circular(last ? 17 : 0),
+      );
+      return Tooltip(
+        message: label,
+        child: Semantics(
+          button: true,
+          selected: sel,
+          label: label,
+          child: InkWell(
+            key: key,
+            borderRadius: radius,
+            onTap: () {
+              setState(() => _viewMode = mode);
+              trackPortalEvent('switch_view_mode', {'mode': mode.name, 'province': _selectedProvince});
+            },
+            child: Container(
+              height: 32,
+              padding: EdgeInsets.symmetric(horizontal: iconOnly ? 9 : 11),
+              decoration: BoxDecoration(color: sel ? color : Colors.white, borderRadius: radius),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, size: 16, color: sel ? Colors.white : const Color(0xFF475569)),
+                if (!iconOnly) ...[
+                  const SizedBox(width: 4),
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 12.5, fontWeight: FontWeight.w800, color: sel ? Colors.white : const Color(0xFF0F172A))),
+                ],
+              ]),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget divider() => Container(width: 1, height: 32, color: const Color(0xFFCBD5E1));
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(17),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          seg(const Key('view_mode_feed'), HomeViewMode.feed, Icons.view_agenda_rounded,
+              pickLangText(lang, ko: '목록', en: 'List', ja: 'リスト', zh: '列表'), const Color(0xFF0F172A), first: true),
+          divider(),
+          seg(const Key('view_mode_calendar'), HomeViewMode.calendar, Icons.calendar_month_rounded,
+              pickLangText(lang, ko: '캘린더', en: 'Calendar', ja: 'カレンダー', zh: '日曆'), const Color(0xFF7C3AED)),
+          divider(),
+          seg(const Key('view_mode_map'), HomeViewMode.map, Icons.map_rounded,
+              pickLangText(lang, ko: '지도', en: 'Map', ja: '地図', zh: '地圖'), const Color(0xFF03C75A), last: true),
+        ]),
       ),
     );
   }
@@ -1027,12 +1294,26 @@ class _HomePageState extends State<HomePage> {
               allItems: _allItems,
               selectedProvince: storyProvince,
             );
-        final moreStories = (_query.trim().isEmpty && _category == DiscoveryCategory.all)
+        final moreStories = (_query.trim().isEmpty && _cat.isAll)
             ? _dailyStories.where((s) => s.id != todayStory.id).take(4).toList()
             : const <DailyStoryItem>[];
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAF9),
+          // 휴대폰: 여행코스는 오른쪽 아래 떠 있는 버튼 (탐색 바 첫 줄을 조건 칩에 양보)
+          floatingActionButton: screenW < 700
+              ? FloatingActionButton.extended(
+                  key: const Key('trip_planner_btn'),
+                  onPressed: () => _openTripPlanner(),
+                  backgroundColor: const Color(0xFF0F766E),
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.route_rounded, size: 20),
+                  label: Text(
+                    pickLangText(lang, ko: '여행코스', en: 'Plan a Trip', ja: '旅行プラン', zh: '規劃行程'),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                )
+              : null,
           appBar: AppBar(
             backgroundColor: Colors.white,
             surfaceTintColor: Colors.white,
@@ -1046,7 +1327,7 @@ class _HomePageState extends State<HomePage> {
                   onTap: () {
                     setState(() {
                       _viewMode = HomeViewMode.feed;
-                      _category = DiscoveryCategory.all;
+                      _cat = CategorySelection.all;
                       _searchCtrl.clear();
                       _query = '';
                     });
@@ -1120,247 +1401,7 @@ class _HomePageState extends State<HomePage> {
                 child: LangSelectorButton(),
               ),
             ],
-            bottom: PreferredSize(
-              preferredSize: Size.fromHeight(_showProvincePicker ? 84 : 46),
-              child: Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 단일 깔끔한 탐색 바: [📍 지역 선택] + [카테고리 칩] + [보기 전환: 스토리 / 캘린더 / 네이버 지도]
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                _quickFilterChip(
-                                  key: const Key('near_me_chip'),
-                                  label: _locating
-                                      ? pickLangText(lang, ko: '📍 위치 확인 중…', en: '📍 Locating…', ja: '📍 取得中…', zh: '📍 定位中…')
-                                      : pickLangText(lang, ko: '📍 내 주변', en: '📍 Near me', ja: '📍 現在地周辺', zh: '📍 我附近'),
-                                  selected: _userPos != null,
-                                  color: const Color(0xFF2563EB),
-                                  onTap: () => _toggleNearMe(lang),
-                                ),
-                                _quickFilterChip(
-                                  key: const Key('weekend_chip'),
-                                  label: pickLangText(lang, ko: '🗓 이번 주말', en: '🗓 This weekend', ja: '🗓 今週末', zh: '🗓 本週末'),
-                                  selected: _weekendOnly,
-                                  color: const Color(0xFFEA580C),
-                                  onTap: () => setState(() {
-                                    _weekendOnly = !_weekendOnly;
-                                    _feedVisibleCount = _feedPageSize;
-                                  }),
-                                ),
-                                _quickFilterChip(
-                                  key: const Key('saved_chip'),
-                                  label: pickLangText(lang,
-                                      ko: '❤️ 찜 ${SavedPlaces.ids.value.length}',
-                                      en: '❤️ Saved ${SavedPlaces.ids.value.length}',
-                                      ja: '❤️ 保存 ${SavedPlaces.ids.value.length}',
-                                      zh: '❤️ 收藏 ${SavedPlaces.ids.value.length}'),
-                                  selected: _savedOnly,
-                                  color: const Color(0xFFE11D48),
-                                  onTap: () => setState(() {
-                                    _savedOnly = !_savedOnly;
-                                    _feedVisibleCount = _feedPageSize;
-                                  }),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: InkWell(
-                                    key: const Key('region_picker_btn'),
-                                    borderRadius: BorderRadius.circular(18),
-                                    onTap: () => setState(() => _showProvincePicker = !_showProvincePicker),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                                      decoration: BoxDecoration(
-                                        color: _selectedProvince == '전체'
-                                            ? const Color(0xFFF1F5F9)
-                                            : const Color(0xFF0F172A),
-                                        borderRadius: BorderRadius.circular(18),
-                                        border: Border.all(
-                                          color: _selectedProvince == '전체'
-                                              ? const Color(0xFFCBD5E1)
-                                              : const Color(0xFF0F172A),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            lang == AppLang.ko
-                                                ? '📍 지역: ${trProvince(_selectedProvince, lang)}'
-                                                : '📍 ${trProvince(_selectedProvince, lang)}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w800,
-                                              color: _selectedProvince == '전체'
-                                                  ? const Color(0xFF0F172A)
-                                                  : Colors.white,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 3),
-                                          Icon(
-                                            _showProvincePicker
-                                                ? Icons.keyboard_arrow_up_rounded
-                                                : Icons.keyboard_arrow_down_rounded,
-                                            size: 16,
-                                            color: _selectedProvince == '전체'
-                                                ? const Color(0xFF475569)
-                                                : Colors.white,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (screenW < 1040) ...[
-                                  _buildViewModePill(
-                                    key: const Key('view_mode_feed'),
-                                    mode: HomeViewMode.feed,
-                                    label: trUi('view_story_feed', lang),
-                                    activeColor: const Color(0xFF0F172A),
-                                  ),
-                                  _buildViewModePill(
-                                    key: const Key('view_mode_calendar'),
-                                    mode: HomeViewMode.calendar,
-                                    label: trUi('view_calendar', lang),
-                                    activeColor: const Color(0xFF7C3AED),
-                                  ),
-                                  _buildViewModePill(
-                                    key: const Key('view_mode_map'),
-                                    mode: HomeViewMode.map,
-                                    label: trUi('view_naver_map', lang),
-                                    activeColor: const Color(0xFF03C75A),
-                                  ),
-                                  _buildTripPlannerPill(lang),
-                                  Container(
-                                    width: 1,
-                                    height: 18,
-                                    margin: const EdgeInsets.only(right: 8, left: 2),
-                                    color: const Color(0xFFE2E8F0),
-                                  ),
-                                ],
-                                ...DiscoveryCategory.values.map((cat) {
-                                  final sel = _category == cat;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: InkWell(
-                                      key: Key('cat_chip_${cat.name}'),
-                                      borderRadius: BorderRadius.circular(18),
-                                      onTap: () => setState(() {
-                                        _category = cat;
-                                        _feedVisibleCount = _feedPageSize;
-                                        if (_viewMode == HomeViewMode.calendar &&
-                                            cat != DiscoveryCategory.all &&
-                                            cat != DiscoveryCategory.event &&
-                                            cat != DiscoveryCategory.market) {
-                                          _viewMode = HomeViewMode.feed;
-                                        }
-                                      }),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                                        decoration: BoxDecoration(
-                                          color: sel ? cat.color : const Color(0xFFF8FAFC),
-                                          borderRadius: BorderRadius.circular(18),
-                                          border: Border.all(
-                                            color: sel ? cat.color : const Color(0xFFCBD5E1),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          trUi(cat.i18nKey, lang),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                            color: sel ? Colors.white : const Color(0xFF334155),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (screenW >= 1040) ...[
-                          Container(
-                            width: 1,
-                            height: 20,
-                            margin: const EdgeInsets.symmetric(horizontal: 8),
-                            color: const Color(0xFFE2E8F0),
-                          ),
-                          _buildViewModePill(
-                            key: const Key('view_mode_feed'),
-                            mode: HomeViewMode.feed,
-                            label: trUi('view_story_feed', lang),
-                            activeColor: const Color(0xFF0F172A),
-                          ),
-                          _buildViewModePill(
-                            key: const Key('view_mode_calendar'),
-                            mode: HomeViewMode.calendar,
-                            label: trUi('view_calendar', lang),
-                            activeColor: const Color(0xFF7C3AED),
-                          ),
-                          _buildViewModePill(
-                            key: const Key('view_mode_map'),
-                            mode: HomeViewMode.map,
-                            label: trUi('view_naver_map', lang),
-                            activeColor: const Color(0xFF03C75A),
-                          ),
-                          _buildTripPlannerPill(lang),
-                        ],
-                      ],
-                    ),
-                    if (_showProvincePicker) ...[
-                      const SizedBox(height: 6),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: kProvinceJumpList.map((p) {
-                            final sel = _selectedProvince == p.key;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 5),
-                              child: InkWell(
-                                key: Key('prov_chip_${p.key}'),
-                                borderRadius: BorderRadius.circular(14),
-                                onTap: () => _selectProvince(p.key),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: sel ? const Color(0xFF0F172A) : Colors.white,
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: sel ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    trProvince(p.key, lang),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: sel ? Colors.white : const Color(0xFF475569),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+            bottom: _buildExploreBar(lang, screenW),
     ),
           body: Column(
             children: [

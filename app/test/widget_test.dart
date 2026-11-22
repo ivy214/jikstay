@@ -15,6 +15,7 @@ import 'package:jikstay/naver_place_info.dart';
 import 'package:jikstay/search_query.dart';
 import 'package:jikstay/spot_detail_sheet.dart';
 import 'package:jikstay/translation_store.dart';
+import 'package:jikstay/category_groups.dart';
 import 'package:jikstay/trail_route.dart';
 import 'package:jikstay/ux_widgets.dart';
 import 'package:jikstay/travel_hub.dart';
@@ -733,6 +734,10 @@ void main() {
         },
       });
 
+      // 탐색 바가 3줄(조건·보기 / 큰 분류 / 세부)이 되어 첫 피드 카드가 기본 800×600 화면 밖으로 밀리므로 화면을 키운다
+      tester.view.physicalSize = const Size(1280, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(
         MaterialApp(
           home: HomePage(
@@ -748,13 +753,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('Translated English Story Title'), findsWidgets);
       expect(find.textContaining('Translated First Feed Spot'), findsWidgets);
-      expect(find.text('📖 Stories & Feed'), findsWidgets);
+      expect(find.text('List'), findsWidgets); // 보기 방식: 목록 | 캘린더 | 지도
 
       // 일본어로 전환
       selectAppLang(AppLang.ja);
       await tester.pumpAndSettle();
       expect(find.textContaining('日本語ストーリータイトル'), findsWidgets);
-      expect(find.text('📖 ストーリー・一覧'), findsWidgets);
+      expect(find.text('リスト'), findsWidgets);
 
       // 스토리 상세 페이지에서도 일본어 본문 확인
       await tester.tap(find.byKey(const Key('open_daily_story_btn')));
@@ -805,6 +810,69 @@ void main() {
       expect(resolveStartLang(browserLangs: ['fr-FR', 'ko-KR']), AppLang.ko);
       expect(resolveStartLang(storedLang: 'ko', browserLangs: ['en-US']), AppLang.ko);
       expect(resolveStartLang(urlLang: 'ja', storedLang: 'ko', browserLangs: ['en-US']), AppLang.ja);
+    });
+
+    group('탐색 바: 큰 분류·세부 칩', () {
+      DiscoveryItem it(String id, String kind, {String sub = '', Map<String, dynamic> extra = const {}}) => parseSpotJson({
+            'id': id, 'kind': kind, 'sub': sub, 'title': 't', 'province': '강원', 'lat': 37.7, 'lng': 128.9, ...extra,
+          }, fallbackCategory: DiscoveryCategory.attraction)!;
+      final trail = it('spot_tr_1', 'outdoor', sub: 'trail');
+      final act = it('spot_ou_1', 'outdoor', sub: 'activity');
+      final camp = it('spot_cp_1', 'outdoor', sub: 'camping', extra: {'camp_type': '일반야영장,글램핑', 'pet': true});
+      final camp2 = it('spot_cp_2', 'outdoor', sub: 'camping', extra: {'camp_type': '자동차야영장'});
+      final sight = it('spot_at_1', 'attraction');
+      final food = it('spot_fo_1', 'food');
+      final market = it('spot_mk_1', 'market');
+      final show = it('spot_cu_1', 'culture');
+      final fest = it('spot_ev_1', 'event');
+      List<String> ids(CategorySelection s) =>
+          [trail, act, camp, camp2, sight, food, market, show, fest].where(s.matches).map((x) => x.id).toList();
+
+      test('묶음·세부 칩이 고르는 항목', () {
+        expect(ids(const CategorySelection(CategoryGroup.sights)), ['spot_tr_1', 'spot_ou_1', 'spot_at_1']); // 캠핑장 제외
+        expect(ids(const CategorySelection(CategoryGroup.sights, 'trail')), ['spot_tr_1']);
+        expect(ids(const CategorySelection(CategoryGroup.stays, 'camping')), ['spot_cp_1', 'spot_cp_2']);
+        expect(ids(const CategorySelection(CategoryGroup.stays, 'glamping')), ['spot_cp_1']);
+        expect(ids(const CategorySelection(CategoryGroup.stays, 'pet')), ['spot_cp_1']);
+        expect(ids(const CategorySelection(CategoryGroup.food)), ['spot_fo_1', 'spot_mk_1']);
+        expect(ids(const CategorySelection(CategoryGroup.food, 'food')), ['spot_fo_1']);
+        expect(ids(const CategorySelection(CategoryGroup.events)), ['spot_cu_1', 'spot_ev_1']);
+        expect(ids(CategorySelection.all).length, 9);
+      });
+
+      test('기본 피드에서 빼 둔 항목을 보여 주는 선택', () {
+        expect(CategorySelection.all.showsMarkets, isFalse);
+        expect(const CategorySelection(CategoryGroup.food).showsMarkets, isTrue);
+        expect(const CategorySelection(CategoryGroup.food, 'food').showsMarkets, isFalse);
+        expect(const CategorySelection(CategoryGroup.events).showsCulture, isTrue);
+        expect(const CategorySelection(CategoryGroup.stays).showsListOnlyOutdoor, isTrue);
+        expect(const CategorySelection(CategoryGroup.sights, 'trail').primary, DiscoveryCategory.outdoor);
+        expect(const CategorySelection(CategoryGroup.sights).fitsCalendar, isFalse);
+        expect(const CategorySelection(CategoryGroup.events).fitsCalendar, isTrue);
+        expect(const CategorySelection(CategoryGroup.stays, 'unknown').sub.key, 'stays'); // 모르는 세부 → 묶음 전체
+      });
+
+      testWidgets('큰 분류를 누르면 세부 칩이 나오고, 다시 누르면 전체로', (tester) async {
+        appLangNotifier.value = AppLang.ko;
+        tester.view.physicalSize = const Size(1280, 1000);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(MaterialApp(
+          home: HomePage(initialDemoMode: true, seedItemsOverride: kBuiltInSeedDiscoveryItems),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('cat_sub_trail')), findsNothing);
+        await tester.tap(find.byKey(const Key('cat_group_sights')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('cat_sub_trail')), findsOneWidget);
+        expect(find.byKey(const Key('cat_sub_forest')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('cat_sub_attraction')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('cat_group_sights')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('cat_sub_trail')), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
     });
 
     group('여행코스: 자연·액티비티', () {
