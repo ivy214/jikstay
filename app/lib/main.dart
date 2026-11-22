@@ -968,7 +968,8 @@ class _HomePageState extends State<HomePage> {
     final narrow = screenW < 700;
     final spec = _cat.spec;
     final showSubs = !_cat.isAll && spec.subs.length > 1;
-    final height = 12.0 + 34 + 6 + 34 + (_showProvincePicker ? 36 : 0) + (showSubs ? 36 : 0);
+    // 휴대폰: 2줄이 5칸 고정 탭(아이콘+이름)이라 조금 더 높다
+    final height = 12.0 + 34 + 6 + (narrow ? 50 : 34) + (_showProvincePicker ? 36 : 0) + (showSubs ? 36 : 0);
 
     void select(CategorySelection next) => setState(() {
           _cat = next;
@@ -991,14 +992,18 @@ class _HomePageState extends State<HomePage> {
             border: Border.all(color: _selectedProvince == '전체' ? const Color(0xFFCBD5E1) : const Color(0xFF0F172A)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(
-              lang == AppLang.ko
-                  ? '📍 지역: ${trProvince(_selectedProvince, lang)}'
-                  : '📍 ${trProvince(_selectedProvince, lang)}',
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w800,
-                color: _selectedProvince == '전체' ? const Color(0xFF0F172A) : Colors.white,
+            Flexible(
+              child: Text(
+                lang == AppLang.ko
+                    ? '📍 지역: ${trProvince(_selectedProvince, lang)}'
+                    : '📍 ${trProvince(_selectedProvince, lang)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: _selectedProvince == '전체' ? const Color(0xFF0F172A) : Colors.white,
+                ),
               ),
             ),
             const SizedBox(width: 3),
@@ -1146,11 +1151,20 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ① 조건 | 보기 방식 | 여행코스
+            // ① 조건 | 보기 방식 | 여행코스  (휴대폰: 지역 + '필터' 버튼 하나 → 아래 시트)
             SizedBox(
               height: 34,
               child: Row(children: [
-                Expanded(child: FadingHScroll(child: Row(children: filters))),
+                if (narrow)
+                  // 지역 이름이 길면(외국어 등) 지역 버튼만 줄어들고 이름 끝을 … 로 (남는 자리는 지역 버튼이 먼저 쓴다)
+                  Expanded(
+                    child: Row(children: [
+                      Flexible(child: regionBtn),
+                      _buildFilterSheetButton(lang),
+                    ]),
+                  )
+                else
+                  Expanded(child: FadingHScroll(child: Row(children: filters))),
                 const SizedBox(width: 8),
                 _buildViewModeSegment(lang, iconOnly: narrow),
                 if (!narrow) ...[
@@ -1197,8 +1211,11 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
             const SizedBox(height: 6),
-            // ② 큰 분류
-            SizedBox(height: 34, child: FadingHScroll(child: Row(children: groupRow))),
+            // ② 큰 분류 (휴대폰: 옆으로 밀지 않아도 다 보이는 5칸 탭)
+            if (narrow)
+              SizedBox(height: 50, child: _buildGroupTabs(lang, select))
+            else
+              SizedBox(height: 34, child: FadingHScroll(child: Row(children: groupRow))),
             // ③ 세부 칩
             if (showSubs) ...[
               const SizedBox(height: 6),
@@ -1207,6 +1224,229 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+    );
+  }
+
+  int get _activeFilterCount => (_userPos != null ? 1 : 0) + (_weekendOnly ? 1 : 0) + (_savedOnly ? 1 : 0);
+
+  /// 휴대폰: 내 주변·이번 주말·찜을 한 버튼으로 (켜진 개수 표시) → 아래에서 올라오는 시트
+  Widget _buildFilterSheetButton(AppLang lang) {
+    final n = _activeFilterCount;
+    return InkWell(
+      key: const Key('filter_sheet_btn'),
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => _openFilterSheet(lang),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: n > 0 ? const Color(0xFFEFF6FF) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: n > 0 ? const Color(0xFF2563EB) : const Color(0xFFCBD5E1)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.tune_rounded, size: 16, color: n > 0 ? const Color(0xFF2563EB) : const Color(0xFF475569)),
+          const SizedBox(width: 4),
+          Text(pickLangText(lang, ko: '필터', en: 'Filters', ja: 'フィルター', zh: '篩選'),
+              style: TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w800, color: n > 0 ? const Color(0xFF2563EB) : const Color(0xFF0F172A))),
+          if (n > 0) ...[
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(color: const Color(0xFF2563EB), borderRadius: BorderRadius.circular(10)),
+              child: Text('$n', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white)),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _openFilterSheet(AppLang lang) async {
+    trackPortalEvent('open_filter_sheet', {'province': _selectedProvince});
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
+        void apply(VoidCallback f) {
+          setState(() {
+            f();
+            _feedVisibleCount = _feedPageSize;
+          });
+          setSheet(() {});
+        }
+
+        Widget row(Key key, IconData icon, Color color, String title, String desc, bool on, VoidCallback onTap) => ListTile(
+              key: key,
+              onTap: onTap,
+              leading: CircleAvatar(
+                backgroundColor: color.withValues(alpha: on ? 0.16 : 0.07),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              title: Text(title, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800)),
+              subtitle: Text(desc, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              trailing: Switch(value: on, activeThumbColor: Colors.white, activeTrackColor: color, onChanged: (_) => onTap()),
+            );
+
+        final saved = SavedPlaces.ids.value.length;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                child: Text(pickLangText(lang, ko: '필터', en: 'Filters', ja: 'フィルター', zh: '篩選'),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              ),
+              row(
+                const Key('sheet_near_me'),
+                Icons.near_me_rounded,
+                const Color(0xFF2563EB),
+                _locating
+                    ? pickLangText(lang, ko: '위치 확인 중…', en: 'Locating…', ja: '取得中…', zh: '定位中…')
+                    : pickLangText(lang, ko: '내 주변 가까운 순', en: 'Nearest first', ja: '現在地から近い順', zh: '離我最近'),
+                pickLangText(lang,
+                    ko: '휴대폰 위치로 가까운 곳부터 보여 줍니다',
+                    en: 'Sort by distance from your location',
+                    ja: '現在地から近い順に表示',
+                    zh: '依目前位置由近到遠排列'),
+                _userPos != null,
+                () async {
+                  await _toggleNearMe(lang);
+                  if (ctx.mounted) setSheet(() {});
+                },
+              ),
+              row(
+                const Key('sheet_weekend'),
+                Icons.event_rounded,
+                const Color(0xFFEA580C),
+                pickLangText(lang, ko: '이번 주말에 여는 곳', en: 'Open this weekend', ja: '今週末に開催・営業', zh: '本週末開放'),
+                pickLangText(lang,
+                    ko: '축제·공연은 주말 일정이 있는 것만',
+                    en: 'Festivals and shows running this weekend',
+                    ja: '週末に開催される祭り・公演のみ',
+                    zh: '僅顯示週末舉行的慶典與演出'),
+                _weekendOnly,
+                () => apply(() => _weekendOnly = !_weekendOnly),
+              ),
+              row(
+                const Key('sheet_saved'),
+                Icons.favorite_rounded,
+                const Color(0xFFE11D48),
+                pickLangText(lang, ko: '찜한 곳만 ($saved)', en: 'Saved only ($saved)', ja: '保存のみ ($saved)', zh: '僅收藏 ($saved)'),
+                pickLangText(lang,
+                    ko: '이 기기에 저장한 곳',
+                    en: 'Places saved on this device',
+                    ja: 'この端末に保存した場所',
+                    zh: '此裝置上收藏的地點'),
+                _savedOnly,
+                () => apply(() => _savedOnly = !_savedOnly),
+              ),
+              const Divider(height: 20),
+              ListTile(
+                key: const Key('sheet_guides'),
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0x142563EB),
+                  child: Icon(Icons.menu_book_rounded, color: Color(0xFF2563EB), size: 20),
+                ),
+                title: Text(categoryGroupSpec(CategoryGroup.guides).label(lang),
+                    style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800)),
+                subtitle: Text(
+                    pickLangText(lang,
+                        ko: '지자체 공식 관광지도·가이드북(PDF)',
+                        en: 'Official municipal maps & guidebooks (PDF)',
+                        ja: '自治体公式の観光マップ・ガイドブック',
+                        zh: '地方政府官方觀光地圖與指南'),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  setState(() {
+                    _cat = const CategorySelection(CategoryGroup.guides);
+                    _feedVisibleCount = _feedPageSize;
+                    if (_viewMode == HomeViewMode.calendar) _viewMode = HomeViewMode.feed;
+                  });
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Row(children: [
+                  TextButton(
+                    key: const Key('sheet_reset'),
+                    onPressed: _activeFilterCount == 0
+                        ? null
+                        : () => apply(() {
+                              _userPos = null;
+                              _weekendOnly = false;
+                              _savedOnly = false;
+                            }),
+                    child: Text(pickLangText(lang, ko: '초기화', en: 'Reset', ja: 'リセット', zh: '重設')),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    key: const Key('sheet_done'),
+                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F172A)),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: Text(pickLangText(lang, ko: '결과 보기', en: 'Show results', ja: '結果を見る', zh: '查看結果')),
+                  ),
+                ]),
+              ),
+            ]),
+          ),
+        );
+      }),
+    );
+  }
+
+  /// 휴대폰: 큰 분류 5개를 같은 너비의 탭(아이콘 위, 이름 아래)으로 — 옆으로 밀지 않아도 모두 보인다
+  Widget _buildGroupTabs(AppLang lang, void Function(CategorySelection) select) {
+    final groups = kCategoryGroups.where((g) => g.group != CategoryGroup.guides).toList();
+    return Row(
+      children: groups.map((g) {
+        final sel = _cat.group == g.group;
+        final label = g.label(lang);
+        final cut = label.indexOf(' ');
+        final icon = cut > 0 ? label.substring(0, cut) : '';
+        final name = categoryTabLabel(g.group, lang);
+        return Expanded(
+          child: Semantics(
+            button: true,
+            selected: sel,
+            label: name,
+            child: InkWell(
+              key: Key('cat_group_${g.group.name}'),
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => select(sel ? CategorySelection.all : CategorySelection(g.group)),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: sel ? g.color.withValues(alpha: 0.1) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border(bottom: BorderSide(color: sel ? g.color : Colors.transparent, width: 2.5)),
+                ),
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(icon, style: const TextStyle(fontSize: 17, height: 1.1)),
+                  const SizedBox(height: 2),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.15,
+                      fontWeight: sel ? FontWeight.w900 : FontWeight.w700,
+                      color: sel ? g.color : const Color(0xFF334155),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 

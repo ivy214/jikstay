@@ -94,6 +94,22 @@ final List<CategoryGroupSpec> kCategoryGroups = [
 
 CategoryGroupSpec categoryGroupSpec(CategoryGroup g) => kCategoryGroups.firstWhere((s) => s.group == g);
 
+/// 휴대폰 5칸 탭에 들어갈 짧은 이름 (한국어는 원래 이름이 들어가고, 외국어는 길어서 줄인다)
+String categoryTabLabel(CategoryGroup g, AppLang lang) {
+  if (lang == AppLang.ko) {
+    final l = categoryGroupSpec(g).ko;
+    return l.substring(l.indexOf(' ') + 1);
+  }
+  return switch (g) {
+    CategoryGroup.all => pickLangText(lang, ko: '전체', en: 'All', ja: 'すべて', zh: '全部'),
+    CategoryGroup.events => pickLangText(lang, ko: '축제·공연', en: 'Events', ja: '祭り', zh: '慶典'),
+    CategoryGroup.sights => pickLangText(lang, ko: '볼거리·자연', en: 'Outdoors', ja: '見どころ', zh: '景點'),
+    CategoryGroup.food => pickLangText(lang, ko: '먹거리·시장', en: 'Food', ja: 'グルメ', zh: '美食'),
+    CategoryGroup.stays => pickLangText(lang, ko: '숙소·캠핑', en: 'Stays', ja: '宿・キャンプ', zh: '住宿'),
+    CategoryGroup.guides => pickLangText(lang, ko: '관광지도', en: 'Guides', ja: 'ガイド', zh: '指南'),
+  };
+}
+
 /// 지금 선택: 큰 분류 + 세부 칩. 세부를 고르지 않으면 묶음 전체(첫 칩).
 class CategorySelection {
   const CategorySelection(this.group, [this.subKey = '']);

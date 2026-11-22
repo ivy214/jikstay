@@ -852,6 +852,43 @@ void main() {
         expect(const CategorySelection(CategoryGroup.stays, 'unknown').sub.key, 'stays'); // 모르는 세부 → 묶음 전체
       });
 
+      testWidgets('휴대폰: 필터 시트에서 이번 주말을 켜면 버튼에 개수, 초기화로 끄기 · 5칸 탭', (tester) async {
+        appLangNotifier.value = AppLang.ko;
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(MaterialApp(
+          home: HomePage(initialDemoMode: true, seedItemsOverride: kBuiltInSeedDiscoveryItems),
+        ));
+        await tester.pumpAndSettle();
+        // 휴대폰에서는 조건 칩 대신 '필터' 버튼, 큰 분류는 5칸 탭이 모두 화면 안에
+        expect(find.byKey(const Key('weekend_chip')), findsNothing);
+        for (final g in ['all', 'events', 'sights', 'food', 'stays']) {
+          final r = tester.getRect(find.byKey(Key('cat_group_$g')));
+          expect(r.right <= 390, isTrue, reason: g);
+        }
+        await tester.tap(find.byKey(const Key('filter_sheet_btn')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('sheet_weekend')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('sheet_done')));
+        await tester.pumpAndSettle();
+        expect(find.descendant(of: find.byKey(const Key('filter_sheet_btn')), matching: find.text('1')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('filter_sheet_btn')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('sheet_reset')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('sheet_done')));
+        await tester.pumpAndSettle();
+        expect(find.descendant(of: find.byKey(const Key('filter_sheet_btn')), matching: find.text('1')), findsNothing);
+
+        await tester.tap(find.byKey(const Key('cat_group_stays')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('cat_sub_camping')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+
       testWidgets('큰 분류를 누르면 세부 칩이 나오고, 다시 누르면 전체로', (tester) async {
         appLangNotifier.value = AppLang.ko;
         tester.view.physicalSize = const Size(1280, 1000);
