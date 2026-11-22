@@ -391,3 +391,39 @@ describe("RSS 피드 (/rss.xml)", () => {
     assert.doesNotMatch(empty, /<item>/);
   });
 });
+
+describe("텔레그램 채널 게시 문구", async () => {
+  const tg = await import("../scripts/post_telegram.mjs");
+  const hub = {
+    daily_stories: [{ id: "spot_story_a", title: "청령포 <단종>", province: "강원", city: "영월군", months: [], pull_quote: "강물 & 솔숲" }],
+    festivals: [
+      { id: "spot_ev_wk", title: "김장 축제", province: "전북", region_label: "전북 순창군", start_date: "20261127", end_date: "20261128" },
+      { id: "spot_ev_next", title: "다음 주 축제", province: "전북", start_date: "20261205", end_date: "20261206" },
+      { id: "spot_ev_yearly", title: "상설 공연", province: "서울", start_date: "20260101", end_date: "20261231" },
+    ],
+  };
+
+  it("지역 해시태그는 시·도와 시·군·구 이름으로만 만든다", () => {
+    assert.deepEqual(tg.regionTags("강원 영월군"), ["#강원여행", "#영월여행"]);
+    assert.deepEqual(tg.regionTags("대구 동성로·팔공산·근대골목"), ["#대구여행"]);
+    assert.deepEqual(tg.regionTags("서울 중구"), ["#서울여행"]);
+  });
+
+  it("스토리 캡션은 HTML 을 이스케이프하고 사이트 링크를 단다", () => {
+    const { pickTodayStory } = require("../functions/today_story.js");
+    const story = pickTodayStory(hub, "20261122");
+    const cap = tg.buildStoryCaption(hub, story, "20261122");
+    assert.match(cap, /11월 22일 오늘의 로컬 스토리/);
+    assert.match(cap, /청령포 &lt;단종&gt;/);
+    assert.match(cap, /강물 &amp; 솔숲/);
+    assert.match(cap, /href="https:\/\/jikstay.app\/\?story=spot_story_a"/);
+    assert.ok(cap.length <= 1024);
+  });
+
+  it("주말 목록은 이번 토·일에 열리는 짧은 축제만", () => {
+    assert.deepEqual(tg.weekendRange("20261127"), ["20261128", "20261129"]);
+    assert.deepEqual(tg.weekendRange("20261129"), ["20261129", "20261129"]);
+    assert.deepEqual(tg.weekendFestivals(hub, "20261127").map((x) => x.id), ["spot_ev_wk"]);
+    assert.equal(tg.buildWeekendMessage({ festivals: [] }, "20261127"), null);
+  });
+});

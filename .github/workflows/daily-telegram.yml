@@ -1,0 +1,45 @@
+name: Daily Telegram Story
+
+on:
+  schedule:
+    # 매일 08:00 KST (전날 23:00 UTC). 금요일에는 이번 주말 축제 목록도 함께 올린다.
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "게시하지 않고 문구만 출력"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-telegram
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # 외부 패키지 없이 functions/today_story.js 만 불러 쓰므로 npm install 이 필요 없다
+      - name: Post today's story
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            node firebase/scripts/post_telegram.mjs --dry-run
+          elif [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 시크릿이 없어 게시를 건너뜁니다."
+          else
+            node firebase/scripts/post_telegram.mjs
+          fi
