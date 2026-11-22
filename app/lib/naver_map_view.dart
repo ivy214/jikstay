@@ -54,9 +54,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
     _centerLat = meta.lat;
     _centerLng = meta.lng;
     _zoom = meta.zoom;
-    if (widget.items.isNotEmpty) {
-      _selectedPinItem = widget.items.first;
-    }
+    // 요약 카드는 마커를 눌렀을 때만 띄움 (모바일에서 지도 가림 방지)
   }
 
   @override
@@ -67,9 +65,9 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
       _centerLat = meta.lat;
       _centerLng = meta.lng;
       _zoom = meta.zoom;
-      _selectedPinItem = widget.items.isNotEmpty ? widget.items.first : null;
+      _selectedPinItem = null;
     } else if (_selectedPinItem != null && !widget.items.any((e) => e.id == _selectedPinItem!.id)) {
-      _selectedPinItem = widget.items.isNotEmpty ? widget.items.first : null;
+      _selectedPinItem = null;
     }
   }
 
@@ -277,6 +275,10 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
       },
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        // 빈 지도 영역을 탭하면 요약 카드 닫기
+        onTap: () {
+          if (_selectedPinItem != null) setState(() => _selectedPinItem = null);
+        },
         onScaleStart: (details) {
           _lastFocalPoint = details.localFocalPoint;
           _scaleStartZoom = _zoom;
@@ -368,6 +370,7 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                           ],
                         ),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
@@ -448,6 +451,13 @@ class _NaverLocalMapViewState extends State<NaverLocalMapView> {
                                   ),
                                 ],
                               ),
+                            ),
+                            IconButton(
+                              key: const Key('map_pin_close_btn'),
+                              visualDensity: VisualDensity.compact,
+                              tooltip: lang == AppLang.ko ? '닫기' : 'Close',
+                              onPressed: () => setState(() => _selectedPinItem = null),
+                              icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF64748B)),
                             ),
                           ],
                         ),
@@ -769,6 +779,7 @@ class _MapPinPill extends StatelessWidget {
     // 전통시장은 먹거리(주황)와 구분되게 갈색 🧺 핀
     final bgColor = selected ? const Color(0xFF0F172A) : (item.isMarket ? const Color(0xFF92400E) : item.category.color);
     return GestureDetector(
+      key: const Key('map_pin_pill'),
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),

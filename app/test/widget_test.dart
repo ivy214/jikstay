@@ -679,8 +679,20 @@ void main() {
       expect(find.byKey(const Key('naver_map_top_bar')), findsOneWidget);
       expect(find.byKey(const Key('open_naver_map_region_btn')), findsOneWidget);
       expect(find.byKey(const Key('interactive_korea_map_canvas')), findsOneWidget);
+      // 요약 카드는 마커를 누르기 전에는 숨김
+      expect(find.byKey(const Key('map_pin_detail_btn')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('map_pin_pill')).first);
+      await tester.pumpAndSettle();
       expect(find.byKey(const Key('map_pin_naver_btn')), findsOneWidget);
       expect(find.byKey(const Key('map_pin_detail_btn')), findsOneWidget);
+
+      // 닫기 버튼으로 카드 숨김 후 다시 열기
+      await tester.tap(find.byKey(const Key('map_pin_close_btn')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('map_pin_detail_btn')), findsNothing);
+      await tester.tap(find.byKey(const Key('map_pin_pill')).first);
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('map_pin_detail_btn')));
       await tester.pumpAndSettle();
