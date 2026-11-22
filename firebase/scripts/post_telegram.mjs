@@ -59,6 +59,21 @@ export function regionTags(region) {
   return [prov && tag(`${prov}여행`), cityBase.length >= 2 && tag(`${cityBase}여행`)].filter(Boolean);
 }
 
+/**
+ * 사진 출처 표기. 공공누리 출처표시 조건을 지킬 수 있는 사진만 올린다.
+ * 출처를 알 수 없는 사진(포털 검색 이미지 등)이면 "" → 사진 없이 글만 올린다.
+ */
+export function photoCredit(url) {
+  let host = "";
+  try {
+    host = new URL(String(url || "")).hostname;
+  } catch (_) {
+    return "";
+  }
+  if (host === "visitkorea.or.kr" || host.endsWith(".visitkorea.or.kr")) return "한국관광공사";
+  return "";
+}
+
 export function storyLink(hub, story) {
   const isDaily = (hub.daily_stories || []).some((s) => s && String(s.id) === story.id);
   return `${SITE}/?${isDaily ? "story" : "spot"}=${encodeURIComponent(story.id)}`;
@@ -75,7 +90,14 @@ export function buildStoryCaption(hub, story, todayYmd) {
     `${esc(story.badge)} · 📍 ${esc(story.region)}`,
     "",
   ].join("\n");
-  const tail = ["", "", `👉 <a href="${esc(link)}">직스테이에서 자세히 보기</a>`, tags].join("\n");
+  const credit = photoCredit(story.image);
+  const tail = [
+    "",
+    ...(credit ? ["", `📷 사진: ${esc(credit)}`] : []), // 출처를 모르면 줄째 뺀다
+    "",
+    `👉 <a href="${esc(link)}">직스테이에서 자세히 보기</a>`,
+    tags,
+  ].join("\n");
   // 한도는 태그를 뺀 글자 수 기준이지만, 넉넉하게 태그 포함 길이로 맞춘다
   const room = Math.max(80, Math.min(SUMMARY_MAX, CAPTION_MAX - head.length - tail.length - 10));
   return head + esc(clip(story.summary, room)) + tail;
@@ -158,7 +180,14 @@ async function main(argv) {
   const hub = await fetchJson(`${SITE}/data/hub/core.json`);
   const story = pickTodayStory(hub, todayYmd);
   const posts = [];
-  if (story) posts.push({ kind: "story", caption: buildStoryCaption(hub, story, todayYmd), image: story.image });
+  // 출처를 표기할 수 없는 사진은 올리지 않는다
+  if (story) {
+    posts.push({
+      kind: "story",
+      caption: buildStoryCaption(hub, story, todayYmd),
+      image: photoCredit(story.image) ? story.image : "",
+    });
+  }
   else console.warn("오늘 고를 스토리가 없습니다.");
   if (withWeekend) {
     const msg = buildWeekendMessage(hub, todayYmd);
@@ -175,9 +204,15 @@ async function main(argv) {
         if (!p.image) throw new Error("이미지 없음");
         await telegram(token, "sendPhoto", { chat_id: chatId, photo: p.image, caption: p.caption, parse_mode: "HTML" });
       } catch (err) {
-        // 이미지 서버가 텔레그램 요청을 막거나 너무 크면 글만 올린다 (링크 미리보기로 사진이 붙는다)
-        console.warn(`사진 전송 실패, 글로 대신 올립니다: ${err.message}`);
-        await telegram(token, "sendMessage", { chat_id: chatId, text: p.caption, parse_mode: "HTML" });
+        // 사진이 없거나(출처 불명 포함) 이미지 서버가 막으면 글만 올린다.
+        // 링크 미리보기를 켜면 출처 불명 사진이 사이트 og:image 로 딸려 나오므로 끈다.
+        console.warn(`사진 없이 글로 올립니다: ${err.message}`);
+        await telegram(token, "sendMessage", {
+          chat_id: chatId,
+          text: p.caption,
+          parse_mode: "HTML",
+          link_preview_options: { is_disabled: true },
+        });
       }
     } else {
       await telegram(token, "sendMessage", {

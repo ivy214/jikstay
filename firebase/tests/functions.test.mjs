@@ -420,6 +420,19 @@ describe("텔레그램 채널 게시 문구", async () => {
     assert.ok(cap.length <= 1024);
   });
 
+  it("관광공사 사진에만 출처를 달고, 출처 불명 사진은 캡션에서도 뺀다", () => {
+    assert.equal(tg.photoCredit("https://tong.visitkorea.or.kr/cms/a.jpg"), "한국관광공사");
+    assert.equal(tg.photoCredit("https://csearch-phinf.pstatic.net/a.jpg"), "");
+    assert.equal(tg.photoCredit("https://evilvisitkorea.or.kr/a.jpg"), "");
+    assert.equal(tg.photoCredit(""), "");
+    const base = { id: "spot_story_a", title: "t", badge: "b", region: "강원 영월군", summary: "s" };
+    const withKto = tg.buildStoryCaption(hub, { ...base, image: "https://tong.visitkorea.or.kr/a.jpg" }, "20261122");
+    assert.match(withKto, /s\n\n📷 사진: 한국관광공사\n\n👉/);
+    const noCredit = tg.buildStoryCaption(hub, { ...base, image: "https://csearch-phinf.pstatic.net/a.jpg" }, "20261122");
+    assert.doesNotMatch(noCredit, /📷/);
+    assert.match(noCredit, /s\n\n👉/);
+  });
+
   it("주말 목록은 이번 토·일에 열리는 짧은 축제만", () => {
     assert.deepEqual(tg.weekendRange("20261127"), ["20261128", "20261129"]);
     assert.deepEqual(tg.weekendRange("20261129"), ["20261129", "20261129"]);
