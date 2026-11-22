@@ -69,6 +69,10 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # IndexNow 에 '바뀐 페이지만' 알리려고 갱신 전 허브를 남겨 둔다
+      - name: Snapshot hub before refresh
+        run: cp app/web/data/public_travel_hub.json "$RUNNER_TEMP/hub_prev.json"
+
       - name: Refresh weekly festivals
         run: python backend/weekly_hub_refresh.py --no-translate
 
@@ -222,6 +226,13 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           npx --yes firebase-tools deploy --only "${{ steps.stage.outputs.targets }}" --project jikstay-lkxu1 --non-interactive
           rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+      # 배포가 끝난 뒤에야 검색엔진이 새 내용을 읽어 갈 수 있으므로 배포 성공 후에만 알린다
+      - name: Notify IndexNow (Naver, Bing)
+        id: indexnow
+        if: steps.fb.outputs.enabled == 'true' && success()
+        continue-on-error: true
+        run: python backend/notify_indexnow.py --prev "$RUNNER_TEMP/hub_prev.json"
 
       - name: Remove Firebase Admin credentials
         if: always()

@@ -6,6 +6,7 @@ const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 
 const seo = require("./seo_content");
 const todayStory = require("./today_story");
+const rss = require("./rss");
 
 initializeApp();
 
@@ -1236,6 +1237,28 @@ exports.serveSitemap = onRequest({ region: "asia-northeast3" }, async (req, res)
   } catch (err) {
     console.error("Sitemap error:", err);
     res.status(500).send("Sitemap error");
+  }
+});
+
+exports.serveRss = onRequest({ region: "asia-northeast3" }, async (req, res) => {
+  if (redirectToPrimaryDomain(req, res)) return;
+  const proto = req.get("x-forwarded-proto") || "https";
+  const host = req.get("x-forwarded-host") || req.get("host") || PRIMARY_HOST;
+  const origin = `${proto}://${host}`;
+  try {
+    const [hubCore, cultureDoc] = await Promise.all([
+      seo.fetchJsonCached(`${origin}/data/hub/core.json`),
+      seo.fetchJsonCached(`${origin}/data/hub/culture.json`),
+    ]);
+    if (!hubCore) throw new Error("hub core.json unavailable");
+    const xml = rss.buildRssXml(origin, hubCore, (cultureDoc && cultureDoc.culture) || [], kstTodayYmd());
+    res.set("Content-Type", "application/rss+xml; charset=utf-8");
+    // 오늘의 스토리가 KST 자정에 바뀌므로 CDN 캐시는 1시간까지만
+    res.set("Cache-Control", "public, max-age=1800, s-maxage=3600");
+    res.status(200).send(xml);
+  } catch (err) {
+    console.error("RSS error:", err);
+    res.status(500).send("RSS error");
   }
 });
 

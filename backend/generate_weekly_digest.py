@@ -18,6 +18,7 @@ HUB_PATH = ROOT / "app" / "web" / "data" / "public_travel_hub.json"
 STAYS_PATH = ROOT / "app" / "web" / "data" / "public_stays_index.json"
 DOCS_DIR = ROOT / "docs"
 SITE = "https://jikstay.app"
+LONG_RUNNING_DAYS = 60
 
 
 def _parse_ymd(val: Any) -> dt.date | None:
@@ -30,17 +31,24 @@ def _parse_ymd(val: Any) -> dt.date | None:
     return None
 
 
+def _fmt_ymd(val: Any) -> str:
+    d = _parse_ymd(val)
+    return d.strftime("%Y.%m.%d") if d else ""
+
+
 def _upcoming_events(hub: Dict[str, Any], today: dt.date, limit: int = 8) -> List[Dict[str, Any]]:
     scored: List[tuple[int, Dict[str, Any]]] = []
-    for ev in hub.get("events") or []:
-        s = _parse_ymd(ev.get("event_start_date"))
-        e = _parse_ymd(ev.get("event_end_date")) or s
+    for ev in hub.get("festivals") or []:
+        s = _parse_ymd(ev.get("start_date"))
+        e = _parse_ymd(ev.get("end_date")) or s
         if e and e < today:
             continue
         if s and s > today + dt.timedelta(days=21):
             continue
         days_left = (s - today).days if s else 99
-        scored.append((max(0, days_left), ev))
+        # 연중 상설 공연·의식(수개월 이상)은 '이번 주 축제'로 내세우지 않고 뒤로 보낸다
+        long_running = bool(s and e and (e - s).days > LONG_RUNNING_DAYS)
+        scored.append(((long_running, max(0, days_left)), ev))
     scored.sort(key=lambda x: x[0])
     return [x[1] for x in scored[:limit]]
 
@@ -68,7 +76,7 @@ def generate_digest(today: dt.date | None = None) -> tuple[Path, Path]:
     for idx, ev in enumerate(events, 1):
         title = ev.get("title", "지역 축제")
         prov = ev.get("province", "")
-        period = f"{ev.get('event_start_date', '')} ~ {ev.get('event_end_date', '')}".strip(" ~")
+        period = f"{_fmt_ymd(ev.get('start_date'))} ~ {_fmt_ymd(ev.get('end_date'))}".strip(" ~")
         eid = ev.get("id", "")
         link = f"{SITE}/?spot={quote(str(eid))}" if eid else f"{SITE}/?region={quote(str(prov))}"
         md_lines.append(f"{idx}. **[{prov}] {title}** ({period or '일정 확인'})")

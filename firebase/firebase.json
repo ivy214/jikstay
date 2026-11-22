@@ -32,6 +32,7 @@
     "rewrites": [
       { "source": "/go", "function": "goRedirect", "region": "asia-northeast3" },
       { "source": "/sitemap.xml", "function": "serveSitemap", "region": "asia-northeast3" },
+      { "source": "/rss.xml", "function": "serveRss", "region": "asia-northeast3" },
       { "source": "/robots.txt", "function": "serveRobots", "region": "asia-northeast3" },
       { "source": "**", "function": "serveApp", "region": "asia-northeast3" }
     ]

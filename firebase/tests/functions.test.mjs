@@ -350,3 +350,44 @@ describe("홈 오늘의 스토리 (스플래시 = 앱 첫 화면)", () => {
     assert.match(noImg, /<div class="js-story-img-wrap" style="display:none">/);
   });
 });
+
+describe("RSS 피드 (/rss.xml)", () => {
+  const rss = require("../functions/rss.js");
+  const hub = {
+    updated_at: Date.UTC(2026, 10, 16),
+    daily_stories: [{ id: "spot_story_a", title: "청령포 이야기", province: "강원", city: "영월군", months: [], pull_quote: "강물에 둘러싸인 섬 & 솔숲" }],
+    festivals: [
+      { id: "spot_ev_soon", title: "김장 축제", province: "전북", region_label: "전북 순창군", start_date: "20261128", end_date: "20261130", overview: "<b>김장</b>\u0001 체험", image_url: "https://tong.visitkorea.or.kr/a.jpg" },
+      { id: "spot_ev_far", title: "먼 축제", province: "전북", start_date: "20270101", end_date: "20270102" },
+      { id: "spot_ev_ended", title: "끝난 축제", province: "전북", start_date: "20261101", end_date: "20261110" },
+      { id: "spot_ev_yearly", title: "상설 공연", province: "서울", start_date: "20260101", end_date: "20261231" },
+    ],
+  };
+  const culture = [{ id: "spot_cu_1", title: "겨울 연극", province: "서울", city: "종로구", culture_type: "공연", realm: "연극", start_date: "20261122", end_date: "20261220", place: "대학로" }];
+  const xml = rss.buildRssXml("https://jikstay.app", hub, culture, "20261122");
+
+  it("오늘의 스토리를 첫 항목으로, 날짜가 들어간 guid 로 싣는다", () => {
+    assert.match(xml, /<item>\s*<title>11월 22일 오늘의 로컬 스토리: 청령포 이야기<\/title>\s*<link>https:\/\/jikstay.app\/\?story=spot_story_a<\/link>/);
+    assert.match(xml, /<guid isPermaLink="false">https:\/\/jikstay.app\/today\/20261122<\/guid>/);
+    assert.match(xml, /<pubDate>Sat, 21 Nov 2026 15:00:00 GMT<\/pubDate>/);
+  });
+
+  it("2주 안에 시작하는 행사만 싣고, 끝난·먼·상설 행사는 뺀다", () => {
+    assert.match(xml, /\?spot=spot_ev_soon/);
+    assert.match(xml, /\?spot=spot_cu_1/);
+    assert.doesNotMatch(xml, /spot_ev_far|spot_ev_ended|spot_ev_yearly/);
+    assert.match(xml, /공연\/연극 · 서울 종로구 · 2026.11.22 ~ 2026.12.20 · 대학로/);
+  });
+
+  it("태그·제어 문자를 지우고 특수 문자를 이스케이프한다", () => {
+    assert.match(xml, /섬 &amp; 솔숲/);
+    assert.doesNotMatch(xml, /<b>|\u0001/);
+    assert.match(xml, /<media:content url="https:\/\/tong.visitkorea.or.kr\/a.jpg" medium="image"\/>/);
+  });
+
+  it("허브가 비어 있어도 올바른 빈 채널을 만든다", () => {
+    const empty = rss.buildRssXml("https://jikstay.app", null, null, "20261122");
+    assert.match(empty, /<channel>[\s\S]*<\/channel>/);
+    assert.doesNotMatch(empty, /<item>/);
+  });
+});
