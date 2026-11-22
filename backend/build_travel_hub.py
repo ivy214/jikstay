@@ -942,16 +942,9 @@ def fetch_17_provinces_spots(
                     with lock:
                         seen_cids.add(cid)
                     rg = classify_region_group(d1) or "전체"
-                    spot_idx = len(picked_for_type)
-                    # 시·도별 대표 먹거리·볼거리 상단 2곳에 방문 혜택 쿠폰 / 스폰서 추천 메타데이터 부여
-                    is_sponsored = spot_idx < 2
-                    coupon_title = ""
-                    if is_sponsored:
-                        coupon_title = (
-                            "직스테이 방문 혜택 · 화면 제시 시 음료/사이드 서비스"
-                            if kind_key == "food"
-                            else "로컬 추천 파트너 · 주변 맛집·안심숙소 연계 코스"
-                        )
+                    # 방문 혜택·제휴 표시(is_sponsored, coupon_title)는 여기서 붙이지 않는다.
+                    # 실제로 협의한 가게만 관리자 화면(admin_app, admin_override_sponsor)에서 지정한다.
+                    # (예전에는 시·도별 상위 2곳에 '화면 제시 시 음료 서비스'를 자동으로 붙여 사실이 아닌 혜택이 노출됐다)
                     spot_doc: dict[str, Any] = {
                         "id": f"spot_{kind_key[:2]}_{cid}",
                         "kind": kind_key,
@@ -967,9 +960,6 @@ def fetch_17_provinces_spots(
                         "tel": str(it.get("tel") or "").strip(),
                         "map_url": f"https://map.naver.com/p/search/{quote(f'{prov} {title}'.strip())}",
                     }
-                    if is_sponsored:
-                        spot_doc["is_sponsored"] = True
-                        spot_doc["coupon_title"] = coupon_title
                     picked_for_type.append(spot_doc)
                     sub_added += 1
                     if sub_added >= sub_quota:
@@ -1672,11 +1662,9 @@ def enrich_spots_and_festivals_details(
 
         if not p_rows and d.get("addr"):
             p_rows.append({"label": "위치 주소", "value": str(d["addr"])})
-        if not pull_quote:
-            if d.get("coupon_title"):
-                pull_quote = str(d["coupon_title"])
-            elif paragraphs:
-                pull_quote = paragraphs[0][:95] + ("…" if len(paragraphs[0]) > 95 else "")
+        # 혜택 문구(coupon_title)는 소개 문장이 아니므로 인용구로 쓰지 않는다
+        if not pull_quote and paragraphs:
+            pull_quote = paragraphs[0][:95] + ("…" if len(paragraphs[0]) > 95 else "")
 
         if overview_txt:
             d["overview"] = overview_txt[:220]

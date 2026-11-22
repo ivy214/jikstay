@@ -1047,15 +1047,15 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                   ],
 
                   // 8. 방문 혜택 쿠폰 (팝업 대신 페이지 내 인라인 바우처로 즉시 펼침) & 원본 PDF 버튼
-                  if (_current.isSponsored ||
-                      _current.couponTitle.isNotEmpty ||
+                  // 쿠폰은 관리자가 혜택 문구(couponTitle)를 실제로 등록한 가게에만 보인다
+                  if (_current.couponTitle.isNotEmpty ||
                       _current.pdfLinks.isNotEmpty ||
                       (_current.category == DiscoveryCategory.ebook && _current.externalUrl.isNotEmpty)) ...[
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (_current.isSponsored || _current.couponTitle.isNotEmpty)
+                        if (_current.couponTitle.isNotEmpty)
                           FilledButton.icon(
                             key: const Key('sheet_coupon_btn'),
                             style: FilledButton.styleFrom(
@@ -1132,9 +1132,7 @@ class _SpotDetailSheetState extends State<SpotDetailSheet> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _current.couponTitle.isNotEmpty
-                                  ? _current.couponTitle
-                                  : '현장 방문 시 직스테이 로컬 화면을 제시해 주세요.',
+                              _current.couponTitle,
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,

@@ -112,7 +112,7 @@ const List<DiscoveryItem> kBuiltInSeedDiscoveryItems = [
     pullQuote: '해발 500m 청정 장수고원에서 자란 한우 숯불구이와 아삭한 장수사과 후식 한 상',
     paragraphs: [
       '금강 발원지 뜬봉샘과 논개사당 탐방 전후로 현지인과 여행객이 즐겨 찾는 장수읍 대표 한우 전문 로컬 식당입니다. 고원 지대 일교차 속에서 자란 장수 한우 특유의 고소한 육향과 직접 담근 제철 산나물 찬이 어우러집니다.',
-      '점심 시간대에는 진하게 우려낸 한우국밥과 육회비빔밥이 인기가 높으며, 직스테이 로컬 화면을 제시하시면 음료 또는 계절 사과 후식 혜택을 받으실 수 있습니다.',
+      '점심 시간대에는 진하게 우려낸 한우국밥과 육회비빔밥이 인기가 높습니다.',
     ],
     practicalHeader: '방문 전 필수 확인 · 대표 메뉴 · 영업시간 · 편의안내',
     practicalInfo: [
@@ -129,8 +129,6 @@ const List<DiscoveryItem> kBuiltInSeedDiscoveryItems = [
         link: 'https://search.naver.com/search.naver?query=%EC%9E%A5%EC%88%98%20%ED%95%9C%EC%9A%B0%20%EB%A7%9B%EC%A7%91',
       ),
     ],
-    isSponsored: true,
-    couponTitle: '직스테이 방문 혜택 · 화면 제시 시 음료/후식 서비스',
     mapUrl: 'https://map.naver.com/p/search/%EC%9E%A5%EC%88%98%20%ED%95%9C%EC%9A%B0',
     priorityScore: 125,
   ),

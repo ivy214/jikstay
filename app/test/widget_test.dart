@@ -601,17 +601,9 @@ void main() {
       await tester.drag(sheetScrollable, const Offset(0, 5000)); // 맨 위로 되돌린 뒤 이어서 확인
       await tester.pumpAndSettle();
 
-      // 4-1. 방문 혜택 쿠폰 버튼 클릭 → 팝업 다이얼로그 없이 페이지 내 인라인 바우처 오픈 확인
-      final couponBtn = find.byKey(const Key('sheet_coupon_btn'));
-      await tester.scrollUntilVisible(couponBtn, 180, scrollable: sheetScrollable);
-      await tester.ensureVisible(couponBtn);
-      await tester.pumpAndSettle();
-      await tester.tap(couponBtn);
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(find.text('직스테이 로컬 방문 혜택 쿠폰'), findsOneWidget);
-      await tester.tap(find.text('닫기'));
-      await tester.pumpAndSettle();
+      // 4-1. 혜택을 등록하지 않은 가게에는 방문 혜택 쿠폰 버튼이 없어야 한다 (사실이 아닌 혜택 노출 방지)
+      expect(find.byKey(const Key('sheet_coupon_btn')), findsNothing);
+      expect(find.textContaining('화면을 제시'), findsNothing);
 
       // 길찾기 버튼 및 지자체 공식 가이드북 PDF 연결 확인
       final dirBtn = find.byKey(const Key('sheet_directions_btn'));
