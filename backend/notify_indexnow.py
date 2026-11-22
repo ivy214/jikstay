@@ -29,7 +29,8 @@ HUB_PATH = ROOT / "app" / "web" / "data" / "public_travel_hub.json"
 HOST = "jikstay.app"
 SITE = f"https://{HOST}"
 INDEXNOW_KEY = "jikstayindexnow20260000"
-KEY_LOCATION = f"{SITE}/{INDEXNOW_KEY}.txt"
+# 키 파일은 사이트 최상위 /{key}.txt (app/web) 에 둔다. 이 경우 규격상 keyLocation 은 생략하며,
+# 네이버는 keyLocation 이 있으면 422 "Invalid urls" 로 거절한다 (2026-11-22 확인).
 # api.indexnow.org 는 참여 검색엔진(Bing·Yandex 등)에 공유하고, 네이버는 자체 엔드포인트로도 받는다
 ENDPOINTS = (
     "https://api.indexnow.org/indexnow",
@@ -115,7 +116,7 @@ def submit_indexnow(urls: List[str]) -> bool:
     if not urls:
         print("[IndexNow] 바뀐 URL 이 없어 제출하지 않습니다.")
         return True
-    payload = {"host": HOST, "key": INDEXNOW_KEY, "keyLocation": KEY_LOCATION, "urlList": urls}
+    payload = {"host": HOST, "key": INDEXNOW_KEY, "urlList": urls}
     ok = False
     for ep in ENDPOINTS:
         try:
