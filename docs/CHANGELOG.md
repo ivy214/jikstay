@@ -219,7 +219,7 @@ listings:          pending_verification → active ⇄ suspended → withdrawn
 ### 환경
 
 - Python 3.12 64비트 가상환경 `backend/.venv` (시스템 Python 3.14는 32비트라 `cryptography` 등 설치 불가)
-- Flutter 3.50.0 (`C:\Users\dongchae\dev\flutter`), Node 22 (Functions)
+- Flutter 3.50.0 (PATH 의 `flutter`, 다른 설치본은 `deploy.ps1 -FlutterBin`), Node 22 (Functions)
 - `.vscode/settings.json`: 터미널에서 `.env` 자동 사용
 
 ### 관리자 작업
@@ -257,20 +257,23 @@ cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 
 ### 환경변수 (`.env`, 값은 비밀)
 
-| 변수 | 용도 | 현재 .env |
-| --- | --- | --- |
-| `FIREBASE_CREDENTIALS`, `FIREBASE_BUCKET` | Admin SDK | 있음 |
-| `LLM_PROVIDER`, `OPENAI_API_KEY`, `GEMINI_API_KEY` (+선택 `OPENAI_MODEL`, `GEMINI_MODEL`, `LLM_TIMEOUT_S`, `LLM_ATTEMPTS`) | 블로그 분석 | 있음 |
-| `DATA_GO_KR_SERVICE_KEY`, `LICENSE_API_LODGING/HANOK/FOREIGN` (`RURAL`은 기본값) | 인허가 대조 | 있음 |
-| `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM_NAME`, `CONTACT_EMAIL`, `SITE_URL` | 이메일 알림·링크 | 있음 |
-| `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION` | 쇼츠 나레이션 | **없음** |
-| `SOLAPI_API_KEY/SECRET/SENDER` | 문자 알림(선택) | 없음 |
-| `IG_USER_ID`, `IG_ACCESS_TOKEN`, `GRAPH_API_VERSION` | 릴스(선택) | 없음 |
-| `NAVER_CLIENT_ID/SECRET` | 섭외 후보 검색 | 없음 |
-| `BGM_PATH`, `TTS_PROVIDER`, `OUTPUT_DIR`, `SERVICE_NAME`, `FONT_*_PATH` | 선택 | — |
-| `RECAPTCHA_SITE_KEY` | Flutter `--dart-define` (App Check) | .env 아님 |
+`.env.example` 을 `.env` 로 복사한 뒤 빈 값을 채운다. Python 스크립트는 `backend/env.py`(또는 같은 로직)로 루트 `.env` 를 읽고, 이미 설정된 환경변수는 덮어쓰지 않는다(같은 이름이 두 번 있으면 첫 줄이 쓰인다). GitHub Actions 는 같은 이름의 Secrets 를 쓴다.
 
-유튜브는 `client_secret.json`(OAuth 클라이언트) 필요 → 첫 실행 때 브라우저 로그인 후 `youtube_token.json` 생성.
+| 변수 | 용도 | 쓰는 곳 | Actions Secret |
+| --- | --- | --- | --- |
+| `FIREBASE_CREDENTIALS`, `FIREBASE_BUCKET` | Admin SDK (키 파일 `backend/serviceAccountKey.json`) | `firebase_client.py` | `FIREBASE_SERVICE_ACCOUNT_JIKSTAY`(키 JSON 전체), 버킷은 워크플로에 고정 |
+| `DATA_GO_KR_SERVICE_KEY` | 공공데이터포털 공용 키 — 인허가, 문화정보원 공연·전시, TourAPI 키 대체 | `license_check.py`, `refresh_culture.py` 외 | 있음 |
+| `TOUR_API_KEY` | 관광공사 TourAPI — 관광지·축제·캠핑장·두루누비 | `build_travel_hub.py`, `refresh_camping.py`, `refresh_trails.py` 외 | 있음 |
+| `KOPIS_API_KEY` | KOPIS 지방 공연 보강 | `refresh_culture.py` | 있음 (2026-11-23 추가) |
+| `LICENSE_API_LODGING/HANOK/FOREIGN` (`RURAL`·`TOURIST_ACCOMMODATION`은 기본값) | 행안부 인허가 API 주소(비밀 아님) | `license_check.py` | 워크플로에 고정 |
+| `NAVER_CLIENT_ID/SECRET` (+선택 `NAVER_API_MODE`) | 네이버 지역 검색 — 장소 보강, 리뷰·링크 | `enrich_naver_local.py`, `build_travel_hub.py`, `curate_public_stays.py` | 있음 |
+| `AZURE_TRANSLATOR_KEY/REGION` (+선택 `AZURE_MONTHLY_FREE_CHARS`) | 번역 1순위(무료 F0, 월 한도 95%에서 멈춤) | `translate_hub.py` | 있음 |
+| `GEMINI_API_KEY` | 허브 콘텐츠 생성·보강, 번역 예비 | `weekly_hub_refresh.py`, `translate_hub.py` 외 | 있음 |
+| `OPENAI_API_KEY` | 번역 예비 (Gemini 키가 없을 때만) | `translate_hub.py` | 없음 |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | 하루 한 편 텔레그램 게시 | `firebase/scripts/post_telegram.mjs` | 있음 (.env 아님) |
+| `RECAPTCHA_SITE_KEY` | Flutter `--dart-define` (App Check, reCAPTCHA Enterprise) | `deploy.ps1`, 주간 워크플로 | 있음 (로컬은 Windows 사용자 환경변수, .env 아님) |
+
+2026-11-23 정리: 삭제된 기능(블로그 분석·이메일 알림·쇼츠 나레이션)용 `LLM_PROVIDER`, `SMTP_*`, `MAIL_FROM_NAME`, `CONTACT_EMAIL`, `SITE_URL`, `AZURE_SPEECH_*` 는 `.env` 에서 뺐다.
 
 ---
 
@@ -445,3 +448,10 @@ cd firebase && firebase deploy --only firestore:rules,storage,functions,hosting
 - **초기화면 지도 제거 — 순수 매거진형 Story-First 홈 레이아웃 (`app/lib/main.dart`)**:
   - 초기화면에서 지도(`ZillowMapView`)를 완전히 제거하여 Zillow/네이버지도형 정보 포털 느낌을 없애고 초기 타일 네트워크 요청 0건 달성.
   - 중앙 정렬(`maxWidth: 1040`) 와이드 2단 에디토리얼 스토리 히어로 카드 + 함께 읽어볼 지자체 가이드북 스토리 스트립 + 반응형 2열 로컬 큐레이션 피드 구조로 개편(길찾기는 상세 페이지/시트 내 네이버·카카오·구글맵 원클릭 딥링크로 연결).
+
+### 2026-11-23 — 새 PC 환경 정리 · Actions 점검
+
+- `.env` 를 실제 코드가 쓰는 14개로 정리하고 `.env.example` 추가. `FIREBASE_CREDENTIALS` 를 `backend/` 기준 상대 경로로 변경(새 서비스 계정 키 발급).
+- 주간 워크플로에 `KOPIS_API_KEY` 전달(그동안 Actions 에서는 KOPIS 보강이 조용히 빠졌다), 작업 시간 제한(주간 150분·CI 30분), 액션을 Node 24 기반 버전으로 올림.
+- `firebase/functions/package-lock.json` 을 `package.json`(engines node 22)과 맞춤.
+- `deploy.ps1` 기본 Flutter 경로를 PATH 의 `flutter` 로 변경, 못 찾으면 바로 멈춤.
