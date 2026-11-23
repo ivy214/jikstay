@@ -23,7 +23,8 @@
 [CmdletBinding()]
 param(
   [string]$RecaptchaKey = $env:RECAPTCHA_SITE_KEY,
-  [string]$FlutterBin = "C:\Users\dongchae\dev\flutter\bin\flutter.bat",
+  # 기본은 PATH 의 flutter. 다른 설치본을 쓰려면 -FlutterBin "C:\...\flutter\bin\flutter.bat"
+  [string]$FlutterBin = "flutter",
   [switch]$Deploy,
   [string]$Only = "",
   [string]$Project = "jikstay-lkxu1",
@@ -38,8 +39,8 @@ $PublicDir = Join-Path $Root "firebase\public"
 $FunctionsIndex = Join-Path $Root "firebase\functions\index.html"
 $FirebaseDir = Join-Path $Root "firebase"
 
-if (-not (Test-Path $FlutterBin)) {
-  $FlutterBin = "flutter"
+if (-not (Test-Path $FlutterBin) -and -not (Get-Command $FlutterBin -ErrorAction SilentlyContinue)) {
+  throw "Flutter 를 찾을 수 없습니다: '$FlutterBin'. PATH 에 flutter 를 추가하거나 -FlutterBin 으로 경로를 지정하세요."
 }
 
 # Windows PowerShell 5.1 은 외부 프로그램이 stderr 에 쓴 경고(예: flutter 의 --pwa-strategy 폐지 안내)를
