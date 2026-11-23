@@ -16,6 +16,8 @@ concurrency:
 jobs:
   refresh-hub:
     runs-on: ubuntu-latest
+    # 평소 약 1시간. 외부 API 가 멈춰도 기본 6시간 동안 붙잡히지 않게 한다
+    timeout-minutes: 150
     env:
       # 시크릿 이름은 로컬 .env 변수 이름과 같게 맞춘다.
       DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
@@ -23,6 +25,8 @@ jobs:
       NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
       NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # 공연: KOPIS 지방 공연 보강 (없으면 refresh_culture.py 가 조용히 건너뜀)
+      KOPIS_API_KEY: ${{ secrets.KOPIS_API_KEY }}
       # 번역: Azure Translator 무료(F0) 우선, 한도·오류 시 Gemini
       AZURE_TRANSLATOR_KEY: ${{ secrets.AZURE_TRANSLATOR_KEY }}
       AZURE_TRANSLATOR_REGION: ${{ secrets.AZURE_TRANSLATOR_REGION }}
@@ -33,10 +37,10 @@ jobs:
       FIREBASE_BUCKET: jikstay-lkxu1.firebasestorage.app
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
